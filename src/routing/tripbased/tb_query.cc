@@ -1,1 +1,1 @@
-#include "nigiri/routing/tripbased_query.h"
+#include "../../../include/nigiri/routing/tripbased/tb_query.h"
