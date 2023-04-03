@@ -22,52 +22,48 @@ struct transfer {
   location_idx_t location_idx_to_;
 
   // bit set to mark instances of trips
-  bitfield& bitfield_from_;
+  bitfield bitfield_from_;
   std::int8_t shift_amount_to_;
 
   // walking time: from stop -> to stop
   duration_t walking_time(location_idx_t const from, location_idx_t const to);
 };
 
+bool operator <(const transfer& t1, const transfer& t2) {
+  return std::tie(t1.transport_idx_from_, t1.location_idx_from_) < std::tie(t2.transport_idx_from_, t2.location_idx_from_);
+}
+
 struct transfer_set {
-  void add(transfer&& t) {
-    transports_from_.emplace_back(t.transport_idx_from_);
-    locations_from_.emplace_back(t.location_idx_from_);
-    transports_to_.emplace_back(t.transport_idx_to_);
-    locations_to_.emplace_back(t.location_idx_to_);
-    bitfields_from_.emplace_back(t.bitfield_from_);
-    shift_amounts_to_.emplace_back(t.shift_amount_to_);
+  // add the transfer to the end of the transfer set, without sorting
+  // requires sorting after transfer computation
+  void emplace_back(const transfer&);
 
-    assert(transports_from_.size() == locations_from_.size());
-    assert(transports_from_.size() == transports_to_.size());
-    assert(transports_from_.size() == locations_to_.size());
-    assert(transports_from_.size() == bitfields_from_.size());
-    assert(transports_from_.size() == shift_amounts_to_.size());
-  }
+  void insert(const transfer_idx_t, const transfer&);
 
-  transfer get(transfer_idx_t const transfer_idx) {
-    return transfer{transports_from_[transfer_idx],
-          locations_from_[transfer_idx],
-    transports_to_[transfer_idx],
-    locations_to_[transfer_idx],
-    bitfields_from_[transfer_idx],
-    shift_amounts_to_[transfer_idx]};
-  }
+  // add the transfer while maintaining the sorting
+  void add_sorted(const transfer&);
+
+  transfer_idx_t find_insertion_idx(const transfer&);
 
   // sort the transfer set by
   // primary: transport_idx_from
   // secondary: location_idx_from
   void sort();
 
-  // add some sort of index structure to map a transport_idx to the first transfer
-  // in the sorted transfer set
+  // construct an indexing structure: transport_from_idx -> first transfer
+  void index();
 
+  // get the transfer for this transfer index from the transfer set
+  transfer get(transfer_idx_t const);
+
+  // map a transport_idx to its first transfer in the sorted transfer set
+  hash_map<transport_idx_t,transfer_idx_t> transport_to_transfer_idx_;
+
+  // attributes of the transfers
   vector_map<transfer_idx_t, transport_idx_t> transports_from_;
   vector_map<transfer_idx_t, location_idx_t> locations_from_;
-
   vector_map<transfer_idx_t, transport_idx_t> transports_to_;
   vector_map<transfer_idx_t, location_idx_t> locations_to_;
-
   vector_map<transfer_idx_t, bitfield> bitfields_from_;
   vector_map<transfer_idx_t, std::int8_t> shift_amounts_to_;
 };
