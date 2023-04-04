@@ -4,68 +4,54 @@
 
 namespace nigiri::routing::tripbased {
 
-using transfer_idx_t = cista::strong<std::uint64_t, struct _transfer_idx>;
-
 // transfer: trip t, stop p -> trip u, stop q
-// DoOBS for trip t: instances of trip t for which transfer is possible
-// shift amount sigma_u: shift DoOBs for trip t -> DoOBS for trip u
+// DoOBS for trip t and u: instances of trip t for which transfer is possible
+// from is implicit -> given by indexing of transfer set
+// via footpath -> can be accessed by location idx of from and to
 struct transfer {
-  // from
-  transport_idx_t transport_idx_from_;
-  location_idx_t location_idx_from_;
-
-  // via footpath
-  // -> can be accessed by location idx of from and to
+  transfer() = default;
+  transfer(transport_idx_t transport_idx_to, location_idx_t location_idx_to, bitfield_idx_t bitfield_idx_from, bitfield_idx_t bitfield_idx_to)
+      : transport_idx_to_(transport_idx_to), location_idx_to_(location_idx_to), bitfield_idx_from_(bitfield_idx_from), bitfield_idx_to_(bitfield_idx_to) {}
 
   // to
-  transport_idx_t transport_idx_to_;
-  location_idx_t location_idx_to_;
+  transport_idx_t transport_idx_to_{};
+  location_idx_t location_idx_to_{};
 
   // bit set to mark instances of trips
-  bitfield bitfield_from_;
-  std::int8_t shift_amount_to_;
-
-  // walking time: from stop -> to stop
-  duration_t walking_time(location_idx_t const from, location_idx_t const to);
+  bitfield_idx_t bitfield_idx_from_{};
+  bitfield_idx_t bitfield_idx_to_{};
 };
 
-bool operator <(const transfer& t1, const transfer& t2) {
-  return std::tie(t1.transport_idx_from_, t1.location_idx_from_) < std::tie(t2.transport_idx_from_, t2.location_idx_from_);
-}
-
 struct transfer_set {
-  // add the transfer to the end of the transfer set, without sorting
-  // requires sorting after transfer computation
-  void emplace_back(const transfer&);
+  transfer_set() = default;
 
-  void insert(const transfer_idx_t, const transfer&);
+  void add(transfer const&);
 
-  // add the transfer while maintaining the sorting
-  void add_sorted(const transfer&);
+  //
+  transfer get_transfers(transport_idx_t const, location_idx_t const);
 
-  transfer_idx_t find_insertion_idx(const transfer&);
+  using iterator_t = typename vector<transfer>::const_iterator;
+  using index_t = std::uint64_t;
+  // data
+  struct entry {
 
-  // sort the transfer set by
-  // primary: transport_idx_from
-  // secondary: location_idx_from
-  void sort();
+    entry(vector<transfer> const& data, vector<index_t> const& index, index_t key)
+        : data_(data),
+          index_start_(index[key]),
+          index_end_(index[key+1]),
+          key_{key} {}
 
-  // construct an indexing structure: transport_from_idx -> first transfer
-  void index();
 
-  // get the transfer for this transfer index from the transfer set
-  transfer get(transfer_idx_t const);
 
-  // map a transport_idx to its first transfer in the sorted transfer set
-  hash_map<transport_idx_t,transfer_idx_t> transport_to_transfer_idx_;
+    vector<transfer> const& data_;
+    index_t const index_start_;
+    index_t const index_end_;
+    index_t key_;
+  };
 
-  // attributes of the transfers
-  vector_map<transfer_idx_t, transport_idx_t> transports_from_;
-  vector_map<transfer_idx_t, location_idx_t> locations_from_;
-  vector_map<transfer_idx_t, transport_idx_t> transports_to_;
-  vector_map<transfer_idx_t, location_idx_t> locations_to_;
-  vector_map<transfer_idx_t, bitfield> bitfields_from_;
-  vector_map<transfer_idx_t, std::int8_t> shift_amounts_to_;
+  vector_map<transport_idx_t, std::uint32_t> transport_to_stops_;
+  vector_map<location_idx_t, std::uint32_t> stop_to_transfers_;
+  vector<transfer> transfers_;
 };
 
 } // namespace nigiri::routing::tripbased
