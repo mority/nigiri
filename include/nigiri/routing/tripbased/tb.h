@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../types.h"
+#include "nigiri/types.h"
 
 namespace nigiri::routing::tripbased {
 
