@@ -22,36 +22,32 @@ struct transfer {
   bitfield_idx_t bitfield_idx_to_{};
 };
 
+
+using key = pair<transport_idx_t,location_idx_t>;
+using entry = pair<std::uint64_t,std::uint64_t>;
+
 struct transfer_set {
-  transfer_set() = default;
+  void add(transport_idx_t const, location_idx_t const, transfer const&);
 
-  void add(transfer const&);
+  void finalize();
 
-  //
-  transfer get_transfers(transport_idx_t const, location_idx_t const);
+  // returns entry containing start index and end index (exclusive) of transfers
+  // for given transport at given stop
+  std::optional<entry> get_transfers(transport_idx_t const, location_idx_t const);
 
-  using iterator_t = typename vector<transfer>::const_iterator;
-  using index_t = std::uint64_t;
-  // data
-  struct entry {
+  transfer& operator [](std::uint64_t index) {
+    return transfers_[index];
+  }
 
-    entry(vector<transfer> const& data, vector<index_t> const& index, index_t key)
-        : data_(data),
-          index_start_(index[key]),
-          index_end_(index[key+1]),
-          key_{key} {}
+  bool initialized_ = false;
+  bool finalized_ = false;
+  hash_map<key,entry> index_{};
+  vector<transfer> transfers_{};
+  transport_idx_t cur_transport_idx_from_{};
+  location_idx_t cur_location_idx_from_{};
+  std::uint64_t cur_start_ = 0U;
+  std::uint16_t cur_length_ = 0U;
 
-
-
-    vector<transfer> const& data_;
-    index_t const index_start_;
-    index_t const index_end_;
-    index_t key_;
-  };
-
-  vector_map<transport_idx_t, std::uint32_t> transport_to_stops_;
-  vector_map<location_idx_t, std::uint32_t> stop_to_transfers_;
-  vector<transfer> transfers_;
 };
 
 } // namespace nigiri::routing::tripbased
