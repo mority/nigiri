@@ -23,17 +23,19 @@ struct transfer {
 };
 
 
-using key = pair<transport_idx_t,location_idx_t>;
-using entry = pair<std::uint64_t,std::uint64_t>;
 
-struct transfer_set {
-  void add(transport_idx_t const, location_idx_t const, transfer const&);
+
+struct hash_transfer_set {
+  using key = pair<transport_idx_t,location_idx_t>;
+  using entry = pair<std::uint64_t,std::uint64_t>;
+
+  void add(transport_idx_t const&, location_idx_t const&, transfer const&);
 
   void finalize();
 
   // returns entry containing start index and end index (exclusive) of transfers
   // for given transport at given stop
-  std::optional<entry> get_transfers(transport_idx_t const, location_idx_t const);
+  std::optional<entry> get_transfers(transport_idx_t const&, location_idx_t const&);
 
   transfer& operator [](std::uint64_t index) {
     return transfers_[index];
@@ -49,5 +51,10 @@ struct transfer_set {
   std::uint16_t cur_length_ = 0U;
 
 };
+
+// returns the number of times midnight is passed
+constexpr int num_midnights(duration_t d) {
+  return d.count() / 1440U;
+}
 
 } // namespace nigiri::routing::tripbased

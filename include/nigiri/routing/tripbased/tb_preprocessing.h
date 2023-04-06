@@ -37,7 +37,7 @@ struct tb_preprocessing {
   // init with bitfields of timetable
   hash_map<bitfield, bitfield_idx_t> bitfield_to_bitfield_idx_{};
 
-  transfer_set ts{};
+  hash_transfer_set ts{};
 };
 
 }  // namespace nigiri::routing::tripbased

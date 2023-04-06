@@ -9,7 +9,7 @@ using namespace nigiri::routing::tripbased;
 TEST_CASE("transfer_set_basic") {
 
   // fill
-  transfer_set ts;
+  hash_transfer_set ts;
   std::uint64_t transport_to = 30000U;
   std::uint64_t location_to = 40000U;
   std::uint64_t bitfield_from = 50000U;
@@ -41,7 +41,7 @@ TEST_CASE("transfer_set_basic") {
     for (std::uint64_t location = 20000U; location < 20010U; ++location) {
       location_idx_t location_idx_from{location};
 
-      std::optional<entry> e =
+      std::optional<hash_transfer_set::entry> e =
           ts.get_transfers(transport_idx_from, location_idx_from);
       CHECK(e.has_value());
       CHECK_EQ(10, e->second - e->first);
@@ -61,6 +61,6 @@ TEST_CASE("transfer_set_basic") {
   }
 
   // check non-existent key
-  std::optional<entry> e = ts.get_transfers(transport_idx_t{23U}, location_idx_t{42U});
+  std::optional<hash_transfer_set::entry> e = ts.get_transfers(transport_idx_t{23U}, location_idx_t{42U});
   CHECK_FALSE(e.has_value());
 }
