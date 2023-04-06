@@ -53,8 +53,13 @@ struct hash_transfer_set {
 };
 
 // returns the number of times midnight is passed
-constexpr int num_midnights(duration_t d) {
-  return d.count() / 1440U;
+constexpr int num_midnights(duration_t const& d) {
+  return int(d.count() / 1440U);
+}
+
+// returns the time of day given a duration that starts at midnight
+constexpr duration_t time_of_day(duration_t const& d) {
+  return duration_t(d.count() % 1440U);
 }
 
 } // namespace nigiri::routing::tripbased
