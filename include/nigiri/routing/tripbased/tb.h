@@ -29,7 +29,7 @@ struct hash_transfer_set {
   using key = pair<transport_idx_t,location_idx_t>;
   using entry = pair<std::uint64_t,std::uint64_t>;
 
-  void add(transport_idx_t const&, location_idx_t const&, transfer const&);
+  void add(transport_idx_t const& transport_idx_from, location_idx_t const& location_idx_from, transfer const&);
 
   void finalize();
 

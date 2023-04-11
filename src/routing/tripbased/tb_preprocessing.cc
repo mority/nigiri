@@ -1,3 +1,4 @@
+#include "utl/get_or_create.h"
 
 #include "nigiri/types.h"
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
@@ -59,21 +60,27 @@ void tb_preprocessing::initial_transfer_computation(timetable& tt) {
               // sach: shift amount due to changing transports
               int sach = safp;
 
-              auto const tp_to_interval = tt.route_transport_ranges_[ri_to];
+              // departure times of transports of route ri_to at stop si_to
+              auto const event_times = tt.event_times_at_stop(ri_to, si_to, event_type::kDep);
 
-              // all transports of route ri_to sorted by departure time mod 1440 in ascending order
-              auto const deps_tod = tt.event_times_at_stop(ri_to, si_to, event_type::kDep);
+              // all transports of route ri_to sorted by departure time at stop si_to mod 1440 in ascending order
+              std::vector<std::pair<duration_t,std::size_t>> deps_tod(event_times.size());
+              for(std::size_t i = 0U; i < event_times.size(); ++i) {
+                deps_tod.emplace_back(time_of_day(event_times[i]), i);
+              }
+              std::sort(deps_tod.begin(), deps_tod.end());
 
               // first transport in deps_tod that departs after time of day a
               std::size_t tp_to_init = deps_tod.size();
               for(std::size_t i = 0U; i < deps_tod.size(); ++i) {
-                if(a <= deps_tod[i]) {
+                if(a <= deps_tod[i].first) {
                   tp_to_init = i;
                   break;
                 }
               }
 
-              std::size_t tp_to = tp_to_init;
+              // initialize index of currently examined transport in deps_tod
+              std::size_t tp_to_cur = tp_to_init;
 
               // true if midnight was passed while waiting for connecting trip
               bool midnight = false;
@@ -83,13 +90,63 @@ void tb_preprocessing::initial_transfer_computation(timetable& tt) {
 
               // check if any bit in omega is set to 1
               while(omega.any()) {
-                // check if tp_to is valid, if not continue at beginning of day
-                if(tp_to == deps_tod.size() && !midnight) {
+                // check if tp_to_cur is valid, if not continue at beginning of day
+                if(tp_to_cur == deps_tod.size() && !midnight) {
                   midnight = true;
                   sach++;
-                  tp_to = 0U;
+                  tp_to_cur = 0U;
                 }
 
+                // time of day of departure of current transport
+                duration_t dep_cur = deps_tod[tp_to_cur].first;
+                if(midnight) {
+                  dep_cur += duration_t{1440U};
+                }
+
+                // offset from begin of tp_to interval
+                std::size_t tp_to_offset = deps_tod[tp_to_cur].second;
+
+                // transport index of transport that we transfer to
+                transport_idx_t tpi_to = tt.route_transport_ranges_[ri_to][tp_to_offset];
+
+                // check conditions for required transfer
+                // 1. different route OR
+                // 2. earlier stop    OR
+                // 3. same route but tpi_to is earlier than tpi_from
+                bool req = ri_from != ri_to
+                           || si_to < si_from
+                           || (tpi_to != tpi_from
+                               && (dep_cur - (tt.event_mam(tpi_to,si_to,event_type::kDep) - tt.event_mam(tpi_to, si_from, event_type::kArr)) <= a - fp.duration_));
+
+                if(req) {
+                  // shift amount due to number of times transport_to passed midnight
+                  int satp_to = num_midnights(tt.event_mam(tpi_to,si_to,event_type::kDep));
+
+                  // total shift amount
+                  int sa_total = satp_to - (satp_from + sach);
+
+                  // align bitfields and perform AND
+                  bitfield transfer_from = omega;
+                  if (sa_total < 0) {
+                    transfer_from &= tt.bitfields_[tt.transport_traffic_days_[tpi_to]] << static_cast<std::size_t>(-1 * sa_total);
+                  } else {
+                    transfer_from &= tt.bitfields_[tt.transport_traffic_days_[tpi_to]] >> static_cast<std::size_t>(sa_total);
+                  }
+
+                  // check for match
+                  if(transfer_from.any()) {
+
+                    // remove days that are covered by this transfer from omega
+                    omega &= ~transfer_from;
+
+                    // add transfer to transfer set
+                    bitfield_idx_t bfi_from = utl::get_or_create(bitfield_to_bitfield_idx_, );
+                    bitfield_idx_t bfi_to =  utl::get_or_create();
+                    transfer t{tpi_to, li_to, bfi_from, bfi_to};
+                    ts.add(tpi_from, li_from, t);
+
+                  }
+                }
               }
             }
           }
