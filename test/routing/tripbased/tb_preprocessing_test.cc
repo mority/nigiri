@@ -8,7 +8,7 @@ using namespace nigiri::routing::tripbased;
 
 TEST_CASE("get_or_create_bfi") {
   // init
-  timetable tt{};
+  timetable tt;
   tb_preprocessing tbp{tt};
 
   // bitfield already registered with timetable
@@ -28,4 +28,10 @@ TEST_CASE("get_or_create_bfi") {
   bitfield_idx_t bfi1_act = tbp.get_or_create_bfi(bf1);
   CHECK_EQ(bfi1_exp, bfi1_act);
   CHECK_EQ(bf1, tt.bitfields_[bfi1_exp]);
+}
+
+TEST_CASE("initial_transfer_computation") {
+  timetable tt;
+  auto const src = source_idx_t{0U};
+
 }

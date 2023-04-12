@@ -43,13 +43,14 @@ struct hash_transfer_set {
 
   bool initialized_ = false;
   bool finalized_ = false;
-  hash_map<key,entry> index_{};
-  vector<transfer> transfers_{};
+
   transport_idx_t cur_transport_idx_from_{};
   location_idx_t cur_location_idx_from_{};
   std::uint64_t cur_start_ = 0U;
   std::uint16_t cur_length_ = 0U;
 
+  hash_map<key,entry> index_{};
+  vector<transfer> transfers_{};
 };
 
 // returns the number of times midnight is passed
