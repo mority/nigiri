@@ -103,7 +103,7 @@ void tb_preprocessing::initial_transfer_computation() {
                 // check if tp_to_cur is valid, if not continue at beginning of day
                 if(tp_to_cur == deps_tod.size() && !midnight) {
                   midnight = true;
-                  sach++;
+                  ++sach;
                   tp_to_cur = 0U;
                 }
 
@@ -139,33 +139,42 @@ void tb_preprocessing::initial_transfer_computation() {
                   int sa_total = satp_to - (satp_from + sach);
 
                   // align bitfields and perform AND
-                  bitfield transfer_from = omega;
+                  // bitfield transfer from
+                  bitfield bf_tf_from = omega;
                   if (sa_total < 0) {
-                    transfer_from &=
+                    bf_tf_from &=
                         tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]] << static_cast<std::size_t>(-1 * sa_total);
                   } else {
-                    transfer_from &=
+                    bf_tf_from &=
                         tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]] >> static_cast<std::size_t>(sa_total);
                   }
 
                   // check for match
-                  if(transfer_from.any()) {
+                  if(bf_tf_from.any()) {
 
                     // remove days that are covered by this transfer from omega
-                    omega &= ~transfer_from;
+                    omega &= ~bf_tf_from;
 
                     // construct and add transfer to transfer set
-                    bitfield_idx_t bfi_from = get_or_create_bfi(transfer_from);
-                    bitfield transfer_to = transfer_from;
+                    bitfield_idx_t bfi_from = get_or_create_bfi(bf_tf_from);
+                    // bitfield transfer to
+                    bitfield bf_tf_to = bf_tf_from;
                     if(sa_total < 0) {
-                      transfer_to <<= static_cast<std::size_t>(-1 * sa_total);
+                      bf_tf_to <<= static_cast<std::size_t>(-1 * sa_total);
                     } else {
-                      transfer_to >>= static_cast<std::size_t>(sa_total);
+                      bf_tf_to >>= static_cast<std::size_t>(sa_total);
                     }
-                    bitfield_idx_t bfi_to = get_or_create_bfi(transfer_to);
+                    bitfield_idx_t bfi_to = get_or_create_bfi(bf_tf_to);
                     transfer t{tpi_to, li_to, bfi_from, bfi_to};
-                    ts.add(tpi_from, li_from, t);
+                    ts_.add(tpi_from, li_from, t);
                   }
+                }
+
+                // prep next iteration
+                ++tp_to_cur;
+                // check if we examined all transports
+                if(tp_to_cur == tp_to_init) {
+                  break;
                 }
               }
             }
@@ -175,6 +184,9 @@ void tb_preprocessing::initial_transfer_computation() {
       }
     }
   }
+
+  // finalize transfer set
+  ts_.finalize();
 }
 
 }; // namespace nigiri::routing::tripbased

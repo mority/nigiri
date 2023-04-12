@@ -43,7 +43,7 @@ struct tb_preprocessing {
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
   timetable& tt_;
-  hash_transfer_set ts{};
+  hash_transfer_set ts_{};
 };
 
 }  // namespace nigiri::routing::tripbased
