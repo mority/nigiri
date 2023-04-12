@@ -46,7 +46,7 @@ TEST_CASE("transfer_set_basic") {
       CHECK(e.has_value());
       CHECK_EQ(10, e->second - e->first);
 
-      for(std::uint64_t i = e->first; i < e->second; ++i) {
+      for(std::uint32_t i = e->first; i < e->second; ++i) {
         transfer t = ts[i];
         transport_idx_t transport_idx_to{transport_to++};
         location_idx_t location_idx_to{location_to++};

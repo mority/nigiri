@@ -27,7 +27,7 @@ struct transfer {
 
 struct hash_transfer_set {
   using key = pair<transport_idx_t,location_idx_t>;
-  using entry = pair<std::uint64_t,std::uint64_t>;
+  using entry = pair<std::uint32_t,std::uint32_t>;
 
   void add(transport_idx_t const& transport_idx_from, location_idx_t const& location_idx_from, transfer const&);
 
@@ -37,7 +37,7 @@ struct hash_transfer_set {
   // for given transport at given stop
   std::optional<entry> get_transfers(transport_idx_t const&, location_idx_t const&);
 
-  transfer& operator [](std::uint64_t index) {
+  transfer& operator[](std::uint32_t index) {
     return transfers_[index];
   }
 
@@ -46,8 +46,8 @@ struct hash_transfer_set {
 
   transport_idx_t cur_transport_idx_from_{};
   location_idx_t cur_location_idx_from_{};
-  std::uint64_t cur_start_ = 0U;
-  std::uint16_t cur_length_ = 0U;
+  std::uint32_t cur_start_ = 0U;
+  std::uint32_t cur_length_ = 0U;
 
   hash_map<key,entry> index_{};
   vector<transfer> transfers_{};
@@ -55,12 +55,12 @@ struct hash_transfer_set {
 
 // returns the number of times midnight is passed
 constexpr int num_midnights(duration_t const& d) {
-  return int(d.count() / 1440U);
+  return int(d.count() / 1440);
 }
 
 // returns the time of day given a duration that starts at midnight
 constexpr duration_t time_of_day(duration_t const& d) {
-  return duration_t(d.count() % 1440U);
+  return duration_t(d.count() % 1440);
 }
 
 } // namespace nigiri::routing::tripbased

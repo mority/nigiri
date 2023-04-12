@@ -3,10 +3,11 @@
 #include "nigiri/types.h"
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
 
-namespace nigiri::routing::tripbased {
+using namespace nigiri;
+using namespace nigiri::routing::tripbased;
 
 bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
-  return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&]() {
+  return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&bf, this]() {
     bitfield_idx_t bfi = tt_.register_bitfield(bf);
     bitfield_to_bitfield_idx_.emplace(bf,bfi);
     return bfi;});
@@ -23,7 +24,7 @@ void tb_preprocessing::initial_transfer_computation() {
   for(transport_idx_t tpi_from{0U}; tpi_from < tt_.transport_traffic_days_.size(); ++tpi_from) {
 
     // ri from: route index from
-    route_idx_t ri_from = tt_.transport_route_[tpi_from];
+    route_idx_t const ri_from = tt_.transport_route_[tpi_from];
 
     // iterate over stops of transport (skip first stop)
     auto stops_from = tt_.route_location_seq_[ri_from];
@@ -31,30 +32,33 @@ void tb_preprocessing::initial_transfer_computation() {
     for(std::size_t si_from = 1U; si_from < stops_from.size(); ++si_from) {
 
       // li_from: location index from
-      location_idx_t li_from{stops_from[si_from]};
+      location_idx_t const li_from{stops_from[si_from]};
 
-      duration_t t_arr_from =
+      duration_t const t_arr_from =
           tt_.event_mam(tpi_from, si_from, event_type::kArr);
 
       // sa_from: shift amount transport from
-      int satp_from = num_midnights(t_arr_from);
+      int const satp_from = num_midnights(t_arr_from);
 
       // iterate over stops in walking range
-      auto footpaths_out = it_range{tt_.locations_.footpaths_out_[li_from]};
+      // auto footpaths_out = it_range{tt_.locations_.footpaths_out_[li_from]}; // <- causes invalid write
+
+      auto footpaths_out = tt_.locations_.footpaths_out_[li_from];
+
       // fp: outgoing footpath
       for(auto fp : footpaths_out) {
 
         // li_to: location index of destination of footpath
-        location_idx_t li_to = fp.target_;
+        location_idx_t const li_to = fp.target_;
 
         // ta: arrival time at stop_to in relation to transport_from
-        duration_t ta = t_arr_from + fp.duration_;
+        duration_t const ta = t_arr_from + fp.duration_;
 
         // safp: shift amount footpath
-        int safp = num_midnights(ta) - satp_from;
+        int const safp = num_midnights(ta) - satp_from;
 
         // a: time of day when arriving at stop_to
-        duration_t a = time_of_day(ta);
+        duration_t const a = time_of_day(ta);
 
         // iterate over lines serving stop_to
         auto routes_at_stop_to = it_range{tt_.location_routes_[li_to]};
@@ -114,17 +118,17 @@ void tb_preprocessing::initial_transfer_computation() {
                 }
 
                 // offset from begin of tp_to interval
-                std::size_t tp_to_offset = deps_tod[tp_to_cur].second;
+                std::size_t const tp_to_offset = deps_tod[tp_to_cur].second;
 
                 // transport index of transport that we transfer to
-                transport_idx_t tpi_to =
-                    tt_.route_transport_ranges_[ri_to][tp_to_offset];
+                transport_idx_t const tpi_to =
+                    tt_.route_transport_ranges_[ri_to][static_cast<std::uint32_t>(tp_to_offset)];
 
                 // check conditions for required transfer
                 // 1. different route OR
                 // 2. earlier stop    OR
                 // 3. same route but tpi_to is earlier than tpi_from
-                bool req = ri_from != ri_to
+                bool const req = ri_from != ri_to
                            || si_to < si_from
                            || (tpi_to != tpi_from
                                && (dep_cur - (tt_.event_mam(tpi_to,si_to,event_type::kDep) -
@@ -132,11 +136,11 @@ void tb_preprocessing::initial_transfer_computation() {
 
                 if(req) {
                   // shift amount due to number of times transport_to passed midnight
-                  int satp_to = num_midnights(
+                  int const satp_to = num_midnights(
                       tt_.event_mam(tpi_to,si_to,event_type::kDep));
 
                   // total shift amount
-                  int sa_total = satp_to - (satp_from + sach);
+                  int const sa_total = satp_to - (satp_from + sach);
 
                   // align bitfields and perform AND
                   // bitfield transfer from
@@ -156,7 +160,7 @@ void tb_preprocessing::initial_transfer_computation() {
                     omega &= ~bf_tf_from;
 
                     // construct and add transfer to transfer set
-                    bitfield_idx_t bfi_from = get_or_create_bfi(bf_tf_from);
+                    bitfield_idx_t const bfi_from = get_or_create_bfi(bf_tf_from);
                     // bitfield transfer to
                     bitfield bf_tf_to = bf_tf_from;
                     if(sa_total < 0) {
@@ -164,8 +168,8 @@ void tb_preprocessing::initial_transfer_computation() {
                     } else {
                       bf_tf_to >>= static_cast<std::size_t>(sa_total);
                     }
-                    bitfield_idx_t bfi_to = get_or_create_bfi(bf_tf_to);
-                    transfer t{tpi_to, li_to, bfi_from, bfi_to};
+                    bitfield_idx_t const bfi_to = get_or_create_bfi(bf_tf_to);
+                    transfer const t{tpi_to, li_to, bfi_from, bfi_to};
                     ts_.add(tpi_from, li_from, t);
                   }
                 }
@@ -188,5 +192,3 @@ void tb_preprocessing::initial_transfer_computation() {
   // finalize transfer set
   ts_.finalize();
 }
-
-}; // namespace nigiri::routing::tripbased
