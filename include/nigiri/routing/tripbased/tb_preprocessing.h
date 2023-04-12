@@ -15,17 +15,20 @@ struct earliest_times {
 };
 
 struct tb_preprocessing {
+  tb_preprocessing() = delete;
+  tb_preprocessing(timetable& tt) : tt_(tt) {}
+
   // preprocessing without reduction step
-  void initial_transfer_computation(timetable& tt);
+  void initial_transfer_computation();
 
   // preprocessing with U-turn transfer removal
-  void u_turn_transfer_removal(timetable& tt);
+  void u_turn_transfer_removal();
 
   // preprocessing with U-turn transfer removal and transfer reduction
-  void transfer_reduction(timetable& tt);
+  void transfer_reduction();
 
-  void build_transfer_set(timetable& tt) {
-    initial_transfer_computation(tt);
+  void build_transfer_set() {
+    initial_transfer_computation();
   }
 
   // load precomputed transfer set from file
@@ -37,6 +40,9 @@ struct tb_preprocessing {
   // init with bitfields of timetable
   hash_map<bitfield, bitfield_idx_t> bitfield_to_bitfield_idx_{};
 
+  bitfield_idx_t get_or_create_bfi(bitfield const& bf);
+
+  timetable& tt_;
   hash_transfer_set ts{};
 };
 
