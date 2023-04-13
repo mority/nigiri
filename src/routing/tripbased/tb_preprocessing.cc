@@ -27,12 +27,13 @@ void tb_preprocessing::initial_transfer_computation() {
     route_idx_t const ri_from = tt_.transport_route_[tpi_from];
 
     // iterate over stops of transport (skip first stop)
-    auto stops_from = tt_.route_location_seq_[ri_from];
+    auto const stops_from = tt_.route_location_seq_[ri_from];
     // si_from: stop index from
-    for(std::size_t si_from = 1U; si_from < stops_from.size(); ++si_from) {
+    for(std::size_t si_from = 1U; si_from != stops_from.size(); ++si_from) {
 
+      auto const stop = timetable::stop{stops_from[si_from]};
       // li_from: location index from
-      location_idx_t const li_from{stops_from[si_from]};
+      location_idx_t const li_from = stop.location_idx();
 
       duration_t const t_arr_from =
           tt_.event_mam(tpi_from, si_from, event_type::kArr);
@@ -41,10 +42,7 @@ void tb_preprocessing::initial_transfer_computation() {
       int const satp_from = num_midnights(t_arr_from);
 
       // iterate over stops in walking range
-      // auto footpaths_out = it_range{tt_.locations_.footpaths_out_[li_from]}; // <- causes invalid write
-
-      auto footpaths_out = tt_.locations_.footpaths_out_[li_from];
-
+      auto const footpaths_out = tt_.locations_.footpaths_out_[li_from];
       // fp: outgoing footpath
       for(auto fp : footpaths_out) {
 
