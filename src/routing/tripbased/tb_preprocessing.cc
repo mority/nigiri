@@ -76,7 +76,7 @@ void tb_preprocessing::initial_transfer_computation() {
 
               // all transports of route ri_to sorted by departure time at stop si_to mod 1440 in ascending order
               std::vector<std::pair<duration_t,std::size_t>> deps_tod(event_times.size());
-              for(std::size_t i = 0U; i < event_times.size(); ++i) {
+              for(std::size_t i = 0U; i != event_times.size(); ++i) {
                 deps_tod.emplace_back(time_of_day(event_times[i]), i);
               }
               std::sort(deps_tod.begin(), deps_tod.end());

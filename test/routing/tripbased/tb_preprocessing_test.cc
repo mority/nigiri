@@ -36,10 +36,30 @@ TEST_CASE("initial_transfer_computation") {
   // load timetable
   timetable tt;
   auto const src = source_idx_t{0U};
-  load_timetable(src, loader::hrd::hrd_5_20_26, files_simple(), tt);
+  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
 
   tbp.initial_transfer_computation();
+
+  std::cerr << "num_transfers: " << tbp.ts_.transfers_.size() << std::endl;
+
+  for(transport_idx_t tpi_from{0U}; tpi_from < tt.transport_traffic_days_.size(); ++tpi_from) {
+    route_idx_t const ri_from = tt.transport_route_[tpi_from];
+    auto const stops_from = tt.route_location_seq_[ri_from];
+    for(std::size_t si_from = 0U; si_from != stops_from.size(); ++si_from) {
+      auto const stop = timetable::stop{stops_from[si_from]};
+      // li_from: location index from
+      location_idx_t const li_from = stop.location_idx();
+      std::optional<hash_transfer_set::entry> transfers = tbp.ts_.get_transfers(tpi_from, li_from);
+      if(transfers.has_value()) {
+        for(auto i = transfers.value().first; i != transfers.value().second; ++i) {
+          transfer t = tbp.ts_.transfers_[i];
+          std::cerr << "tpi_from = " << tpi_from << ", li_from = " << li_from << "->" << "tpi_to = " << t.transport_idx_to_ << ", li_to" << t.location_idx_to_ << std::endl;
+        }
+
+      }
+    }
+  }
 }
