@@ -71,7 +71,7 @@ TEST_CASE("initial_transfer_computation") {
   // load timetable
   timetable tt;
   auto const src = source_idx_t{0U};
-  load_timetable(src, loader::hrd::hrd_5_20_26, files_simple(), tt);
+  load_timetable(src, loader::hrd::hrd_5_20_26, files(), tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};

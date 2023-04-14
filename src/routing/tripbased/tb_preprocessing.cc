@@ -20,7 +20,7 @@ void tb_preprocessing::initial_transfer_computation() {
   }
 
 #ifndef NDEBUG
-  std::clog << "[TBP] Added " << bitfield_to_bitfield_idx_.size() << " KV-pairs to bitfield_to_bitfield_idx_" << std::endl;
+  TBDL << "Added " << bitfield_to_bitfield_idx_.size() << " KV-pairs to bitfield_to_bitfield_idx_" << std::endl;
 #endif
 
   // iterate over all trips of the timetable
@@ -31,7 +31,7 @@ void tb_preprocessing::initial_transfer_computation() {
     route_idx_t const ri_from = tt_.transport_route_[tpi_from];
 
 #ifndef NDEBUG
-    std::clog << "[TBP] Examining transport " << tpi_from << " of route " << ri_from <<  std::endl;
+    TBDL << "Examining transport " << tpi_from << " of route " << ri_from << "..." <<  std::endl;
 #endif
 
     // iterate over stops of transport (skip first stop)
@@ -50,11 +50,16 @@ void tb_preprocessing::initial_transfer_computation() {
       int const satp_from = num_midnights(t_arr_from);
 
 #ifndef NDEBUG
-      std::clog << "[TBP] stop " << si_from << ", location " << li_from << ", t_arr_from " << t_arr_from << ", satp_from " << satp_from <<  std::endl;
+      TBDL << "si_from = " << si_from << ", li_from = " << li_from << ", t_arr_from = " << t_arr_from << ", satp_from = " << satp_from <<  std::endl;
 #endif
 
       // iterate over stops in walking range
       auto const footpaths_out = tt_.locations_.footpaths_out_[li_from];
+
+#ifndef NDEBUG
+      TBDL << "Examining " << footpaths_out.size() << " outgoing footpaths..." <<  std::endl;
+#endif
+
       // fp: outgoing footpath
       for(auto fp : footpaths_out) {
 
@@ -71,11 +76,19 @@ void tb_preprocessing::initial_transfer_computation() {
         duration_t const a = time_of_day(ta);
 
 #ifndef NDEBUG
+        TBDL << "li_to = " << li_to << ", safp = " << safp << ", a = " << a << std::endl;
+#endif
 
         // iterate over lines serving stop_to
-        auto routes_at_stop_to = it_range{tt_.location_routes_[li_to]};
+        auto const routes_at_stop_to = tt_.location_routes_[li_to];
+
+#ifndef NDEBUG
+        TBDL << "Examining " << routes_at_stop_to.size() << " routes at stop li_to..." << std::endl;
+#endif
+
         // ri_to: route index to
         for(auto ri_to : routes_at_stop_to) {
+
           // ri_to might visit stop multiple times, skip if stop_to is the last stop in the stop sequence of the ri_to
           // si_to: stop index to
           for(std::size_t si_to = 0U; si_to < tt_.route_location_seq_[ri_to].size() - 1; ++si_to) {
@@ -114,6 +127,10 @@ void tb_preprocessing::initial_transfer_computation() {
               bitfield omega =
                   tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
 
+#ifndef NDEBUG
+              TBDL << "ri_to = " << ri_to << ", si_to = " << si_to << std::endl;
+#endif
+
               // check if any bit in omega is set to 1
               while(omega.any()) {
                 // check if tp_to_cur is valid, if not continue at beginning of day
@@ -121,6 +138,9 @@ void tb_preprocessing::initial_transfer_computation() {
                   midnight = true;
                   ++sach;
                   tp_to_cur = 0U;
+#ifndef NDEBUG
+                  TBDL << "Passed midnight" << std::endl;
+#endif
                 }
 
                 // time of day of departure of current transport
@@ -135,6 +155,10 @@ void tb_preprocessing::initial_transfer_computation() {
                 // transport index of transport that we transfer to
                 transport_idx_t const tpi_to =
                     tt_.route_transport_ranges_[ri_to][static_cast<std::uint32_t>(tp_to_offset)];
+
+#ifndef NDEBUG
+                TBDL << "Examining tpi_to = " << tpi_to << std::endl;
+#endif
 
                 // check conditions for required transfer
                 // 1. different route OR
@@ -183,8 +207,22 @@ void tb_preprocessing::initial_transfer_computation() {
                     bitfield_idx_t const bfi_to = get_or_create_bfi(bf_tf_to);
                     transfer const t{tpi_to, li_to, bfi_from, bfi_to};
                     ts_.add(tpi_from, li_from, t);
+#ifndef NDEBUG
+                      TBDL << "transfer added" << std::endl;
+#endif
                   }
+#ifndef NDEBUG
+                  else {
+                    TBDL << "required but no bitfield match" << std::endl;
+                  }
+#endif
                 }
+
+#ifndef NDEBUG
+                else {
+                  TBDL << "not required" << std::endl;
+                }
+#endif
 
                 // prep next iteration
                 ++tp_to_cur;

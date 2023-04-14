@@ -2,6 +2,8 @@
 
 #include "nigiri/types.h"
 
+#define TBDL std::clog << "[" <<__FILE_NAME__ << ":" << __LINE__ << "] "
+
 namespace nigiri::routing::tripbased {
 
 // transfer: trip t, stop p -> trip u, stop q
