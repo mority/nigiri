@@ -19,12 +19,20 @@ void tb_preprocessing::initial_transfer_computation() {
     bitfield_to_bitfield_idx_.emplace(tt_.bitfields_[bfi], bfi);
   }
 
+#ifndef NDEBUG
+  std::clog << "[TBP] Added " << bitfield_to_bitfield_idx_.size() << " KV-pairs to bitfield_to_bitfield_idx_" << std::endl;
+#endif
+
   // iterate over all trips of the timetable
   // tpi: transport idx from
   for(transport_idx_t tpi_from{0U}; tpi_from < tt_.transport_traffic_days_.size(); ++tpi_from) {
 
     // ri from: route index from
     route_idx_t const ri_from = tt_.transport_route_[tpi_from];
+
+#ifndef NDEBUG
+    std::clog << "[TBP] Examining transport " << tpi_from << " of route " << ri_from <<  std::endl;
+#endif
 
     // iterate over stops of transport (skip first stop)
     auto const stops_from = tt_.route_location_seq_[ri_from];
@@ -40,6 +48,10 @@ void tb_preprocessing::initial_transfer_computation() {
 
       // sa_from: shift amount transport from
       int const satp_from = num_midnights(t_arr_from);
+
+#ifndef NDEBUG
+      std::clog << "[TBP] stop " << si_from << ", location " << li_from << ", t_arr_from " << t_arr_from << ", satp_from " << satp_from <<  std::endl;
+#endif
 
       // iterate over stops in walking range
       auto const footpaths_out = tt_.locations_.footpaths_out_[li_from];
@@ -57,6 +69,8 @@ void tb_preprocessing::initial_transfer_computation() {
 
         // a: time of day when arriving at stop_to
         duration_t const a = time_of_day(ta);
+
+#ifndef NDEBUG
 
         // iterate over lines serving stop_to
         auto routes_at_stop_to = it_range{tt_.location_routes_[li_to]};
