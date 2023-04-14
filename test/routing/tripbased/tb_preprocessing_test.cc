@@ -71,7 +71,16 @@ TEST_CASE("initial_transfer_computation") {
   // load timetable
   timetable tt;
   auto const src = source_idx_t{0U};
-  load_timetable(src, loader::hrd::hrd_5_20_26, files(), tt);
+  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
+
+  for(location_idx_t li{0U}; li != tt.n_locations(); ++li) {
+    std::cerr << "location " << li << " has footpaths to...";
+    for(auto fpi = 0U; fpi != tt.locations_.footpaths_out_[li].size(); ++fpi) {
+      std::cerr << "location " << tt.locations_.footpaths_out_[li][fpi] << " ";
+    }
+    std::cerr << std::endl;
+  }
+
 
   // init preprocessing
   tb_preprocessing tbp{tt};
