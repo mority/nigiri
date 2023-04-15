@@ -5,18 +5,13 @@
 
 namespace nigiri::routing::tripbased {
 
-struct earliest_times {
-  struct et_entry {
-    minutes_after_midnight_t time;
-    bitfield bitfield_;
-  };
-
-  vector<pair<minutes_after_midnight_t,bitfield>> data_;
-};
-
 struct tb_preprocessing {
   tb_preprocessing() = delete;
-  tb_preprocessing(timetable& tt) : tt_(tt) {}
+
+  /// Constructor
+  /// \param tt reference to timetable
+  /// \param lh look-ahed, maximum time to wait for connection
+  explicit tb_preprocessing(timetable& tt, duration_t lh = duration_t(1440U)) : tt_(tt), lh_(lh) {}
 
   // preprocessing without reduction step
   void initial_transfer_computation();
@@ -43,6 +38,7 @@ struct tb_preprocessing {
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
   timetable& tt_;
+  duration_t lh_; // look-ahead
   hash_transfer_set ts_{};
 };
 
