@@ -6,6 +6,15 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
+constexpr std::string first_n(bitfield const& bf, std::size_t n = 8) {
+  std::string s = "";
+  n = n > bf.size() ? bf.size() : n;
+  for(std::size_t i = n; i != 0; --i) {
+    s += std::to_string(bf[i]);
+  }
+  return s;
+}
+
 bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&bf, this]() {
     bitfield_idx_t bfi = tt_.register_bitfield(bf);
@@ -119,7 +128,8 @@ void tb_preprocessing::initial_transfer_computation() {
                   tt_.event_times_at_stop(ri_to, si_to, event_type::kDep);
 
               // all transports of route ri_to sorted by departure time at stop si_to mod 1440 in ascending order
-              std::vector<std::pair<duration_t,std::size_t>> deps_tod(event_times.size());
+              std::vector<std::pair<duration_t,std::size_t>> deps_tod;
+              deps_tod.reserve(event_times.size());
               for(std::size_t i = 0U; i != event_times.size(); ++i) {
                 deps_tod.emplace_back(time_of_day(event_times[i]), i);
               }
@@ -149,6 +159,8 @@ void tb_preprocessing::initial_transfer_computation() {
 
 #ifndef NDEBUG
               TBDL << "Looking for earliest connecting transport after a = " << a << std::endl;
+              TBDL << "Starting from tp_to_cur = " << tp_to_cur << std::endl;
+              TBDL << "initial omega = " << first_n(omega) << std::endl;
 #endif
               // check if any bit in omega is set to 1
               while(omega.any()) {
@@ -158,7 +170,7 @@ void tb_preprocessing::initial_transfer_computation() {
                   ++sach;
                   tp_to_cur = 0U;
 #ifndef NDEBUG
-                  TBDL << "Passed midnight" << std::endl;
+                  TBDL << "Passed midnight: sach = " << sach << ", tp_to_cur = " << tp_to_cur << std::endl;
 #endif
                 }
 
@@ -202,42 +214,70 @@ void tb_preprocessing::initial_transfer_computation() {
                   // total shift amount
                   int const sa_total = satp_to - (satp_from + sach);
 
-                  // align bitfields and perform AND
+#ifndef NDEBUG
+                  TBDL << "satp_to = " << satp_to << ", sa_total = " << sa_total << std::endl;
+#endif
+
                   // bitfield transfer from
                   bitfield bf_tf_from = omega;
+
+                  // bitfield transport to
+                  bitfield const& bf_tp_to = tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]];
+
+#ifndef NDEBUG
+                  TBDL << "   omega = " << first_n(omega) << std::endl;
+                  TBDL << "bf_tp_to = " << first_n(bf_tp_to) << std::endl;
+#endif
+
+                  // align bitfields and perform AND
                   if (sa_total < 0) {
-                    bf_tf_from &=
-                        tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]] << static_cast<std::size_t>(-1 * sa_total);
+                    bf_tf_from &= bf_tp_to << static_cast<unsigned>(-1 * sa_total);
+#ifndef NDEBUG
+                    TBDL << "shifted left by " << static_cast<unsigned>(-1 * sa_total) << std::endl;
+#endif
                   } else {
-                    bf_tf_from &=
-                        tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]] >> static_cast<std::size_t>(sa_total);
+                    bf_tf_from &= bf_tp_to >> static_cast<unsigned>(sa_total);
+#ifndef NDEBUG
+                    TBDL << "shifted right by " << static_cast<unsigned>(sa_total) << std::endl;
+#endif
                   }
 
+#ifndef NDEBUG
+                  TBDL << "bf_tf_from = " << first_n(bf_tf_from) << std::endl;
+#endif
                   // check for match
                   if(bf_tf_from.any()) {
 
                     // remove days that are covered by this transfer from omega
                     omega &= ~bf_tf_from;
 
+#ifndef NDEBUG
+                    TBDL << "new omega =  " << first_n(omega) << std::endl;
+#endif
+
                     // construct and add transfer to transfer set
                     bitfield_idx_t const bfi_from = get_or_create_bfi(bf_tf_from);
                     // bitfield transfer to
                     bitfield bf_tf_to = bf_tf_from;
                     if(sa_total < 0) {
-                      bf_tf_to <<= static_cast<std::size_t>(-1 * sa_total);
+                      bf_tf_to >>= static_cast<unsigned>(-1 * sa_total);
                     } else {
-                      bf_tf_to >>= static_cast<std::size_t>(sa_total);
+                      bf_tf_to <<= static_cast<unsigned>(sa_total);
                     }
                     bitfield_idx_t const bfi_to = get_or_create_bfi(bf_tf_to);
                     transfer const t{tpi_to, li_to, bfi_from, bfi_to};
                     ts_.add(tpi_from, li_from, t);
 #ifndef NDEBUG
-                      TBDL << "transfer added" << std::endl;
+                      TBDL << "transfer added:" << std::endl;
+                      TBDL << "tpi_from = " << tpi_from << ", li_from = " << li_from << std::endl;
+                      TBDL << "tpi_to = " << tpi_to << ", li_to = " << li_to << std::endl;
+                      TBDL << "bf_tf_from = " << first_n(bf_tf_from) << std::endl;
+                      TBDL << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
 #endif
                   }
 #ifndef NDEBUG
                   else {
-                    TBDL << "required but no bitfield match" << std::endl;
+                    TBDL << "no bitfield match" << std::endl;
                   }
 #endif
                 }
@@ -252,8 +292,17 @@ void tb_preprocessing::initial_transfer_computation() {
                 ++tp_to_cur;
                 // check if we examined all transports
                 if(tp_to_cur == tp_to_init) {
+#ifndef NDEBUG
+                  TBDL << "tp_to_cur = tp_to_init = " << tp_to_cur << ", breaking" << std::endl;
+#endif
                   break;
                 }
+#ifndef NDEBUG
+                if(omega.any()) {
+                  TBDL << "++tp_to_cur = " << tp_to_cur << ", continuing" << std::endl;
+
+                }
+#endif
               }
             }
           }
