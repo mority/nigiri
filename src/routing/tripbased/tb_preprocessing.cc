@@ -77,7 +77,7 @@ void tb_preprocessing::initial_transfer_computation() {
            << ", t_arr_from = " << t_arr_from << ", sa_tp_from = " << sa_tp_from
            << std::endl;
 #endif
-      // locations do not have footpath to themselves, insert reflexive footpath
+      // locations do not have a footpath to themselves, insert reflexive footpath
       std::vector<footpath> footpaths_out;
       footpaths_out.reserve(tt_.locations_.footpaths_out_[li_from].size() + 1);
       footpaths_out.emplace_back(footpath{li_from, duration_t{0}});
@@ -94,7 +94,7 @@ void tb_preprocessing::initial_transfer_computation() {
       // fp: outgoing footpath
       for (auto const& fp : footpaths_out) {
 
-        // if walking to the stop takes longer than the look-ahead skip the stop
+        // if walking to the stop takes longer than the look-ahead, skip the stop
         if (lh_ < fp.duration_) {
           continue;
         }
@@ -168,11 +168,18 @@ void tb_preprocessing::initial_transfer_computation() {
               TBDL << "Sorted " << deps_tod.size()
                    << " transports by departure time" << std::endl;
 #endif
+              // find first departure at or after a
               // tp_to_cur_it: iterator of current element in deps_tod
               auto tp_to_cur_it =
                   std::lower_bound(deps_tod.begin(), deps_tod.end(),
                                    std::pair<duration_t, std::uint32_t>(
-                                       a, 0U));  // find first departure after a
+                                       a, 0U));
+
+              // no departure on this day at or after a
+              if(tp_to_cur_it == deps_tod.end()) {
+                ++sa_w; // start looking on the following day
+                tp_to_cur_it = deps_tod.begin(); // with the earliest transport
+              }
 
               // omega: days of transport_from that still require connection
               bitfield omega =
@@ -180,8 +187,7 @@ void tb_preprocessing::initial_transfer_computation() {
 
 #ifndef NDEBUG
               TBDL << "Looking for earliest connecting transport after a = "
-                   << a << std::endl;
-              TBDL << "initial omega = " << first_n(omega) << std::endl;
+                   << a << ", initial omega = " << first_n(omega) << std::endl;
 #endif
               // check if any bit in omega is set to 1
               while (omega.any()) {
@@ -201,10 +207,9 @@ void tb_preprocessing::initial_transfer_computation() {
                       tt_.route_transport_ranges_[ri_to][tp_to_offset];
 
 #ifndef NDEBUG
-                  TBDL << "Examining element with index "
+                  TBDL << "Examining deps_tod["
                        << std::distance(deps_tod.begin(), tp_to_cur_it)
-                       << " of deps_tod"
-                       << ", tpi_to = " << tpi_to << ", dep_cur = " << dep_cur
+                       << "], tpi_to = " << tpi_to << ", dep_cur = " << dep_cur
                        << std::endl;
 #endif
 
@@ -253,8 +258,7 @@ void tb_preprocessing::initial_transfer_computation() {
                         tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]];
 
 #ifndef NDEBUG
-                    TBDL << "   omega = " << first_n(omega) << std::endl;
-                    TBDL << "bf_tp_to = " << first_n(bf_tp_to) << std::endl;
+                    TBDL << "omega = " << first_n(omega) << ", bf_tp_to = " << first_n(bf_tp_to) << std::endl;
 #endif
 
                     // bitfield transfer from
@@ -305,14 +309,9 @@ void tb_preprocessing::initial_transfer_computation() {
                       ts_.add(tpi_from, li_from, t);
 
 #ifndef NDEBUG
-                      TBDL << "transfer added:" << std::endl;
-                      TBDL << "tpi_from = " << tpi_from
-                           << ", li_from = " << li_from << std::endl;
-                      TBDL << "tpi_to = " << tpi_to << ", li_to = " << li_to
-                           << std::endl;
-                      TBDL << "bf_tf_from = " << first_n(bf_tf_from)
-                           << std::endl;
-                      TBDL << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
+                      TBDL << "transfer added:" << std::endl << "tpi_from = " << tpi_from
+                           << ", li_from = " << li_from << std::endl << "tpi_to = " << tpi_to << ", li_to = " << li_to
+                           << std::endl << "bf_tf_from = " << first_n(bf_tf_from) << std::endl << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
 #endif
                     }
 #ifndef NDEBUG
@@ -328,6 +327,9 @@ void tb_preprocessing::initial_transfer_computation() {
                   }
 #endif
                 } else {
+#ifndef NDEBUG
+                  TBDL << "look-ahead time reached, breaking" << std::endl;
+#endif
                   // examined departure time is greater than look-ahead
                   break;
                 }
@@ -335,6 +337,9 @@ void tb_preprocessing::initial_transfer_computation() {
                 // prep next iteration
                 // is this the last transport of the day?
                 if (std::next(tp_to_cur_it) == deps_tod.end()) {
+#ifndef NDEBUG
+                    TBDL << "passing midnight" << std::endl;
+#endif
                   // passing midnight
                   ++sa_w;
                   // start with the earliest transport on the next day
