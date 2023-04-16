@@ -196,8 +196,13 @@ void tb_preprocessing::initial_transfer_computation() {
                 duration_t dep_cur =
                     tp_to_cur_it->first + duration_t(sa_w * 1440);
 
-                // but dep_cur before a_lh
-                if (dep_cur <= a_lh) {
+                // check if look-ahed time is exceeded
+                if (a_lh < dep_cur) {
+#ifndef NDEBUG
+                  TBDL << "look-ahead time exceeded, breaking" << std::endl;
+#endif
+                  break;
+                }
 
                   // offset from begin of tp_to interval
                   std::size_t const tp_to_offset = tp_to_cur_it->second;
@@ -326,13 +331,6 @@ void tb_preprocessing::initial_transfer_computation() {
                     TBDL << "not required" << std::endl;
                   }
 #endif
-                } else {
-#ifndef NDEBUG
-                  TBDL << "look-ahead time reached, breaking" << std::endl;
-#endif
-                  // examined departure time is greater than look-ahead
-                  break;
-                }
 
                 // prep next iteration
                 // is this the last transport of the day?
