@@ -45,7 +45,7 @@ void tb_preprocessing::initial_transfer_computation() {
   // iterate over all trips of the timetable
   // tpi: transport idx from
   for (transport_idx_t tpi_from{0U};
-       tpi_from < tt_.transport_traffic_days_.size(); ++tpi_from) {
+       tpi_from != tt_.transport_traffic_days_.size(); ++tpi_from) {
 
     // ri from: route index from
     route_idx_t const ri_from = tt_.transport_route_[tpi_from];
@@ -110,6 +110,7 @@ void tb_preprocessing::initial_transfer_computation() {
 
         // a: time of day when arriving at stop_to
         duration_t const a = time_of_day(ta);
+        std::pair<duration_t, std::uint32_t> const comp_a(a, 0U);
 
         // a_lh: look-ahead from a
         duration_t const a_lh = a + (lh_ - fp.duration_);
@@ -172,8 +173,7 @@ void tb_preprocessing::initial_transfer_computation() {
               // tp_to_cur_it: iterator of current element in deps_tod
               auto tp_to_cur_it =
                   std::lower_bound(deps_tod.begin(), deps_tod.end(),
-                                   std::pair<duration_t, std::uint32_t>(
-                                       a, 0U));
+                                   comp_a);
 
               // no departure on this day at or after a
               if(tp_to_cur_it == deps_tod.end()) {
