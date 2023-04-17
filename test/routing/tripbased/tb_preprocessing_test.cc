@@ -1,11 +1,10 @@
-#include "doctest/doctest.h"
+#include "gtest/gtest.h"
 
 #include "nigiri/loader/hrd/load_timetable.h"
-#include "nigiri/timetable.h"
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
+#include "nigiri/timetable.h"
 
 #include "nigiri/print_transport.h"
-
 
 #include "../../loader/hrd/hrd_timetable.h"
 
@@ -45,7 +44,7 @@ std::set<std::string> service_strings2(timetable const& tt) {
   return ret;
 }
 
-TEST_CASE("get_or_create_bfi") {
+TEST(tripbased, get_or_create_bfi) {
   // init
   timetable tt;
   tb_preprocessing tbp{tt};
@@ -54,33 +53,32 @@ TEST_CASE("get_or_create_bfi") {
   bitfield bf0{"0"};
   tt.register_bitfield(bf0);
   bitfield_idx_t bfi0_exp{0U};
-  CHECK_EQ(tt.bitfields_[bfi0_exp], bf0);
+  EXPECT_EQ(tt.bitfields_[bfi0_exp], bf0);
   tbp.bitfield_to_bitfield_idx_.emplace(bf0, bfi0_exp);
   bitfield_idx_t bfi0_act = tbp.get_or_create_bfi(bf0);
-  CHECK_EQ(bfi0_exp, bfi0_act);
+  EXPECT_EQ(bfi0_exp, bfi0_act);
 
   // bitfield not yet registered with timetable
   bitfield bf1{"1"};
   bitfield_idx_t bfi1_exp{1U};
   bitfield_idx_t bfi1_act = tbp.get_or_create_bfi(bf1);
-  CHECK_EQ(bfi1_exp, bfi1_act);
-  CHECK_EQ(bf1, tt.bitfields_[bfi1_exp]);
+  EXPECT_EQ(bfi1_exp, bfi1_act);
+  EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
 
-TEST_CASE("initial_transfer_computation") {
+TEST(tripbased, initial_transfer_computation) {
   // load timetable
   timetable tt;
   auto const src = source_idx_t{0U};
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
 
-  for(location_idx_t li{0U}; li != tt.n_locations(); ++li) {
+  for (location_idx_t li{0U}; li != tt.n_locations(); ++li) {
     std::cerr << "location " << li << " has footpaths to...";
-    for(auto fpi = 0U; fpi != tt.locations_.footpaths_out_[li].size(); ++fpi) {
+    for (auto fpi = 0U; fpi != tt.locations_.footpaths_out_[li].size(); ++fpi) {
       std::cerr << "location " << tt.locations_.footpaths_out_[li][fpi] << " ";
     }
     std::cerr << std::endl;
   }
-
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -88,14 +86,4 @@ TEST_CASE("initial_transfer_computation") {
   tbp.initial_transfer_computation();
 
   std::cerr << "num_transfers: " << tbp.ts_.transfers_.size() << std::endl;
-
-//#ifndef NDEBUG
-//  auto const ss = service_strings2(tt);
-//  for(auto const& s : ss) {
-//
-//    std::cout << s << std::endl;
-//
-//  }
-//#endif
 }
-

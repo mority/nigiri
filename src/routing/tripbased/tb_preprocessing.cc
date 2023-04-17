@@ -17,7 +17,7 @@ constexpr std::string first_n(bitfield const& bf, std::size_t n = 8) {
 
 bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&bf, this]() {
-    bitfield_idx_t bfi = tt_.register_bitfield(bf);
+    auto const bfi = tt_.register_bitfield(bf);
     bitfield_to_bitfield_idx_.emplace(bf, bfi);
     return bfi;
   });
@@ -48,7 +48,7 @@ void tb_preprocessing::initial_transfer_computation() {
        tpi_from != tt_.transport_traffic_days_.size(); ++tpi_from) {
 
     // ri from: route index from
-    route_idx_t const ri_from = tt_.transport_route_[tpi_from];
+    auto const ri_from = tt_.transport_route_[tpi_from];
 
     // iterate over stops of transport (skip first stop)
     auto const stops_from = tt_.route_location_seq_[ri_from];
@@ -64,20 +64,21 @@ void tb_preprocessing::initial_transfer_computation() {
       auto const stop = timetable::stop{stops_from[si_from]};
 
       // li_from: location index from
-      location_idx_t const li_from = stop.location_idx();
+      auto const li_from = stop.location_idx();
 
-      duration_t const t_arr_from =
+      auto const t_arr_from =
           tt_.event_mam(tpi_from, si_from, event_type::kArr);
 
       // sa_tp_from: shift amount transport from
-      int const sa_tp_from = num_midnights(t_arr_from);
+      auto const sa_tp_from = num_midnights(t_arr_from);
 
 #ifndef NDEBUG
       TBDL << "si_from = " << si_from << ", li_from = " << li_from
            << ", t_arr_from = " << t_arr_from << ", sa_tp_from = " << sa_tp_from
            << std::endl;
 #endif
-      // locations do not have a footpath to themselves, insert reflexive footpath
+      // locations do not have a footpath to themselves, insert reflexive
+      // footpath
       std::vector<footpath> footpaths_out;
       footpaths_out.reserve(tt_.locations_.footpaths_out_[li_from].size() + 1);
       footpaths_out.emplace_back(footpath{li_from, duration_t{0}});
@@ -94,26 +95,26 @@ void tb_preprocessing::initial_transfer_computation() {
       // fp: outgoing footpath
       for (auto const& fp : footpaths_out) {
 
-        // if walking to the stop takes longer than the look-ahead, skip the stop
+        // if walking to the stop takes longer than the look-ahead, skip the
+        // stop
         if (lh_ < fp.duration_) {
           continue;
         }
 
         // li_to: location index of destination of footpath
-        location_idx_t const li_to = fp.target_;
+        auto const li_to = fp.target_;
 
         // ta: arrival time at stop_to in relation to transport_from
-        duration_t const ta = t_arr_from + fp.duration_;
+        auto const ta = t_arr_from + fp.duration_;
 
         // sa_fp: shift amount footpath
-        int const sa_fp = num_midnights(ta) - sa_tp_from;
+        auto const sa_fp = num_midnights(ta) - sa_tp_from;
 
         // a: time of day when arriving at stop_to
-        duration_t const a = time_of_day(ta);
-        std::pair<duration_t, std::uint32_t> const comp_a(a, 0U);
+        auto const a = time_of_day(ta);
 
         // a_lh: look-ahead from a
-        duration_t const a_lh = a + (lh_ - fp.duration_);
+        auto const a_lh = a + (lh_ - fp.duration_);
 
 #ifndef NDEBUG
         TBDL << "li_to = " << li_to << ", sa_fp = " << sa_fp << ", a = " << a
@@ -140,7 +141,7 @@ void tb_preprocessing::initial_transfer_computation() {
                 timetable::stop{tt_.route_location_seq_[ri_to][si_to]};
 
             // li_from: location index from
-            location_idx_t const li_to_cur = stop_to_cur.location_idx();
+            auto const li_to_cur = stop_to_cur.location_idx();
 
 #ifndef NDEBUG
             TBDL << "ri_to = " << ri_to << ", si_to = " << si_to
@@ -156,29 +157,19 @@ void tb_preprocessing::initial_transfer_computation() {
               auto const event_times =
                   tt_.event_times_at_stop(ri_to, si_to, event_type::kDep);
 
-              // all transports of route ri_to sorted by departure time at stop
-              // si_to mod 1440 in ascending order
-              std::vector<std::pair<duration_t, std::uint32_t>> deps_tod;
-              deps_tod.reserve(event_times.size());
-              for (std::uint32_t i = 0U; i != event_times.size(); ++i) {
-                deps_tod.emplace_back(time_of_day(event_times[i]), i);
-              }
-              std::sort(deps_tod.begin(), deps_tod.end());
-
-#ifndef NDEBUG
-              TBDL << "Sorted " << deps_tod.size()
-                   << " transports by departure time" << std::endl;
-#endif
               // find first departure at or after a
               // tp_to_cur_it: iterator of current element in deps_tod
               auto tp_to_cur_it =
-                  std::lower_bound(deps_tod.begin(), deps_tod.end(),
-                                   comp_a);
+                  std::lower_bound(event_times.begin(), event_times.end(), a,
+                                   [&](auto&& x, auto&& y) {
+                                     return time_of_day(x) < time_of_day(y);
+                                   });
 
               // no departure on this day at or after a
-              if(tp_to_cur_it == deps_tod.end()) {
-                ++sa_w; // start looking on the following day
-                tp_to_cur_it = deps_tod.begin(); // with the earliest transport
+              if (tp_to_cur_it == event_times.end()) {
+                ++sa_w;  // start looking on the following day
+                tp_to_cur_it =
+                    event_times.begin();  // with the earliest transport
               }
 
               // omega: days of transport_from that still require connection
@@ -193,8 +184,7 @@ void tb_preprocessing::initial_transfer_computation() {
               while (omega.any()) {
 
                 // departure time of current transport in relation to time a
-                duration_t dep_cur =
-                    tp_to_cur_it->first + duration_t(sa_w * 1440);
+                auto const dep_cur = *tp_to_cur_it + duration_t{sa_w * 1440};
 
                 // check if look-ahed time is exceeded
                 if (a_lh < dep_cur) {
@@ -204,144 +194,149 @@ void tb_preprocessing::initial_transfer_computation() {
                   break;
                 }
 
-                  // offset from begin of tp_to interval
-                  std::size_t const tp_to_offset = tp_to_cur_it->second;
+                // offset from begin of tp_to interval
+                auto const tp_to_offset =
+                    std::distance(event_times.begin(), tp_to_cur_it);
 
-                  // transport index of transport that we transfer to
-                  transport_idx_t const tpi_to =
-                      tt_.route_transport_ranges_[ri_to][tp_to_offset];
+                // transport index of transport that we transfer to
+                auto const tpi_to =
+                    tt_.route_transport_ranges_[ri_to][static_cast<std::size_t>(
+                        tp_to_offset)];
 
 #ifndef NDEBUG
-                  TBDL << "Examining deps_tod["
-                       << std::distance(deps_tod.begin(), tp_to_cur_it)
-                       << "], tpi_to = " << tpi_to << ", dep_cur = " << dep_cur
-                       << std::endl;
+                TBDL << "Examining event_times["
+                     << std::distance(event_times.begin(), tp_to_cur_it)
+                     << "], tpi_to = " << tpi_to << ", dep_cur = " << dep_cur
+                     << std::endl;
 #endif
 
 #ifndef NDEBUG
-                  TBDL << "different route -> " << (ri_from != ri_to)
-                       << ", earlier stop -> " << (si_to < si_from)
-                       << ", earlier transport -> "
-                       << (tpi_to != tpi_from &&
-                           (dep_cur - (tt_.event_mam(tpi_to, si_to,
-                                                     event_type::kDep) -
-                                       tt_.event_mam(tpi_to, si_from,
-                                                     event_type::kArr)) <=
-                            a - fp.duration_))
-                       << std::endl;
+                TBDL << "different route -> " << (ri_from != ri_to)
+                     << ", earlier stop -> " << (si_to < si_from)
+                     << ", earlier transport -> "
+                     << (tpi_to != tpi_from &&
+                         (dep_cur -
+                              (tt_.event_mam(tpi_to, si_to, event_type::kDep) -
+                               tt_.event_mam(tpi_to, si_from,
+                                             event_type::kArr)) <=
+                          a - fp.duration_))
+                     << std::endl;
 #endif
 
-                  // check conditions for required transfer
-                  // 1. different route OR
-                  // 2. earlier stop    OR
-                  // 3. same route but tpi_to is earlier than tpi_from
-                  bool const req =
-                      ri_from != ri_to || si_to < si_from ||
-                      (tpi_to != tpi_from &&
-                       (dep_cur -
-                            (tt_.event_mam(tpi_to, si_to, event_type::kDep) -
-                             tt_.event_mam(tpi_to, si_from,
-                                           event_type::kArr)) <=
-                        a - fp.duration_));
+                // check conditions for required transfer
+                // 1. different route OR
+                // 2. earlier stop    OR
+                // 3. same route but tpi_to is earlier than tpi_from
+                auto const req =
+                    ri_from != ri_to || si_to < si_from ||
+                    (tpi_to != tpi_from &&
+                     (dep_cur -
+                          (tt_.event_mam(tpi_to, si_to, event_type::kDep) -
+                           tt_.event_mam(tpi_to, si_from, event_type::kArr)) <=
+                      a - fp.duration_));
 
-                  if (req) {
-                    // shift amount due to number of times transport_to passed
-                    // midnight
-                    int const sa_tp_to = num_midnights(
-                        tt_.event_mam(tpi_to, si_to, event_type::kDep));
+                if (req) {
+                  // shift amount due to number of times transport_to passed
+                  // midnight
+                  auto const sa_tp_to = num_midnights(
+                      tt_.event_mam(tpi_to, si_to, event_type::kDep));
 
-                    // total shift amount
-                    int const sa_total = sa_tp_to - (sa_tp_from + sa_fp + sa_w);
+                  // total shift amount
+                  auto const sa_total = sa_tp_to - (sa_tp_from + sa_fp + sa_w);
 
 #ifndef NDEBUG
-                    TBDL << "sa_tp_to = " << sa_tp_to
-                         << ", sa_total = " << sa_total << std::endl;
+                  TBDL << "sa_tp_to = " << sa_tp_to
+                       << ", sa_total = " << sa_total << std::endl;
 #endif
 
-                    // bitfield transport to
-                    bitfield const& bf_tp_to =
-                        tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]];
+                  // bitfield transport to
+                  auto const& bf_tp_to =
+                      tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]];
 
 #ifndef NDEBUG
-                    TBDL << "omega = " << first_n(omega) << ", bf_tp_to = " << first_n(bf_tp_to) << std::endl;
+                  TBDL << "omega = " << first_n(omega)
+                       << ", bf_tp_to = " << first_n(bf_tp_to) << std::endl;
 #endif
 
-                    // bitfield transfer from
-                    bitfield bf_tf_from = omega;
+                  // bitfield transfer from
+                  auto bf_tf_from = omega;
 
-                    // align bitfields and perform AND
-                    if (sa_total < 0) {
-                      bf_tf_from &= bf_tp_to
-                                    << static_cast<unsigned>(-1 * sa_total);
+                  // align bitfields and perform AND
+                  if (sa_total < 0) {
+                    bf_tf_from &= bf_tp_to
+                                  << static_cast<unsigned>(-1 * sa_total);
 #ifndef NDEBUG
-                      TBDL << "shifted left by "
-                           << static_cast<unsigned>(-1 * sa_total) << std::endl;
+                    TBDL << "shifted left by "
+                         << static_cast<unsigned>(-1 * sa_total) << std::endl;
 #endif
-                    } else {
-                      bf_tf_from &= bf_tp_to >> static_cast<unsigned>(sa_total);
+                  } else {
+                    bf_tf_from &= bf_tp_to >> static_cast<unsigned>(sa_total);
 #ifndef NDEBUG
-                      TBDL << "shifted right by "
-                           << static_cast<unsigned>(sa_total) << std::endl;
-#endif
-                    }
-
-#ifndef NDEBUG
-                    TBDL << "bf_tf_from = " << first_n(bf_tf_from) << std::endl;
-#endif
-                    // check for match
-                    if (bf_tf_from.any()) {
-
-                      // remove days that are covered by this transfer from
-                      // omega
-                      omega &= ~bf_tf_from;
-
-#ifndef NDEBUG
-                      TBDL << "new omega =  " << first_n(omega) << std::endl;
-#endif
-
-                      // construct and add transfer to transfer set
-                      bitfield_idx_t const bfi_from =
-                          get_or_create_bfi(bf_tf_from);
-                      // bitfield transfer to
-                      bitfield bf_tf_to = bf_tf_from;
-                      if (sa_total < 0) {
-                        bf_tf_to >>= static_cast<unsigned>(-1 * sa_total);
-                      } else {
-                        bf_tf_to <<= static_cast<unsigned>(sa_total);
-                      }
-                      bitfield_idx_t const bfi_to = get_or_create_bfi(bf_tf_to);
-                      transfer const t{tpi_to, li_to, bfi_from, bfi_to};
-                      ts_.add(tpi_from, li_from, t);
-
-#ifndef NDEBUG
-                      TBDL << "transfer added:" << std::endl << "tpi_from = " << tpi_from
-                           << ", li_from = " << li_from << std::endl << "tpi_to = " << tpi_to << ", li_to = " << li_to
-                           << std::endl << "bf_tf_from = " << first_n(bf_tf_from) << std::endl << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
-#endif
-                    }
-#ifndef NDEBUG
-                    else {
-                      TBDL << "no bitfield match" << std::endl;
-                    }
+                    TBDL << "shifted right by "
+                         << static_cast<unsigned>(sa_total) << std::endl;
 #endif
                   }
 
+#ifndef NDEBUG
+                  TBDL << "bf_tf_from = " << first_n(bf_tf_from) << std::endl;
+#endif
+                  // check for match
+                  if (bf_tf_from.any()) {
+
+                    // remove days that are covered by this transfer from
+                    // omega
+                    omega &= ~bf_tf_from;
+
+#ifndef NDEBUG
+                    TBDL << "new omega =  " << first_n(omega) << std::endl;
+#endif
+
+                    // construct and add transfer to transfer set
+                    auto const bfi_from = get_or_create_bfi(bf_tf_from);
+                    // bitfield transfer to
+                    auto bf_tf_to = bf_tf_from;
+                    if (sa_total < 0) {
+                      bf_tf_to >>= static_cast<unsigned>(-1 * sa_total);
+                    } else {
+                      bf_tf_to <<= static_cast<unsigned>(sa_total);
+                    }
+                    auto const bfi_to = get_or_create_bfi(bf_tf_to);
+                    transfer const t{tpi_to, li_to, bfi_from, bfi_to};
+                    ts_.add(tpi_from, li_from, t);
+
+#ifndef NDEBUG
+                    TBDL << "transfer added:" << std::endl
+                         << "tpi_from = " << tpi_from
+                         << ", li_from = " << li_from << std::endl
+                         << "tpi_to = " << tpi_to << ", li_to = " << li_to
+                         << std::endl
+                         << "bf_tf_from = " << first_n(bf_tf_from) << std::endl
+                         << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
+#endif
+                  }
 #ifndef NDEBUG
                   else {
-                    TBDL << "not required" << std::endl;
+                    TBDL << "no bitfield match" << std::endl;
                   }
+#endif
+                }
+
+#ifndef NDEBUG
+                else {
+                  TBDL << "not required" << std::endl;
+                }
 #endif
 
                 // prep next iteration
                 // is this the last transport of the day?
-                if (std::next(tp_to_cur_it) == deps_tod.end()) {
+                if (std::next(tp_to_cur_it) == event_times.end()) {
 #ifndef NDEBUG
-                    TBDL << "passing midnight" << std::endl;
+                  TBDL << "passing midnight" << std::endl;
 #endif
                   // passing midnight
                   ++sa_w;
                   // start with the earliest transport on the next day
-                  tp_to_cur_it = deps_tod.begin();
+                  tp_to_cur_it = event_times.begin();
                 } else {
                   ++tp_to_cur_it;
                 }
