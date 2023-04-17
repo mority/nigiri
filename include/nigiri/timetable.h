@@ -84,6 +84,9 @@ struct timetable {
         transfer_time_.emplace_back(l.transfer_time_);  // TODO(felix)
         osm_ids_.emplace_back(osm_node_id_t::invalid());  // TODO(felix)
         parents_.emplace_back(l.parent_);
+      } else {
+        log(log_lvl::error, "timetable.register_location",
+            "duplicate station {}", l.id_);
       }
 
       assert(names_.size() == next_idx + 1);
@@ -150,8 +153,9 @@ struct timetable {
     std::basic_string<trip_line_idx_t> const& section_lines_;
   };
 
+  template <typename TripId>
   trip_idx_t register_trip_id(
-      fmt::memory_buffer const& trip_id_str,
+      TripId const& trip_id_str,
       source_idx_t const src,
       std::string const& display_name,
       trip_debug const dbg,
@@ -218,6 +222,12 @@ struct timetable {
     return idx;
   }
 
+  provider_idx_t register_provider(provider&& p) {
+    auto const idx = providers_.size();
+    providers_.emplace_back(std::move(p));
+    return provider_idx_t{idx};
+  }
+
   void add_transport(transport&& t) {
     transport_traffic_days_.emplace_back(t.bitfield_idx_);
     transport_route_.emplace_back(t.route_idx_);
@@ -270,13 +280,19 @@ struct timetable {
   unixtime_t event_time(nigiri::transport t,
                         size_t const stop_idx,
                         event_type const ev_type) const {
-    return unixtime_t{date_range_.from_ + to_idx(t.day_) * 1_days +
+    return unixtime_t{internal_interval_days().from_ + to_idx(t.day_) * 1_days +
                       event_mam(t.t_idx_, stop_idx, ev_type)};
+  }
+
+  day_idx_t day_idx(date::year_month_day const day) const {
+    return day_idx_t{
+        (date::sys_days{day} - (date_range_.from_ - kTimetableOffset)).count()};
   }
 
   std::pair<day_idx_t, minutes_after_midnight_t> day_idx_mam(
       unixtime_t const t) const {
-    auto const minutes_since_timetable_begin = (t - date_range_.from_).count();
+    auto const minutes_since_timetable_begin =
+        (t - internal_interval().from_).count();
     auto const d =
         static_cast<day_idx_t::value_t>(minutes_since_timetable_begin / 1440);
     auto const m = minutes_since_timetable_begin % 1440;
@@ -285,7 +301,7 @@ struct timetable {
 
   unixtime_t to_unixtime(day_idx_t const d,
                          minutes_after_midnight_t const m) const {
-    return date_range_.from_ + to_idx(d) * 1_days + m;
+    return internal_interval_days().from_ + to_idx(d) * 1_days + m;
   }
 
   cista::base_t<location_idx_t> n_locations() const {
@@ -296,14 +312,21 @@ struct timetable {
     return route_location_seq_.size();
   }
 
-  unixtime_t begin() const {
-    return unixtime_t{std::chrono::duration_cast<i32_minutes>(
-        date_range_.from_.time_since_epoch())};
+  interval<unixtime_t> external_interval() const {
+    return {std::chrono::time_point_cast<i32_minutes>(date_range_.from_),
+            std::chrono::time_point_cast<i32_minutes>(date_range_.to_)};
   }
 
-  unixtime_t end() const {
-    return unixtime_t{std::chrono::duration_cast<i32_minutes>(
-        date_range_.to_.time_since_epoch())};
+  interval<date::sys_days> internal_interval_days() const {
+    return {date_range_.from_ - kTimetableOffset,
+            date_range_.to_ + date::days{1}};
+  }
+
+  constexpr interval<unixtime_t> internal_interval() const {
+    return {
+        std::chrono::time_point_cast<i32_minutes>(date_range_.from_ -
+                                                  kTimetableOffset),
+        std::chrono::time_point_cast<i32_minutes>(date_range_.to_ + 1_days)};
   }
 
   friend std::ostream& operator<<(std::ostream&, timetable const&);

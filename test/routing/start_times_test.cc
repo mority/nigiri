@@ -1,4 +1,4 @@
-#include "doctest/doctest.h"
+#include "gtest/gtest.h"
 
 #include "utl/equal_ranges_linear.h"
 
@@ -9,6 +9,7 @@
 
 using namespace nigiri;
 using namespace nigiri::routing;
+using namespace nigiri::test_data::hrd_timetable;
 
 //   +---15--- 30freq --> A
 //  /
@@ -258,11 +259,11 @@ start_time=2020-03-30 00:00
 |  {time_at_start=2020-03-30 00:00, time_at_stop=2020-03-30 00:30, stop=B}
 )";
 
-TEST_CASE("routing start times") {
+TEST(routing, start_times) {
   auto const src = source_idx_t{0U};
   auto tt = std::make_shared<timetable>();
-  load_timetable(src, loader::hrd::hrd_5_20_26,
-                 nigiri::test_data::hrd_timetable::files_simple(), *tt);
+  tt->date_range_ = full_period();
+  load_timetable(src, loader::hrd::hrd_5_20_26, files_simple(), *tt);
 
   using namespace date;
   auto const A = tt->locations_.location_id_to_idx_.at(
@@ -270,12 +271,11 @@ TEST_CASE("routing start times") {
   auto const B = tt->locations_.location_id_to_idx_.at(
       location_id{.id_ = "0000002", .src_ = src});
   auto starts = std::vector<start>{};
-  get_starts<nigiri::direction::kForward>(
-      *tt,
-      interval<unixtime_t>{sys_days{2020_y / March / 30},
-                           sys_days{2020_y / March / 31}},
-      {{A, 15_minutes, 0}, {B, 30_minutes, 0}},
-      nigiri::routing::location_match_mode::kExact, false, starts);
+  get_starts(nigiri::direction::kForward, *tt,
+             interval<unixtime_t>{sys_days{2020_y / March / 30},
+                                  sys_days{2020_y / March / 31}},
+             {{A, 15_minutes, 0}, {B, 30_minutes, 0}},
+             nigiri::routing::location_match_mode::kExact, false, starts, true);
 
   std::stringstream ss;
   ss << "\n";
@@ -294,5 +294,5 @@ TEST_CASE("routing start times") {
         }
       });
 
-  CHECK(std::string_view{expected} == ss.str());
+  EXPECT_EQ(std::string_view{expected}, ss.str());
 }

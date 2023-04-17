@@ -28,8 +28,15 @@ namespace nigiri {
 // can result in times before the specified first day and after the specified
 // last day (e.g. 00:30 CET is 23:30 UTC the day before, 22:30 PT is 05:30 UTC
 // the next day). To be able to support this, the internal nigiri timetable
-// range needs to start one day early and be one day longer than specified.
-constexpr auto const kBaseDayOffset = std::chrono::days{1};
+// range needs to start one day early and end one day longer than specified.
+//
+// There are trains that travel up to 4 days. Therefore, they are contained in
+// the timetable even if their first departure is 4 days before the first day of
+// the selected timetable period. To be able to fit those trains into the
+// traffic day bitset, we prepend 4 in front of the timetable (in addition
+// to the base day offset due to timezone conversion - see above).
+constexpr auto const kTimetableOffset =
+    std::chrono::days{1} + std::chrono::days{4};
 
 template <size_t Size>
 using bitset = cista::bitset<Size>;
@@ -127,6 +134,7 @@ struct provider {
   CISTA_COMPARABLE()
   CISTA_PRINTABLE(provider, "short_name", "long_name")
   string short_name_, long_name_;
+  timezone_idx_t tz_{timezone_idx_t::invalid()};
 };
 
 struct trip_id {
@@ -183,11 +191,11 @@ struct tz_offsets {
     duration_t season_end_mam_{0};
   };
   friend std::ostream& operator<<(std::ostream&, tz_offsets const&);
-  optional<season> season_{std::nullopt};
+  vector<season> seasons_;
   duration_t offset_{0};
 };
 
-using timezone = variant<void*, tz_offsets>;
+using timezone = variant<void const*, tz_offsets>;
 
 enum class clasz : std::uint8_t {
   kAir = 0,
@@ -220,6 +228,8 @@ enum class direction { kForward, kBackward };
 #include <ostream>
 
 #include "cista/serialization.h"
+#include "utl/helpers/algorithm.h"
+#include "utl/overloaded.h"
 
 namespace std::chrono {
 
@@ -251,43 +261,38 @@ inline std::ostream& operator<<(std::ostream& out,
   return out;
 }
 
-inline std::ostream& operator<<(std::ostream& out, sys_days const& t) {
-  auto const ymd = std::chrono::year_month_day{t};
-  return out << static_cast<int>(ymd.year()) << '-' << std::setw(2)
-             << std::setfill('0') << static_cast<unsigned>(ymd.month()) << '-'
-             << std::setw(2) << static_cast<unsigned>(ymd.day());
-}
-
 }  // namespace std::chrono
 
 #include <iostream>
 
 namespace nigiri {
 
-inline local_time to_local_time(tz_offsets const& offsets, unixtime_t const t) {
-  if (!offsets.season_.has_value()) {
-    return local_time{(t + offsets.offset_).time_since_epoch()};
-  }
-
-  auto const season_begin = offsets.season_->begin_ +
-                            offsets.season_->season_begin_mam_ -
-                            offsets.offset_;
-  auto const season_end = offsets.season_->end_ +
-                          offsets.season_->season_end_mam_ -
-                          offsets.season_->offset_;
-  auto const is_in_season = t >= season_begin && t < season_end;
-  auto const active_offset =
-      is_in_season ? offsets.season_->offset_ : offsets.offset_;
+inline local_time to_local_time_offsets(tz_offsets const& offsets,
+                                        unixtime_t const t) {
+  auto const active_season_it =
+      utl::find_if(offsets.seasons_, [&](tz_offsets::season const& s) {
+        auto const season_begin =
+            s.begin_ + s.season_begin_mam_ - offsets.offset_;
+        auto const season_end = s.end_ + s.season_end_mam_ - s.offset_;
+        return t >= season_begin && t < season_end;
+      });
+  auto const active_offset = active_season_it == end(offsets.seasons_)
+                                 ? offsets.offset_
+                                 : active_season_it->offset_;
   return local_time{(t + active_offset).time_since_epoch()};
 }
 
-inline local_time to_local_time(date::time_zone* tz, unixtime_t const t) {
-  return local_time{std::chrono::duration_cast<duration_t>(
-      tz->to_local(t).time_since_epoch())};
+inline local_time to_local_time_tz(date::time_zone const* tz,
+                                   unixtime_t const t) {
+  return std::chrono::time_point_cast<i32_minutes>(tz->to_local(t));
 }
 
 inline local_time to_local_time(timezone const& tz, unixtime_t const t) {
-  return tz.apply([t](auto&& x) { return to_local_time(x, t); });
+  return tz.apply(utl::overloaded{
+      [t](tz_offsets const& x) { return to_local_time_offsets(x, t); },
+      [t](void const* x) {
+        return to_local_time_tz(reinterpret_cast<date::time_zone const*>(x), t);
+      }});
 }
 
 }  // namespace nigiri
