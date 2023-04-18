@@ -54,8 +54,16 @@ void tb_preprocessing::initial_transfer_computation() {
     auto const stops_from = tt_.route_location_seq_[ri_from];
 
 #ifndef NDEBUG
-    TBDL << "Examining " << stops_from.size() - 1 << " stops of transport "
-         << tpi_from << " of route " << ri_from << "..." << std::endl;
+    TBDL << "Examining transport " << tpi_from << " of route " << ri_from
+         << ", stops:" << std::endl;
+    for (std::size_t si_from = 0U; si_from != stops_from.size(); ++si_from) {
+      auto const stop = timetable::stop{stops_from[si_from]};
+      auto const li_from = stop.location_idx();
+      TBDL << "stop " << si_from << ": "
+           << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
+                                      tt_.locations_.names_[li_from].end()}
+           << std::endl;
+    }
 #endif
 
     // si_from: stop index from
@@ -74,6 +82,9 @@ void tb_preprocessing::initial_transfer_computation() {
 
 #ifndef NDEBUG
       TBDL << "si_from = " << si_from << ", li_from = " << li_from
+           << ", location name: "
+           << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
+                                      tt_.locations_.names_[li_from].end()}
            << ", t_arr_from = " << t_arr_from << ", sa_tp_from = " << sa_tp_from
            << std::endl;
 #endif
@@ -94,8 +105,10 @@ void tb_preprocessing::initial_transfer_computation() {
         auto const a = time_of_day(ta);
 
 #ifndef NDEBUG
-        TBDL << "li_to = " << li_to << ", sa_fp = " << sa_fp << ", a = " << a
-             << std::endl;
+        TBDL << "li_to = " << li_to << ", location name: "
+             << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
+                                        tt_.locations_.names_[li_from].end()}
+             << ", sa_fp = " << sa_fp << ", a = " << a << std::endl;
 #endif
 
         // iterate over lines serving stop_to

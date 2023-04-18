@@ -44,6 +44,61 @@ std::set<std::string> service_strings2(timetable const& tt) {
   return ret;
 }
 
+// single transfer at stop E
+inline loader::mem_dir single_transfer() {
+  constexpr auto const fplan = R"(
+*Z 01337 80____                                           %
+*A VE 0000001 0000005 000001                              %
+*G RE  0000001 0000005                                    %
+0000001 A                            00100                %
+0000005 E                     00200                       %
+*Z 07331 80____                                           %
+*A VE 0000005 0000009 000001                              %
+*G RE  0000005 0000009                                    %
+0000005 E                            00300                %
+0000009 I                     00400                       %
+)";
+  return test_data::hrd_timetable::base().add(
+      {loader::hrd::hrd_5_20_26.fplan_ / "services.101", fplan});
+}
+
+// no transfer at stop E
+inline loader::mem_dir no_transfer() {
+  constexpr auto const fplan = R"(
+*Z 01337 80____                                           %
+*A VE 0000001 0000005 000001                              %
+*G RE  0000001 0000005                                    %
+0000001 A                            00100                %
+0000005 E                     00200                       %
+*Z 07331 80____                                           %
+*A VE 0000005 0000009 000001                              %
+*G RE  0000005 0000009                                    %
+0000005 E                            00200                %
+0000009 I                     00300                       %
+)";
+  return test_data::hrd_timetable::base().add(
+      {loader::hrd::hrd_5_20_26.fplan_ / "services.101", fplan});
+}
+
+// single transfer at stop E
+inline loader::mem_dir from_long_transfer() {
+  constexpr auto const fplan = R"(
+*Z 01337 80____                                           %
+*A VE 0000001 0000005 000001                              %
+*G RE  0000001 0000005                                    %
+0000001 A                            00300                %
+0000005 E                     04800                       %
+*Z 07331 80____                                           %
+*A VE 0000005 0000009 000005                              %
+*G RE  0000005 0000009                                    %
+0000002 B                            00200                %
+0000005 E                     00300  03005                %
+0000009 I                     00400                       %
+)";
+  return test_data::hrd_timetable::base().add(
+      {loader::hrd::hrd_5_20_26.fplan_ / "services.101", fplan});
+}
+
 TEST(tripbased, get_or_create_bfi) {
   // init
   timetable tt;
@@ -66,25 +121,59 @@ TEST(tripbased, get_or_create_bfi) {
   EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
 
-TEST(tripbased, initial_transfer_computation) {
+TEST(initial_transfer_computation, single_transfer) {
   // load timetable
   timetable tt;
   tt.date_range_ = full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
-
-  for (location_idx_t li{0U}; li != tt.n_locations(); ++li) {
-    std::cerr << "location " << li << " has footpaths to...";
-    for (auto fpi = 0U; fpi != tt.locations_.footpaths_out_[li].size(); ++fpi) {
-      std::cerr << "location " << tt.locations_.footpaths_out_[li][fpi] << " ";
-    }
-    std::cerr << std::endl;
-  }
+  load_timetable(src, loader::hrd::hrd_5_20_26, single_transfer(), tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
 
+  // run preprocessing
   tbp.initial_transfer_computation();
 
-  std::cerr << "num_transfers: " << tbp.ts_.transfers_.size() << std::endl;
+  ASSERT_EQ(1, tbp.ts_.transfers_.size());
 }
+
+TEST(initial_transfer_computation, no_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, loader::hrd::hrd_5_20_26, no_transfer(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.initial_transfer_computation();
+
+  ASSERT_EQ(0, tbp.ts_.transfers_.size());
+}
+
+TEST(initial_transfer_computation, from_long_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, loader::hrd::hrd_5_20_26, from_long_transfer(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.initial_transfer_computation();
+
+  ASSERT_EQ(1, tbp.ts_.transfers_.size());
+}
+
+// for (location_idx_t li{0U}; li != tt.n_locations(); ++li) {
+//   std::cerr << "location " << li << " has footpaths to...";
+//   for (auto fpi = 0U; fpi != tt.locations_.footpaths_out_[li].size(); ++fpi)
+//   {
+//     std::cerr << "location " << tt.locations_.footpaths_out_[li][fpi] << " ";
+//   }
+//   std::cerr << std::endl;
+// }
