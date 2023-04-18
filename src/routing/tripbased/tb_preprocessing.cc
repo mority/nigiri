@@ -78,7 +78,9 @@ void tb_preprocessing::initial_transfer_computation() {
            << std::endl;
 #endif
 
-      auto const handle_footpath = [&](footpath const& fp) {
+      auto const handle_footpath = [&t_arr_from, &sa_tp_from, this, &tpi_from,
+                                    &ri_from, &si_from,
+                                    &li_from](footpath const& fp) {
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
 
@@ -268,8 +270,7 @@ void tb_preprocessing::initial_transfer_computation() {
                       bf_tf_to <<= static_cast<unsigned>(sa_total);
                     }
                     auto const bfi_to = get_or_create_bfi(bf_tf_to);
-                    transfer const t{tpi_to, li_to, bfi_from, bfi_to};
-                    ts_.add(tpi_from, li_from, t);
+                    ts_.add(tpi_from, li_from, tpi_to, li_to, bfi_from, bfi_to);
 
 #ifndef NDEBUG
                     TBDL << "transfer added:" << std::endl
@@ -322,7 +323,8 @@ void tb_preprocessing::initial_transfer_computation() {
       };
 
       // reflexive footpath
-      handle_footpath(footpath{li_from, duration_t{0}});
+      handle_footpath(
+          footpath{li_from, tt_.locations_.transfer_time_[li_from]});
 
       // outgoing footpaths of location
       for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {

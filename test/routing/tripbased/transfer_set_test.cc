@@ -23,9 +23,8 @@ TEST(tripbased, transfer_set_basic) {
         location_idx_t location_idx_to{location_to++};
         bitfield_idx_t bitfield_idx_from{bitfield_from++};
         bitfield_idx_t bitfield_idx_to{bitfield_to++};
-        transfer t(transport_idx_to, location_idx_to, bitfield_idx_from,
-                   bitfield_idx_to);
-        ts.add(transport_idx_from, location_idx_from, t);
+        ts.add(transport_idx_from, location_idx_from, transport_idx_to,
+               location_idx_to, bitfield_idx_from, bitfield_idx_to);
       }
     }
   }

@@ -25,7 +25,7 @@ struct transfer {
   transport_idx_t transport_idx_to_{};
   location_idx_t location_idx_to_{};
 
-  // bit set to mark instances of trips
+  // bitfields to mark instances of transport
   bitfield_idx_t bitfield_idx_from_{};
   bitfield_idx_t bitfield_idx_to_{};
 };
@@ -36,7 +36,10 @@ struct hash_transfer_set {
 
   void add(transport_idx_t const& transport_idx_from,
            location_idx_t const& location_idx_from,
-           transfer const&);
+           transport_idx_t const& transport_idx_to,
+           location_idx_t const& location_idx_to,
+           bitfield_idx_t const& bitfield_idx_from,
+           bitfield_idx_t const& bitfield_idx_to);
 
   void finalize();
 
