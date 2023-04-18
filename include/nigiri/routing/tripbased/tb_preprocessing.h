@@ -10,8 +10,9 @@ struct tb_preprocessing {
 
   /// Constructor
   /// \param tt reference to timetable
-  /// \param lh look-ahed, maximum time to wait for connection
-  explicit tb_preprocessing(timetable& tt, duration_t lh = duration_t(1440U)) : tt_(tt), lh_(lh) {}
+  /// \param sa_w_max maximum number of days to wait for connection
+  explicit tb_preprocessing(timetable& tt, int sa_w_max = 1)
+      : tt_(tt), sa_w_max_(sa_w_max) {}
 
   // preprocessing without reduction step
   void initial_transfer_computation();
@@ -22,9 +23,7 @@ struct tb_preprocessing {
   // preprocessing with U-turn transfer removal and transfer reduction
   void transfer_reduction();
 
-  void build_transfer_set() {
-    initial_transfer_computation();
-  }
+  void build_transfer_set() { initial_transfer_computation(); }
 
   // load precomputed transfer set from file
   // also needs to load the corresponding timetable from file since bitfields
@@ -38,7 +37,7 @@ struct tb_preprocessing {
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
   timetable& tt_;
-  duration_t lh_; // look-ahead
+  int const sa_w_max_{};  // look-ahead
   hash_transfer_set ts_{};
 };
 

@@ -26,7 +26,7 @@ bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
 void tb_preprocessing::initial_transfer_computation() {
 
 #ifndef NDEBUG
-  TBDL << "Beginning initial transfer computation, look-ahead = " << lh_
+  TBDL << "Beginning initial transfer computation, sa_w_max_ = " << sa_w_max_
        << std::endl;
 #endif
 
@@ -77,30 +77,8 @@ void tb_preprocessing::initial_transfer_computation() {
            << ", t_arr_from = " << t_arr_from << ", sa_tp_from = " << sa_tp_from
            << std::endl;
 #endif
-      // locations do not have a footpath to themselves, insert reflexive
-      // footpath
-      std::vector<footpath> footpaths_out;
-      footpaths_out.reserve(tt_.locations_.footpaths_out_[li_from].size() + 1);
-      footpaths_out.emplace_back(footpath{li_from, duration_t{0}});
-      std::copy(tt_.locations_.footpaths_out_[li_from].begin(),
-                tt_.locations_.footpaths_out_[li_from].end(),
-                std::back_inserter(footpaths_out));
 
-#ifndef NDEBUG
-      TBDL << "Examining " << footpaths_out.size() << " outgoing footpaths..."
-           << std::endl;
-#endif
-
-      // iterate over stops in walking range
-      // fp: outgoing footpath
-      for (auto const& fp : footpaths_out) {
-
-        // if walking to the stop takes longer than the look-ahead, skip the
-        // stop
-        if (lh_ < fp.duration_) {
-          continue;
-        }
-
+      auto const handle_footpath = [&](footpath const& fp) {
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
 
@@ -112,9 +90,6 @@ void tb_preprocessing::initial_transfer_computation() {
 
         // a: time of day when arriving at stop_to
         auto const a = time_of_day(ta);
-
-        // a_lh: look-ahead from a
-        auto const a_lh = a + (lh_ - fp.duration_);
 
 #ifndef NDEBUG
         TBDL << "li_to = " << li_to << ", sa_fp = " << sa_fp << ", a = " << a
@@ -185,14 +160,6 @@ void tb_preprocessing::initial_transfer_computation() {
 
                 // departure time of current transport in relation to time a
                 auto const dep_cur = *tp_to_cur_it + duration_t{sa_w * 1440};
-
-                // check if look-ahed time is exceeded
-                if (a_lh < dep_cur) {
-#ifndef NDEBUG
-                  TBDL << "look-ahead time exceeded, breaking" << std::endl;
-#endif
-                  break;
-                }
 
                 // offset from begin of tp_to interval
                 auto const tp_to_offset =
@@ -335,6 +302,14 @@ void tb_preprocessing::initial_transfer_computation() {
 #endif
                   // passing midnight
                   ++sa_w;
+
+                  if (sa_w_max_ < sa_w) {
+#ifndef NDEBUG
+                    TBDL << "Maximum waiting time reached" << std::endl;
+#endif
+                    break;
+                  }
+
                   // start with the earliest transport on the next day
                   tp_to_cur_it = event_times.begin();
                 } else {
@@ -344,6 +319,14 @@ void tb_preprocessing::initial_transfer_computation() {
             }
           }
         }
+      };
+
+      // reflexive footpath
+      handle_footpath(footpath{li_from, duration_t{0}});
+
+      // outgoing footpaths of location
+      for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
+        handle_footpath(fp);
       }
     }
   }

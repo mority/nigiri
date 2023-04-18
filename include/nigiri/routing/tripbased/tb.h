@@ -2,7 +2,7 @@
 
 #include "nigiri/types.h"
 
-#define TBDL std::clog << "[" <<__FILE_NAME__ << ":" << __LINE__ << "] "
+#define TBDL std::cerr << "[" << __FILE_NAME__ << ":" << __LINE__ << "] "
 
 namespace nigiri::routing::tripbased {
 
@@ -12,8 +12,14 @@ namespace nigiri::routing::tripbased {
 // via footpath -> can be accessed by location idx of from and to
 struct transfer {
   transfer() = default;
-  transfer(transport_idx_t transport_idx_to, location_idx_t location_idx_to, bitfield_idx_t bitfield_idx_from, bitfield_idx_t bitfield_idx_to)
-      : transport_idx_to_(transport_idx_to), location_idx_to_(location_idx_to), bitfield_idx_from_(bitfield_idx_from), bitfield_idx_to_(bitfield_idx_to) {}
+  transfer(transport_idx_t transport_idx_to,
+           location_idx_t location_idx_to,
+           bitfield_idx_t bitfield_idx_from,
+           bitfield_idx_t bitfield_idx_to)
+      : transport_idx_to_(transport_idx_to),
+        location_idx_to_(location_idx_to),
+        bitfield_idx_from_(bitfield_idx_from),
+        bitfield_idx_to_(bitfield_idx_to) {}
 
   // to
   transport_idx_t transport_idx_to_{};
@@ -24,24 +30,22 @@ struct transfer {
   bitfield_idx_t bitfield_idx_to_{};
 };
 
-
-
-
 struct hash_transfer_set {
-  using key = pair<transport_idx_t,location_idx_t>;
-  using entry = pair<std::uint32_t,std::uint32_t>;
+  using key = pair<transport_idx_t, location_idx_t>;
+  using entry = pair<std::uint32_t, std::uint32_t>;
 
-  void add(transport_idx_t const& transport_idx_from, location_idx_t const& location_idx_from, transfer const&);
+  void add(transport_idx_t const& transport_idx_from,
+           location_idx_t const& location_idx_from,
+           transfer const&);
 
   void finalize();
 
   // returns entry containing start index and end index (exclusive) of transfers
   // for given transport at given stop
-  std::optional<entry> get_transfers(transport_idx_t const&, location_idx_t const&);
+  std::optional<entry> get_transfers(transport_idx_t const&,
+                                     location_idx_t const&);
 
-  transfer& operator[](std::uint32_t index) {
-    return transfers_[index];
-  }
+  transfer& operator[](std::uint32_t index) { return transfers_[index]; }
 
   bool initialized_ = false;
   bool finalized_ = false;
@@ -51,7 +55,7 @@ struct hash_transfer_set {
   std::uint32_t cur_start_ = 0U;
   std::uint32_t cur_length_ = 0U;
 
-  hash_map<key,entry> index_{};
+  hash_map<key, entry> index_{};
   vector<transfer> transfers_{};
 };
 
@@ -65,4 +69,4 @@ constexpr duration_t time_of_day(duration_t const& d) {
   return duration_t(d.count() % 1440);
 }
 
-} // namespace nigiri::routing::tripbased
+}  // namespace nigiri::routing::tripbased
