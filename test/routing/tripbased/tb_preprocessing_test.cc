@@ -69,7 +69,8 @@ TEST(tripbased, get_or_create_bfi) {
 TEST(tripbased, initial_transfer_computation) {
   // load timetable
   timetable tt;
-  auto const src = source_idx_t{0U};
+  tt.date_range_ = full_period();
+  constexpr auto const src = source_idx_t{0U};
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
 
   for (location_idx_t li{0U}; li != tt.n_locations(); ++li) {
