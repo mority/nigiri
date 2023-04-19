@@ -89,9 +89,9 @@ void tb_preprocessing::initial_transfer_computation() {
            << std::endl;
 #endif
 
-      auto const handle_footpath = [&t_arr_from, &sa_tp_from, this, &tpi_from,
-                                    &ri_from, &si_from,
-                                    &li_from](footpath const& fp) {
+      // outgoing footpaths of location
+      for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
+
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
 
@@ -333,21 +333,6 @@ void tb_preprocessing::initial_transfer_computation() {
             }
           }
         }
-      };
-
-      // reflexive footpath
-#ifndef NDEBUG
-      TBDL << "Examining reflexive footpath" << std::endl;
-#endif
-      handle_footpath(
-          footpath{li_from, tt_.locations_.transfer_time_[li_from]});
-
-      // outgoing footpaths of location
-      for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
-#ifndef NDEBUG
-        TBDL << "Examining outgoing footpath" << std::endl;
-#endif
-        handle_footpath(fp);
       }
     }
   }
