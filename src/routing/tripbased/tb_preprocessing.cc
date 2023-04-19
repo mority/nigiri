@@ -7,7 +7,7 @@ using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
 constexpr std::string first_n(bitfield const& bf, std::size_t n = 8) {
-  std::string s = "";
+  std::string s;
   n = n > bf.size() ? bf.size() : n;
   for (std::size_t i = n; i != 0; --i) {
     s += std::to_string(bf[i]);
@@ -168,7 +168,7 @@ void tb_preprocessing::initial_transfer_computation() {
 
 #ifndef NDEBUG
               TBDL << "Looking for earliest connecting transport after a = "
-                   << a << ", initial omega = " << first_n(omega) << std::endl;
+                   << a << ", initial omega = " << omega << std::endl;
 #endif
               // check if any bit in omega is set to 1
               while (omega.any()) {
@@ -236,8 +236,8 @@ void tb_preprocessing::initial_transfer_computation() {
                       tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]];
 
 #ifndef NDEBUG
-                  TBDL << "omega = " << first_n(omega)
-                       << ", bf_tp_to = " << first_n(bf_tp_to) << std::endl;
+                  TBDL << "omega = " << omega << ", bf_tp_to = " << bf_tp_to
+                       << std::endl;
 #endif
 
                   // bitfield transfer from
@@ -245,14 +245,14 @@ void tb_preprocessing::initial_transfer_computation() {
 
                   // align bitfields and perform AND
                   if (sa_total < 0) {
-                    bf_tf_from &= bf_tp_to
-                                  << static_cast<unsigned>(-1 * sa_total);
+                    bf_tf_from &=
+                        bf_tp_to >> static_cast<unsigned>(-1 * sa_total);
 #ifndef NDEBUG
                     TBDL << "shifted left by "
                          << static_cast<unsigned>(-1 * sa_total) << std::endl;
 #endif
                   } else {
-                    bf_tf_from &= bf_tp_to >> static_cast<unsigned>(sa_total);
+                    bf_tf_from &= bf_tp_to << static_cast<unsigned>(sa_total);
 #ifndef NDEBUG
                     TBDL << "shifted right by "
                          << static_cast<unsigned>(sa_total) << std::endl;
@@ -260,7 +260,7 @@ void tb_preprocessing::initial_transfer_computation() {
                   }
 
 #ifndef NDEBUG
-                  TBDL << "bf_tf_from = " << first_n(bf_tf_from) << std::endl;
+                  TBDL << "bf_tf_from = " << bf_tf_from << std::endl;
 #endif
                   // check for match
                   if (bf_tf_from.any()) {
@@ -270,7 +270,7 @@ void tb_preprocessing::initial_transfer_computation() {
                     omega &= ~bf_tf_from;
 
 #ifndef NDEBUG
-                    TBDL << "new omega =  " << first_n(omega) << std::endl;
+                    TBDL << "new omega =  " << omega << std::endl;
 #endif
 
                     // construct and add transfer to transfer set
@@ -278,9 +278,9 @@ void tb_preprocessing::initial_transfer_computation() {
                     // bitfield transfer to
                     auto bf_tf_to = bf_tf_from;
                     if (sa_total < 0) {
-                      bf_tf_to >>= static_cast<unsigned>(-1 * sa_total);
+                      bf_tf_to <<= static_cast<unsigned>(-1 * sa_total);
                     } else {
-                      bf_tf_to <<= static_cast<unsigned>(sa_total);
+                      bf_tf_to >>= static_cast<unsigned>(sa_total);
                     }
                     auto const bfi_to = get_or_create_bfi(bf_tf_to);
                     ts_.add(tpi_from, li_from, tpi_to, li_to, bfi_from, bfi_to);
@@ -291,8 +291,8 @@ void tb_preprocessing::initial_transfer_computation() {
                          << ", li_from = " << li_from << std::endl
                          << "tpi_to = " << tpi_to << ", li_to = " << li_to
                          << std::endl
-                         << "bf_tf_from = " << first_n(bf_tf_from) << std::endl
-                         << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
+                         << "bf_tf_from = " << bf_tf_from << std::endl
+                         << "  bf_tf_to = " << bf_tf_to << std::endl;
 #endif
                   }
 #ifndef NDEBUG
@@ -336,11 +336,17 @@ void tb_preprocessing::initial_transfer_computation() {
       };
 
       // reflexive footpath
+#ifndef NDEBUG
+      TBDL << "Examining reflexive footpath" << std::endl;
+#endif
       handle_footpath(
           footpath{li_from, tt_.locations_.transfer_time_[li_from]});
 
       // outgoing footpaths of location
       for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
+#ifndef NDEBUG
+        TBDL << "Examining outgoing footpath" << std::endl;
+#endif
         handle_footpath(fp);
       }
     }

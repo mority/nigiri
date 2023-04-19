@@ -1,102 +1,32 @@
 #include "gtest/gtest.h"
 
+#include "nigiri/loader/gtfs/load_timetable.h"
 #include "nigiri/loader/hrd/load_timetable.h"
+
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
-#include "nigiri/timetable.h"
 
 #include "nigiri/print_transport.h"
 
 #include "../../loader/hrd/hrd_timetable.h"
 
+#include "./test_data.h"
+
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
-using namespace nigiri::test_data::hrd_timetable;
+using namespace nigiri::routing::tripbased::test;
 
-std::set<std::string> service_strings2(timetable const& tt) {
-  auto const reverse = [](std::string s) {
-    std::reverse(s.begin(), s.end());
-    return s;
-  };
-  auto const num_days = static_cast<size_t>(
-      (tt.date_range_.to_ - tt.date_range_.from_ + 1_days) / 1_days);
-  auto ret = std::set<std::string>{};
-  for (auto i = 0U; i != tt.transport_traffic_days_.size(); ++i) {
-    std::stringstream out;
-    auto const transport_idx = transport_idx_t{i};
-    auto const traffic_days =
-        tt.bitfields_.at(tt.transport_traffic_days_.at(transport_idx));
-    out << "TRAFFIC_DAYS="
-        << reverse(
-               traffic_days.to_string().substr(traffic_days.size() - num_days))
-        << "\n";
-    for (auto d = tt.date_range_.from_; d != tt.date_range_.to_;
-         d += std::chrono::days{1}) {
-      auto const day_idx = day_idx_t{
-          static_cast<day_idx_t::value_t>((d - tt.date_range_.from_) / 1_days)};
-      if (traffic_days.test(to_idx(day_idx))) {
-        date::to_stream(out, "%F", d);
-        out << " (day_idx=" << day_idx << ")\n";
-        print_transport(tt, out, {transport_idx, day_idx});
-      }
-    }
-    ret.emplace(out.str());
-  }
-  return ret;
+constexpr interval<std::chrono::sys_days> hrd_full_period() {
+  using namespace date;
+  constexpr auto const from = (2020_y / March / 28).operator sys_days();
+  constexpr auto const to = (2020_y / March / 31).operator sys_days();
+  return {from, to};
 }
 
-// single transfer at stop E
-inline loader::mem_dir single_transfer() {
-  constexpr auto const fplan = R"(
-*Z 01337 80____                                           %
-*A VE 0000001 0000005 000001                              %
-*G RE  0000001 0000005                                    %
-0000001 A                            00100                %
-0000005 E                     00200                       %
-*Z 07331 80____                                           %
-*A VE 0000005 0000009 000001                              %
-*G RE  0000005 0000009                                    %
-0000005 E                            00300                %
-0000009 I                     00400                       %
-)";
-  return test_data::hrd_timetable::base().add(
-      {loader::hrd::hrd_5_20_26.fplan_ / "services.101", fplan});
-}
-
-// no transfer at stop E
-inline loader::mem_dir no_transfer() {
-  constexpr auto const fplan = R"(
-*Z 01337 80____                                           %
-*A VE 0000001 0000005 000001                              %
-*G RE  0000001 0000005                                    %
-0000001 A                            00100                %
-0000005 E                     00200                       %
-*Z 07331 80____                                           %
-*A VE 0000005 0000009 000001                              %
-*G RE  0000005 0000009                                    %
-0000005 E                            00200                %
-0000009 I                     00300                       %
-)";
-  return test_data::hrd_timetable::base().add(
-      {loader::hrd::hrd_5_20_26.fplan_ / "services.101", fplan});
-}
-
-// single transfer at stop E
-inline loader::mem_dir from_long_transfer() {
-  constexpr auto const fplan = R"(
-*Z 01337 80____                                           %
-*A VE 0000001 0000005 000001                              %
-*G RE  0000001 0000005                                    %
-0000001 A                            00300                %
-0000005 E                     04800                       %
-*Z 07331 80____                                           %
-*A VE 0000005 0000009 000005                              %
-*G RE  0000005 0000009                                    %
-0000002 B                            00200                %
-0000005 E                     00300  03005                %
-0000009 I                     00400                       %
-)";
-  return test_data::hrd_timetable::base().add(
-      {loader::hrd::hrd_5_20_26.fplan_ / "services.101", fplan});
+constexpr interval<std::chrono::sys_days> gtfs_full_period() {
+  using namespace date;
+  constexpr auto const from = (2021_y / March / 01).operator sys_days();
+  constexpr auto const to = (2021_y / March / 07).operator sys_days();
+  return {from, to};
 }
 
 TEST(tripbased, get_or_create_bfi) {
@@ -121,12 +51,30 @@ TEST(tripbased, get_or_create_bfi) {
   EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
 
+// single transfer at stop E
+inline loader::mem_dir single_transfer_data() {
+  constexpr auto const fplan = R"(
+*Z 01337 80____                                           %
+*A VE 0000001 0000005 000001                              %
+*G RE  0000001 0000005                                    %
+0000001 A                            00100                %
+0000005 E                     00200                       %
+*Z 07331 80____                                           %
+*A VE 0000005 0000009 000001                              %
+*G RE  0000005 0000009                                    %
+0000005 E                            00300                %
+0000009 I                     00400                       %
+)";
+  return test_data::hrd_timetable::base().add(
+      {loader::hrd::hrd_5_20_26.fplan_ / "services.101", fplan});
+}
+
 TEST(initial_transfer_computation, single_transfer) {
   // load timetable
   timetable tt;
-  tt.date_range_ = full_period();
+  tt.date_range_ = hrd_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, loader::hrd::hrd_5_20_26, single_transfer(), tt);
+  load_timetable(src, loader::hrd::hrd_5_20_26, single_transfer_data(), tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -135,14 +83,42 @@ TEST(initial_transfer_computation, single_transfer) {
   tbp.initial_transfer_computation();
 
   ASSERT_EQ(1, tbp.ts_.transfers_.size());
+  auto const transfers =
+      tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{18U});
+  ASSERT_TRUE(transfers.has_value());
+  ASSERT_EQ(0U, transfers->first);
+  ASSERT_EQ(1U, transfers->second);
+  auto const t = tbp.ts_.transfers_[transfers->first];
+  EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{18U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+}
+
+// no transfer at stop E
+loader::mem_dir no_transfer_data() {
+  constexpr auto const fplan = R"(
+*Z 01337 80____                                           %
+*A VE 0000001 0000005 000001                              %
+*G RE  0000001 0000005                                    %
+0000001 A                            00100                %
+0000005 E                     00200                       %
+*Z 07331 80____                                           %
+*A VE 0000005 0000009 000001                              %
+*G RE  0000005 0000009                                    %
+0000005 E                            00200                %
+0000009 I                     00300                       %
+)";
+  return test_data::hrd_timetable::base().add(
+      {loader::hrd::hrd_5_20_26.fplan_ / "services.101", fplan});
 }
 
 TEST(initial_transfer_computation, no_transfer) {
   // load timetable
   timetable tt;
-  tt.date_range_ = full_period();
+  tt.date_range_ = hrd_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, loader::hrd::hrd_5_20_26, no_transfer(), tt);
+  load_timetable(src, loader::hrd::hrd_5_20_26, no_transfer_data(), tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -153,12 +129,14 @@ TEST(initial_transfer_computation, no_transfer) {
   ASSERT_EQ(0, tbp.ts_.transfers_.size());
 }
 
+using namespace nigiri::loader::gtfs;
+
 TEST(initial_transfer_computation, from_long_transfer) {
   // load timetable
   timetable tt;
-  tt.date_range_ = full_period();
+  tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, loader::hrd::hrd_5_20_26, from_long_transfer(), tt);
+  load_timetable(src, long_transfer_files(), tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
