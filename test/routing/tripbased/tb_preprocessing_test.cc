@@ -9,31 +9,24 @@ using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
 
-constexpr interval<std::chrono::sys_days> hrd_full_period() {
-  using namespace date;
-  constexpr auto const from = (2020_y / March / 28).operator sys_days();
-  constexpr auto const to = (2020_y / March / 31).operator sys_days();
-  return {from, to};
-}
-
 TEST(tripbased, get_or_create_bfi) {
   // init
   timetable tt;
   tb_preprocessing tbp{tt};
 
   // bitfield already registered with timetable
-  bitfield bf0{"0"};
+  bitfield const bf0{"0"};
   tt.register_bitfield(bf0);
-  bitfield_idx_t bfi0_exp{0U};
+  bitfield_idx_t const bfi0_exp{0U};
   EXPECT_EQ(tt.bitfields_[bfi0_exp], bf0);
   tbp.bitfield_to_bitfield_idx_.emplace(bf0, bfi0_exp);
-  bitfield_idx_t bfi0_act = tbp.get_or_create_bfi(bf0);
+  auto const bfi0_act = tbp.get_or_create_bfi(bf0);
   EXPECT_EQ(bfi0_exp, bfi0_act);
 
   // bitfield not yet registered with timetable
-  bitfield bf1{"1"};
-  bitfield_idx_t bfi1_exp{1U};
-  bitfield_idx_t bfi1_act = tbp.get_or_create_bfi(bf1);
+  bitfield const bf1{"1"};
+  bitfield_idx_t const bfi1_exp{1U};
+  auto const bfi1_act = tbp.get_or_create_bfi(bf1);
   EXPECT_EQ(bfi1_exp, bfi1_act);
   EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
