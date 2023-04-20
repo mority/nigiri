@@ -6,11 +6,24 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-constexpr std::string first_n(bitfield const& bf, std::size_t n = 8) {
+constexpr std::string first_n(bitfield const& bf, std::size_t n = 16) {
   std::string s;
   n = n > bf.size() ? bf.size() : n;
-  for (std::size_t i = n; i != 0; --i) {
+  for (std::size_t i = n; i + 1 != 0; --i) {
     s += std::to_string(bf[i]);
+  }
+  return s;
+}
+
+std::string print_transport(timetable const& tt, transport_idx_t const& tpi) {
+  std::string s;
+  for (auto const att_comb_idx : tt.transport_section_attributes_[tpi]) {
+    for (auto const att_idx : tt.attribute_combinations_[att_comb_idx]) {
+      s += tt.attributes_[att_idx].code_;
+      s += ": ";
+      s += tt.attributes_[att_idx].text_;
+      s += " | ";
+    }
   }
   return s;
 }
@@ -54,16 +67,8 @@ void tb_preprocessing::initial_transfer_computation() {
     auto const stops_from = tt_.route_location_seq_[ri_from];
 
 #ifndef NDEBUG
-    TBDL << "Examining transport " << tpi_from << " of route " << ri_from
-         << ", stops:" << std::endl;
-    for (std::size_t si_from = 0U; si_from != stops_from.size(); ++si_from) {
-      auto const stop = timetable::stop{stops_from[si_from]};
-      auto const li_from = stop.location_idx();
-      TBDL << "stop " << si_from << ": "
-           << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
-                                      tt_.locations_.names_[li_from].end()}
-           << std::endl;
-    }
+    TBDL << "-----------------------------------------------------------------"
+         << std::endl;
 #endif
 
     // si_from: stop index from
@@ -81,12 +86,12 @@ void tb_preprocessing::initial_transfer_computation() {
       auto const sa_tp_from = num_midnights(t_arr_from);
 
 #ifndef NDEBUG
-      TBDL << "si_from = " << si_from << ", li_from = " << li_from
-           << ", location name: "
+      TBDL << "tpi_from = " << tpi_from << ", ri_from = " << ri_from
+           << ", si_from = " << si_from << ", li_from = " << li_from << "("
            << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
                                       tt_.locations_.names_[li_from].end()}
-           << ", t_arr_from = " << t_arr_from << ", sa_tp_from = " << sa_tp_from
-           << std::endl;
+           << "), t_arr_from = " << t_arr_from
+           << ", sa_tp_from = " << sa_tp_from << std::endl;
 #endif
 
       // outgoing footpaths of location
@@ -105,18 +110,20 @@ void tb_preprocessing::initial_transfer_computation() {
         auto const a = time_of_day(ta);
 
 #ifndef NDEBUG
-        TBDL << "li_to = " << li_to << ", location name: "
+        TBDL << "li_to = " << li_to << "("
              << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
                                         tt_.locations_.names_[li_from].end()}
-             << ", sa_fp = " << sa_fp << ", a = " << a << std::endl;
+             << "), sa_fp = " << sa_fp << ", a = " << a << std::endl;
 #endif
 
         // iterate over lines serving stop_to
         auto const routes_at_stop_to = tt_.location_routes_[li_to];
 
 #ifndef NDEBUG
-        TBDL << "Examining " << routes_at_stop_to.size()
-             << " routes at li_to = " << li_to << "..." << std::endl;
+        TBDL << "Examining " << routes_at_stop_to.size() << " routes at "
+             << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
+                                        tt_.locations_.names_[li_from].end()}
+             << "..." << std::endl;
 #endif
 
         // ri_to: route index to
@@ -132,11 +139,6 @@ void tb_preprocessing::initial_transfer_computation() {
 
             // li_from: location index from
             auto const li_to_cur = stop_to_cur.location_idx();
-
-#ifndef NDEBUG
-            TBDL << "ri_to = " << ri_to << ", si_to = " << si_to
-                 << ", li_to_cur = " << li_to_cur << std::endl;
-#endif
 
             if (li_to_cur == li_to) {
 
@@ -167,8 +169,19 @@ void tb_preprocessing::initial_transfer_computation() {
                   tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
 
 #ifndef NDEBUG
-              TBDL << "Looking for earliest connecting transport after a = "
-                   << a << ", initial omega = " << omega << std::endl;
+              TBDL << "tpi_from = " << tpi_from << ", si_from = " << si_from
+                   << ", from location: "
+                   << std::basic_string<
+                          char>{tt_.locations_.names_[li_from].begin(),
+                                tt_.locations_.names_[li_from].end()}
+                   << ", ri_to = " << ri_to << ", si_to = " << si_to
+                   << ", to location:  = "
+                   << std::basic_string<
+                          char>{tt_.locations_.names_[li_to_cur].begin(),
+                                tt_.locations_.names_[li_to_cur].end()}
+                   << std::endl
+                   << "Looking for earliest connecting transport after a = "
+                   << a << ", initial omega = " << first_n(omega) << std::endl;
 #endif
               // check if any bit in omega is set to 1
               while (omega.any()) {
@@ -186,14 +199,8 @@ void tb_preprocessing::initial_transfer_computation() {
                         tp_to_offset)];
 
 #ifndef NDEBUG
-                TBDL << "Examining event_times["
-                     << std::distance(event_times.begin(), tp_to_cur_it)
-                     << "], tpi_to = " << tpi_to << ", dep_cur = " << dep_cur
-                     << std::endl;
-#endif
-
-#ifndef NDEBUG
-                TBDL << "different route -> " << (ri_from != ri_to)
+                TBDL << "tpi_to = " << tpi_to << " departing at " << dep_cur
+                     << ": different route -> " << (ri_from != ri_to)
                      << ", earlier stop -> " << (si_to < si_from)
                      << ", earlier transport -> "
                      << (tpi_to != tpi_from &&
@@ -226,19 +233,9 @@ void tb_preprocessing::initial_transfer_computation() {
                   // total shift amount
                   auto const sa_total = sa_tp_to - (sa_tp_from + sa_fp + sa_w);
 
-#ifndef NDEBUG
-                  TBDL << "sa_tp_to = " << sa_tp_to
-                       << ", sa_total = " << sa_total << std::endl;
-#endif
-
                   // bitfield transport to
                   auto const& bf_tp_to =
                       tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]];
-
-#ifndef NDEBUG
-                  TBDL << "omega = " << omega << ", bf_tp_to = " << bf_tp_to
-                       << std::endl;
-#endif
 
                   // bitfield transfer from
                   auto bf_tf_from = omega;
@@ -247,21 +244,10 @@ void tb_preprocessing::initial_transfer_computation() {
                   if (sa_total < 0) {
                     bf_tf_from &=
                         bf_tp_to >> static_cast<unsigned>(-1 * sa_total);
-#ifndef NDEBUG
-                    TBDL << "shifted left by "
-                         << static_cast<unsigned>(-1 * sa_total) << std::endl;
-#endif
                   } else {
                     bf_tf_from &= bf_tp_to << static_cast<unsigned>(sa_total);
-#ifndef NDEBUG
-                    TBDL << "shifted right by "
-                         << static_cast<unsigned>(sa_total) << std::endl;
-#endif
                   }
 
-#ifndef NDEBUG
-                  TBDL << "bf_tf_from = " << bf_tf_from << std::endl;
-#endif
                   // check for match
                   if (bf_tf_from.any()) {
 
@@ -270,7 +256,7 @@ void tb_preprocessing::initial_transfer_computation() {
                     omega &= ~bf_tf_from;
 
 #ifndef NDEBUG
-                    TBDL << "new omega =  " << omega << std::endl;
+                    TBDL << "new omega =  " << first_n(omega) << std::endl;
 #endif
 
                     // construct and add transfer to transfer set
@@ -291,28 +277,20 @@ void tb_preprocessing::initial_transfer_computation() {
                          << ", li_from = " << li_from << std::endl
                          << "tpi_to = " << tpi_to << ", li_to = " << li_to
                          << std::endl
-                         << "bf_tf_from = " << bf_tf_from << std::endl
-                         << "  bf_tf_to = " << bf_tf_to << std::endl;
+                         << "bf_tf_from = " << first_n(bf_tf_from) << std::endl
+                         << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
 #endif
                   }
-#ifndef NDEBUG
-                  else {
-                    TBDL << "no bitfield match" << std::endl;
-                  }
-#endif
                 }
-
-#ifndef NDEBUG
-                else {
-                  TBDL << "not required" << std::endl;
-                }
-#endif
 
                 // prep next iteration
                 // is this the last transport of the day?
                 if (std::next(tp_to_cur_it) == event_times.end()) {
+
 #ifndef NDEBUG
-                  TBDL << "passing midnight" << std::endl;
+                  if (omega.any()) {
+                    TBDL << "passing midnight" << std::endl;
+                  }
 #endif
                   // passing midnight
                   ++sa_w;
