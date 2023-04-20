@@ -27,7 +27,7 @@ TEST(tripbased, get_or_create_bfi) {
   bitfield const bf1{"1"};
   bitfield_idx_t const bfi1_exp{1U};
   auto const bfi1_act = tbp.get_or_create_bfi(bf1);
-  EXPECT_EQ(bfi1_exp, bfi1_act);
+  ASSERT_EQ(bfi1_exp, bfi1_act);
   EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
 
@@ -46,7 +46,7 @@ TEST(initial_transfer_computation, no_transfer) {
   // run preprocessing
   tbp.initial_transfer_computation();
 
-  ASSERT_EQ(0, tbp.ts_.transfers_.size());
+  EXPECT_EQ(0U, tbp.ts_.transfers_.size());
 }
 
 TEST(initial_transfer_computation, same_day_transfer) {
@@ -62,7 +62,7 @@ TEST(initial_transfer_computation, same_day_transfer) {
   // run preprocessing
   tbp.initial_transfer_computation();
 
-  ASSERT_EQ(1, tbp.ts_.transfers_.size());
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{1U});
   ASSERT_TRUE(transfers.has_value());
@@ -73,6 +73,10 @@ TEST(initial_transfer_computation, same_day_transfer) {
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
   EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
   EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+
+  bitfield const bf_exp{"100000"};
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
 }
 
 TEST(initial_transfer_computation, from_long_transfer) {
@@ -88,7 +92,7 @@ TEST(initial_transfer_computation, from_long_transfer) {
   // run preprocessing
   tbp.initial_transfer_computation();
 
-  ASSERT_EQ(1, tbp.ts_.transfers_.size());
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{1U});
   ASSERT_TRUE(transfers.has_value());
@@ -99,6 +103,11 @@ TEST(initial_transfer_computation, from_long_transfer) {
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
   EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
   EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_to_);
+
+  bitfield const bf_tf_from_exp{"100000"};
+  bitfield const bf_tf_to_exp{"100000000"};
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
 }
 
 TEST(initial_transfer_computation, weekday_transfer) {
@@ -114,7 +123,7 @@ TEST(initial_transfer_computation, weekday_transfer) {
   // run preprocessing
   tbp.initial_transfer_computation();
 
-  ASSERT_EQ(1, tbp.ts_.transfers_.size());
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
       tbp.ts_.get_transfers(transport_idx_t{1U}, location_idx_t{1U});
   ASSERT_TRUE(transfers.has_value());
@@ -125,4 +134,39 @@ TEST(initial_transfer_computation, weekday_transfer) {
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
   EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_from_);
   EXPECT_EQ(bitfield_idx_t{2U}, t.bitfield_idx_to_);
+
+  bitfield const bf_tf_from_exp{"0111100000"};
+  bitfield const bf_tf_to_exp{"1111000000"};
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+}
+
+TEST(initial_transfer_computation, daily_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, daily_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.initial_transfer_computation();
+
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
+  auto const transfers =
+      tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{1U});
+  ASSERT_TRUE(transfers.has_value());
+  ASSERT_EQ(0U, transfers->first);
+  ASSERT_EQ(1U, transfers->second);
+  auto const t = tbp.ts_.transfers_[transfers->first];
+  EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+
+  bitfield const bf_exp{"111111100000"};
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
 }

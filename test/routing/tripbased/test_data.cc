@@ -24,6 +24,7 @@ constexpr auto const frequencies_file_content =
 
 constexpr auto const calendar_file_content = std::string_view{
     R"(service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+DLY,1,1,1,1,1,1,1,20210301,20210307
 WE,0,0,0,0,0,1,1,20210301,20210307
 WD,1,1,1,1,1,0,0,20210301,20210307
 MON,1,0,0,0,0,0,0,20210301,20210307
@@ -182,6 +183,40 @@ loader::mem_dir weekday_transfer_files() {
        {path{kTripsFile}, std::string{weekday_transfer_trips_file_content}},
        {path{kStopTimesFile},
         std::string{weekday_transfer_stop_times_content}}}};
+}
+
+constexpr auto const daily_transfer_routes_file_content = std::string_view{
+    R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R0,DTA,R0,R0,"S0 -> S1",2
+R1,DTA,R1,R1,"S1 -> S2",2
+)"};
+
+constexpr auto const daily_transfer_trips_file_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R0,DLY,R0_DLY,R0_DLY,1
+R1,DLY,R1_DLY,R1_DLY,2
+)";
+
+constexpr auto const daily_transfer_stop_times_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R0_DLY,00:00:00,00:00:00,S0,0,0,0
+R0_DLY,02:00:00,02:00:00,S1,1,0,0
+R1_DLY,03:00:00,03:00:00,S1,0,0,0
+R1_DLY,04:00:00,04:00:00,S2,1,0,0
+)";
+
+loader::mem_dir daily_transfer_files() {
+  using std::filesystem::path;
+  return {
+      {{path{kAgencyFile}, std::string{agency_file_content}},
+       {path{kStopFile}, std::string{simple_stops_file_content}},
+       {path{kCalenderFile}, std::string{calendar_file_content}},
+       {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+       {path{kTransfersFile}, std::string{transfers_file_content}},
+       {path{kRoutesFile}, std::string{daily_transfer_routes_file_content}},
+       {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+       {path{kTripsFile}, std::string{daily_transfer_trips_file_content}},
+       {path{kStopTimesFile}, std::string{daily_transfer_stop_times_content}}}};
 }
 
 }  // namespace nigiri::routing::tripbased::test
