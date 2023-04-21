@@ -31,6 +31,8 @@ TEST(tripbased, get_or_create_bfi) {
   EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
 
+TEST(tripbased, earliest_times) {}
+
 using namespace nigiri::loader::gtfs;
 
 TEST(initial_transfer_computation, no_transfer) {

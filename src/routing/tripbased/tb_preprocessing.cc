@@ -43,6 +43,10 @@ void tb_preprocessing::build_transfer_set(
        << " KV-pairs to bitfield_to_bitfield_idx_" << std::endl;
 #endif
 
+  // earliest arrival time per stop
+
+  // earliest time of connecting trip per stop
+
   // iterate over all trips of the timetable
   // tpi: transport idx from
   for (transport_idx_t tpi_from{0U};
