@@ -15,19 +15,6 @@ constexpr std::string first_n(bitfield const& bf, std::size_t n = 16) {
   return s;
 }
 
-std::string print_transport(timetable const& tt, transport_idx_t const& tpi) {
-  std::string s;
-  for (auto const att_comb_idx : tt.transport_section_attributes_[tpi]) {
-    for (auto const att_idx : tt.attribute_combinations_[att_comb_idx]) {
-      s += tt.attributes_[att_idx].code_;
-      s += ": ";
-      s += tt.attributes_[att_idx].text_;
-      s += " | ";
-    }
-  }
-  return s;
-}
-
 bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&bf, this]() {
     auto const bfi = tt_.register_bitfield(bf);
@@ -36,7 +23,8 @@ bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   });
 }
 
-void tb_preprocessing::initial_transfer_computation() {
+void tb_preprocessing::build_transfer_set(
+    bool uturn_removal /* , bool reduction */) {
 
 #ifndef NDEBUG
   TBDL << "Beginning initial transfer computation, sa_w_max_ = " << sa_w_max_
@@ -258,28 +246,71 @@ void tb_preprocessing::initial_transfer_computation() {
 #ifndef NDEBUG
                     TBDL << "new omega =  " << first_n(omega) << std::endl;
 #endif
+                    auto const check_uturn = [&]() {
+                      // check if next stop for tpi_to and previous stop for
+                      // tpi_from exists
+                      if (si_to + 1 < tt_.route_location_seq_[ri_to].size() &&
+                          si_from - 1 > 0) {
+                        // check if next stop of tpi_to is the previous stop of
+                        // tpi_from
+                        auto const stop_to_next = timetable::stop{
+                            tt_.route_location_seq_[ri_to][si_to + 1]};
+                        auto const stop_from_prev = timetable::stop{
+                            tt_.route_location_seq_[ri_from][si_from - 1]};
+                        if (stop_to_next.location_idx() ==
+                            stop_from_prev.location_idx()) {
+                          // check if tpi_to is already reachable at the
+                          // previous stop of tpi_from
+                          auto const dep_to_next =
+                              dep_cur +
+                              (tt_.event_mam(tpi_to, si_to + 1,
+                                             event_type::kDep) -
+                               tt_.event_mam(tpi_to, si_to, event_type::kDep));
+                          auto const arr_from_prev =
+                              a - fp.duration_ -
+                              (tt_.event_mam(tpi_from, si_from,
+                                             event_type::kArr) -
+                               tt_.event_mam(tpi_from, si_from,
+                                             event_type::kArr));
+                          auto const transfer_time_from_prev =
+                              tt_.locations_.transfer_time_
+                                  [stop_from_prev.location_idx()];
+                          return arr_from_prev + transfer_time_from_prev <=
+                                 dep_to_next;
+                        }
+                      }
+                      return false;
+                    };
 
-                    // construct and add transfer to transfer set
-                    auto const bfi_from = get_or_create_bfi(bf_tf_from);
-                    // bitfield transfer to
-                    auto bf_tf_to = bf_tf_from;
-                    if (sa_total < 0) {
-                      bf_tf_to <<= static_cast<unsigned>(-1 * sa_total);
-                    } else {
-                      bf_tf_to >>= static_cast<unsigned>(sa_total);
-                    }
-                    auto const bfi_to = get_or_create_bfi(bf_tf_to);
-                    ts_.add(tpi_from, li_from, tpi_to, li_to, bfi_from, bfi_to);
+                    // perform uturn_check if uturn_removal flag is set
+                    auto const is_uturn = uturn_removal ? check_uturn() : false;
+
+                    if (!is_uturn) {
+                      // construct and add transfer to transfer set
+                      auto const bfi_from = get_or_create_bfi(bf_tf_from);
+                      // bitfield transfer to
+                      auto bf_tf_to = bf_tf_from;
+                      if (sa_total < 0) {
+                        bf_tf_to <<= static_cast<unsigned>(-1 * sa_total);
+                      } else {
+                        bf_tf_to >>= static_cast<unsigned>(sa_total);
+                      }
+                      auto const bfi_to = get_or_create_bfi(bf_tf_to);
+                      ts_.add(tpi_from, li_from, tpi_to, li_to, bfi_from,
+                              bfi_to);
 
 #ifndef NDEBUG
-                    TBDL << "transfer added:" << std::endl
-                         << "tpi_from = " << tpi_from
-                         << ", li_from = " << li_from << std::endl
-                         << "tpi_to = " << tpi_to << ", li_to = " << li_to
-                         << std::endl
-                         << "bf_tf_from = " << first_n(bf_tf_from) << std::endl
-                         << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
+                      TBDL << "transfer added:" << std::endl
+                           << "tpi_from = " << tpi_from
+                           << ", li_from = " << li_from << std::endl
+                           << "tpi_to = " << tpi_to << ", li_to = " << li_to
+                           << std::endl
+                           << "bf_tf_from = " << first_n(bf_tf_from)
+                           << std::endl
+                           << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
+
 #endif
+                    }
                   }
                 }
 

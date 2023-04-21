@@ -15,15 +15,8 @@ struct tb_preprocessing {
       : tt_(tt), sa_w_max_(sa_w_max) {}
 
   // preprocessing without reduction step
-  void initial_transfer_computation();
-
-  // preprocessing with U-turn transfer removal
-  void u_turn_transfer_removal();
-
-  // preprocessing with U-turn transfer removal and transfer reduction
-  void transfer_reduction();
-
-  void build_transfer_set() { initial_transfer_computation(); }
+  void build_transfer_set(
+      bool uturn_removal = true /*, bool reduction = true*/);
 
   // load precomputed transfer set from file
   // also needs to load the corresponding timetable from file since bitfields
