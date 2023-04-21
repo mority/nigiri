@@ -31,7 +31,91 @@ TEST(tripbased, get_or_create_bfi) {
   EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
 
-TEST(tripbased, earliest_times) {}
+TEST(tripbased, earliest_times) {
+  // init
+  timetable tt;
+  tb_preprocessing tbp{tt};
+  tb_preprocessing::earliest_times ets{tbp};
+
+  // update empty
+  location_idx_t const li_exp0{23U};
+  duration_t const time_exp0{42U};
+  bitfield const bf_exp0{"111"};
+  ets.update(li_exp0, time_exp0, bf_exp0);
+
+  ASSERT_EQ(1, ets.size());
+
+  EXPECT_EQ(li_exp0, ets[0].location_idx_);
+  EXPECT_EQ(time_exp0, ets[0].time_);
+  EXPECT_EQ(bf_exp0, tt.bitfields_[ets[0].bf_idx_]);
+
+  // update end
+  location_idx_t const li_exp1{66U};
+  duration_t const time_exp1{77U};
+  bitfield const bf_exp1{"101"};
+  ets.update(li_exp1, time_exp1, bf_exp1);
+
+  ASSERT_EQ(2, ets.size());
+
+  EXPECT_EQ(li_exp0, ets[0].location_idx_);
+  EXPECT_EQ(time_exp0, ets[0].time_);
+  EXPECT_EQ(bf_exp0, tt.bitfields_[ets[0].bf_idx_]);
+
+  EXPECT_EQ(li_exp1, ets[1].location_idx_);
+  EXPECT_EQ(time_exp1, ets[1].time_);
+  EXPECT_EQ(bf_exp1, tt.bitfields_[ets[1].bf_idx_]);
+
+  // update inner
+  location_idx_t const li_exp2{55U};
+  duration_t const time_exp2{88U};
+  bitfield const bf_exp2{"110"};
+  ets.update(li_exp2, time_exp2, bf_exp2);
+
+  ASSERT_EQ(3, ets.size());
+
+  EXPECT_EQ(li_exp0, ets[0].location_idx_);
+  EXPECT_EQ(time_exp0, ets[0].time_);
+  EXPECT_EQ(bf_exp0, tt.bitfields_[ets[0].bf_idx_]);
+
+  EXPECT_EQ(li_exp2, ets[1].location_idx_);
+  EXPECT_EQ(time_exp2, ets[1].time_);
+  EXPECT_EQ(bf_exp2, tt.bitfields_[ets[1].bf_idx_]);
+
+  EXPECT_EQ(li_exp1, ets[2].location_idx_);
+  EXPECT_EQ(time_exp1, ets[2].time_);
+  EXPECT_EQ(bf_exp1, tt.bitfields_[ets[2].bf_idx_]);
+
+  // update existing inner, no remove
+  location_idx_t const li_exp3{55U};
+  duration_t const time_exp3{87U};
+  bitfield const bf_exp3{"010"};
+  ets.update(li_exp3, time_exp3, bf_exp3);
+  bitfield const bf_exp4{"100"};
+
+  ASSERT_EQ(4, ets.size());
+
+  EXPECT_EQ(li_exp0, ets[0].location_idx_);
+  EXPECT_EQ(time_exp0, ets[0].time_);
+  EXPECT_EQ(bf_exp0, tt.bitfields_[ets[0].bf_idx_]);
+
+  EXPECT_EQ(li_exp2, ets[1].location_idx_);
+  EXPECT_EQ(time_exp2, ets[1].time_);
+  EXPECT_EQ(bf_exp4, tt.bitfields_[ets[1].bf_idx_]);
+
+  EXPECT_EQ(li_exp3, ets[2].location_idx_);
+  EXPECT_EQ(time_exp3, ets[2].time_);
+  EXPECT_EQ(bf_exp3, tt.bitfields_[ets[2].bf_idx_]);
+
+  EXPECT_EQ(li_exp1, ets[3].location_idx_);
+  EXPECT_EQ(time_exp1, ets[3].time_);
+  EXPECT_EQ(bf_exp1, tt.bitfields_[ets[3].bf_idx_]);
+
+  // update existing inner, remove
+
+  // update existing begin, remove
+
+  // update existing end, remove
+}
 
 using namespace nigiri::loader::gtfs;
 

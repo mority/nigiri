@@ -77,6 +77,12 @@ struct tb_preprocessing {
       }
     }
 
+    constexpr unsigned long size() { return data_.size(); }
+
+    constexpr earliest_time& operator[](unsigned long pos) {
+      return data_[pos];
+    }
+
     tb_preprocessing& tbp_;
     std::vector<earliest_time> data_{};
   };
