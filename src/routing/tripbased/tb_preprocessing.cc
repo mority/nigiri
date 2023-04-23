@@ -44,8 +44,10 @@ void tb_preprocessing::build_transfer_set(
 #endif
 
   // earliest arrival time per stop
+  earliest_times ets_arr{*this};
 
   // earliest time of connecting trip per stop
+  earliest_times ets_ch{*this};
 
   // iterate over all trips of the timetable
   // tpi: transport idx from
