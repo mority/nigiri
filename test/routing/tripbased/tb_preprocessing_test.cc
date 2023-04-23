@@ -1,3 +1,5 @@
+#include <random>
+
 #include "gtest/gtest.h"
 
 #include "nigiri/loader/gtfs/load_timetable.h"
@@ -31,7 +33,7 @@ TEST(tripbased, get_or_create_bfi) {
   EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
 
-TEST(tripbased, earliest_times) {
+TEST(earliest_times, basic) {
   // init
   timetable tt;
   tb_preprocessing tbp{tt};
@@ -40,81 +42,277 @@ TEST(tripbased, earliest_times) {
   // update empty
   location_idx_t const li_exp0{23U};
   duration_t const time_exp0{42U};
-  bitfield const bf_exp0{"111"};
-  ets.update(li_exp0, time_exp0, bf_exp0);
+  bitfield const bf_111{"111"};
+  ets.update(li_exp0, time_exp0, bf_111);
 
   ASSERT_EQ(1, ets.size());
 
   EXPECT_EQ(li_exp0, ets[0].location_idx_);
   EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_exp0, tt.bitfields_[ets[0].bf_idx_]);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
 
   // update end
   location_idx_t const li_exp1{66U};
   duration_t const time_exp1{77U};
-  bitfield const bf_exp1{"101"};
-  ets.update(li_exp1, time_exp1, bf_exp1);
+  bitfield const bf_101{"101"};
+  ets.update(li_exp1, time_exp1, bf_101);
 
   ASSERT_EQ(2, ets.size());
 
   EXPECT_EQ(li_exp0, ets[0].location_idx_);
   EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_exp0, tt.bitfields_[ets[0].bf_idx_]);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
 
   EXPECT_EQ(li_exp1, ets[1].location_idx_);
   EXPECT_EQ(time_exp1, ets[1].time_);
-  EXPECT_EQ(bf_exp1, tt.bitfields_[ets[1].bf_idx_]);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets[1].bf_idx_]);
 
   // update inner
   location_idx_t const li_exp2{55U};
   duration_t const time_exp2{88U};
-  bitfield const bf_exp2{"110"};
-  ets.update(li_exp2, time_exp2, bf_exp2);
+  bitfield const bf_110{"110"};
+  ets.update(li_exp2, time_exp2, bf_110);
 
   ASSERT_EQ(3, ets.size());
 
   EXPECT_EQ(li_exp0, ets[0].location_idx_);
   EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_exp0, tt.bitfields_[ets[0].bf_idx_]);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
 
   EXPECT_EQ(li_exp2, ets[1].location_idx_);
   EXPECT_EQ(time_exp2, ets[1].time_);
-  EXPECT_EQ(bf_exp2, tt.bitfields_[ets[1].bf_idx_]);
+  EXPECT_EQ(bf_110, tt.bitfields_[ets[1].bf_idx_]);
 
   EXPECT_EQ(li_exp1, ets[2].location_idx_);
   EXPECT_EQ(time_exp1, ets[2].time_);
-  EXPECT_EQ(bf_exp1, tt.bitfields_[ets[2].bf_idx_]);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets[2].bf_idx_]);
 
   // update existing inner, no remove
   location_idx_t const li_exp3{55U};
   duration_t const time_exp3{87U};
-  bitfield const bf_exp3{"010"};
-  ets.update(li_exp3, time_exp3, bf_exp3);
-  bitfield const bf_exp4{"100"};
+  bitfield const bf_010{"010"};
+  ets.update(li_exp3, time_exp3, bf_010);
+  bitfield const bf_100{"100"};
 
   ASSERT_EQ(4, ets.size());
 
   EXPECT_EQ(li_exp0, ets[0].location_idx_);
   EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_exp0, tt.bitfields_[ets[0].bf_idx_]);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
 
   EXPECT_EQ(li_exp2, ets[1].location_idx_);
   EXPECT_EQ(time_exp2, ets[1].time_);
-  EXPECT_EQ(bf_exp4, tt.bitfields_[ets[1].bf_idx_]);
+  EXPECT_EQ(bf_100, tt.bitfields_[ets[1].bf_idx_]);
 
   EXPECT_EQ(li_exp3, ets[2].location_idx_);
   EXPECT_EQ(time_exp3, ets[2].time_);
-  EXPECT_EQ(bf_exp3, tt.bitfields_[ets[2].bf_idx_]);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets[2].bf_idx_]);
 
   EXPECT_EQ(li_exp1, ets[3].location_idx_);
   EXPECT_EQ(time_exp1, ets[3].time_);
-  EXPECT_EQ(bf_exp1, tt.bitfields_[ets[3].bf_idx_]);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets[3].bf_idx_]);
 
   // update existing inner, remove
+  location_idx_t const li_exp4{55U};
+  duration_t const time_exp4{86U};
+
+  ets.update(li_exp4, time_exp4, bf_010);
+
+  ASSERT_EQ(4, ets.size());
+
+  EXPECT_EQ(li_exp0, ets[0].location_idx_);
+  EXPECT_EQ(time_exp0, ets[0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+
+  EXPECT_EQ(li_exp2, ets[1].location_idx_);
+  EXPECT_EQ(time_exp2, ets[1].time_);
+  EXPECT_EQ(bf_100, tt.bitfields_[ets[1].bf_idx_]);
+
+  EXPECT_EQ(li_exp4, ets[2].location_idx_);
+  EXPECT_EQ(time_exp4, ets[2].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets[2].bf_idx_]);
+
+  EXPECT_EQ(li_exp1, ets[3].location_idx_);
+  EXPECT_EQ(time_exp1, ets[3].time_);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets[3].bf_idx_]);
 
   // update existing begin, remove
+  duration_t const time_exp5{41U};
+
+  ets.update(li_exp0, time_exp5, bf_111);
+
+  ASSERT_EQ(4, ets.size());
+
+  EXPECT_EQ(li_exp0, ets[0].location_idx_);
+  EXPECT_EQ(time_exp5, ets[0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+
+  EXPECT_EQ(li_exp2, ets[1].location_idx_);
+  EXPECT_EQ(time_exp2, ets[1].time_);
+  EXPECT_EQ(bf_100, tt.bitfields_[ets[1].bf_idx_]);
+
+  EXPECT_EQ(li_exp4, ets[2].location_idx_);
+  EXPECT_EQ(time_exp4, ets[2].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets[2].bf_idx_]);
+
+  EXPECT_EQ(li_exp1, ets[3].location_idx_);
+  EXPECT_EQ(time_exp1, ets[3].time_);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets[3].bf_idx_]);
 
   // update existing end, remove
+  duration_t const time_exp6{76U};
+
+  ets.update(li_exp1, time_exp6, bf_111);
+
+  ASSERT_EQ(4, ets.size());
+
+  EXPECT_EQ(li_exp0, ets[0].location_idx_);
+  EXPECT_EQ(time_exp5, ets[0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+
+  EXPECT_EQ(li_exp2, ets[1].location_idx_);
+  EXPECT_EQ(time_exp2, ets[1].time_);
+  EXPECT_EQ(bf_100, tt.bitfields_[ets[1].bf_idx_]);
+
+  EXPECT_EQ(li_exp4, ets[2].location_idx_);
+  EXPECT_EQ(time_exp4, ets[2].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets[2].bf_idx_]);
+
+  EXPECT_EQ(li_exp1, ets[3].location_idx_);
+  EXPECT_EQ(time_exp6, ets[3].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[3].bf_idx_]);
+}
+
+TEST(earliest_times, same_time_more_bits) {
+  // init
+  timetable tt;
+  tb_preprocessing tbp{tt};
+  tb_preprocessing::earliest_times ets{tbp};
+
+  location_idx_t const li{23U};
+  duration_t const time{42U};
+  bitfield const bf_010{"010"};
+  bitfield const bf_111{"111"};
+
+  ets.update(li, time, bf_010);
+  ASSERT_EQ(1, ets.size());
+  EXPECT_EQ(li, ets[0].location_idx_);
+  EXPECT_EQ(time, ets[0].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets[0].bf_idx_]);
+
+  ets.update(li, time, bf_111);
+  ASSERT_EQ(1, ets.size());
+  EXPECT_EQ(li, ets[0].location_idx_);
+  EXPECT_EQ(time, ets[0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+}
+
+TEST(earliest_times, same_time_less_bits) {
+  // init
+  timetable tt;
+  tb_preprocessing tbp{tt};
+  tb_preprocessing::earliest_times ets{tbp};
+
+  location_idx_t const li{23U};
+  duration_t const time{42U};
+  bitfield const bf_111{"111"};
+  bitfield const bf_101{"101"};
+
+  ets.update(li, time, bf_111);
+  ASSERT_EQ(1, ets.size());
+  EXPECT_EQ(li, ets[0].location_idx_);
+  EXPECT_EQ(time, ets[0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+
+  ets.update(li, time, bf_101);
+  ASSERT_EQ(1, ets.size());
+  EXPECT_EQ(li, ets[0].location_idx_);
+  EXPECT_EQ(time, ets[0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+}
+
+TEST(earliest_times, same_time_other_bits) {
+  // init
+  timetable tt;
+  tb_preprocessing tbp{tt};
+  tb_preprocessing::earliest_times ets{tbp};
+
+  location_idx_t const li{23U};
+  duration_t const time{42U};
+  bitfield const bf_010{"010"};
+  bitfield const bf_101{"101"};
+  bitfield const bf_111{"111"};
+
+  ets.update(li, time, bf_010);
+  ASSERT_EQ(1, ets.size());
+  EXPECT_EQ(li, ets[0].location_idx_);
+  EXPECT_EQ(time, ets[0].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets[0].bf_idx_]);
+
+  ets.update(li, time, bf_101);
+  ASSERT_EQ(1, ets.size());
+  EXPECT_EQ(li, ets[0].location_idx_);
+  EXPECT_EQ(time, ets[0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+}
+
+TEST(earliest_times, random) {
+  // init
+  timetable tt;
+  tb_preprocessing tbp{tt};
+  tb_preprocessing::earliest_times ets{tbp};
+
+  // fill params
+  auto const num_updates = 100000U;
+  auto const li_max = 100U;
+  auto const time_max = 1440U;
+  auto const num_bits = 365U;
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> li_dist(0, li_max);
+  std::uniform_int_distribution<> time_dist(0, time_max);
+  std::uniform_int_distribution<> bit_dist(0, 1);
+
+  // fill
+  for (auto i = 0U; i < num_updates; ++i) {
+    bitfield bf;
+    for (auto j = 0U; j < num_bits; ++j) {
+      bf.set(j, bit_dist(gen));
+    }
+    ets.update(location_idx_t{li_dist(gen)}, duration_t{time_dist(gen)}, bf);
+  }
+
+  // check sorted by location
+  for (auto it = ets.data_.begin(); it + 1 != ets.data_.end(); ++it) {
+    EXPECT_TRUE(it->location_idx_ <= (it + 1)->location_idx_);
+  }
+
+  // check each time is unique per location
+  ASSERT_TRUE(0 < ets.size());
+  location_idx_t li_cur = ets[0].location_idx_;
+  std::set<duration_t> time_set;
+  for (auto it = ets.data_.begin(); it != ets.data_.end(); ++it) {
+    if (it->location_idx_ != li_cur) {
+      li_cur = it->location_idx_;
+      time_set.clear();
+    }
+    EXPECT_EQ(time_set.end(), time_set.find(it->time_));
+    time_set.emplace(it->time_);
+  }
+
+  // check bitsets are disjoint per location
+  li_cur = ets[0].location_idx_;
+  auto bf_or = tt.bitfields_[ets[0].bf_idx_];
+  for (auto it = ets.data_.begin() + 1; it != ets.data_.end(); ++it) {
+    if (it->location_idx_ != li_cur) {
+      li_cur = it->location_idx_;
+      bf_or = tt.bitfields_[it->bf_idx_];
+    } else {
+      EXPECT_TRUE((bf_or & tt.bitfields_[it->bf_idx_]).none());
+      bf_or |= tt.bitfields_[it->bf_idx_];
+    }
+  }
 }
 
 using namespace nigiri::loader::gtfs;

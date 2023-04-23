@@ -62,8 +62,17 @@ struct tb_preprocessing {
             et_cur->bf_idx_ = tbp_.get_or_create_bfi(bf_cur);
             ++et_cur;
           }
+        } else if (time_new == et_cur->time_) {
+          // entry for this time already exists
+          if ((bf_new & ~tbp_.tt_.bitfields_[et_cur->bf_idx_]).none()) {
+            // all bits of bf_new already covered
+            return false;
+          } else {
+            bf_new |= tbp_.tt_.bitfields_[et_cur->bf_idx_];
+            data_.erase(et_cur);
+          }
         } else {
-          // new time is not better than current time, update its bitset
+          // new time is worse than current time, update bit set of new time
           bf_new &= ~tbp_.tt_.bitfields_[et_cur->bf_idx_];
           ++et_cur;
         }
