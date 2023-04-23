@@ -44,6 +44,8 @@ struct tb_preprocessing {
         return true;
       }
 
+      auto overwrite_spot = data_.end();
+
       // iterate entries for this li_new
       while (et_cur != data_.end() && et_cur->location_idx_ == li_new) {
         if (bf_new.none()) {
@@ -56,7 +58,12 @@ struct tb_preprocessing {
           bitfield bf_cur = tbp_.tt_.bitfields_[et_cur->bf_idx_] & ~bf_new;
           if (bf_cur.none()) {
             // if current time is no longer needed, we remove it from the vector
-            data_.erase(et_cur);
+            if (overwrite_spot == data_.end()) {
+              overwrite_spot = et_cur;
+              ++et_cur;
+            } else {
+              data_.erase(et_cur);
+            }
           } else {
             // save updated bitset index of current time
             et_cur->bf_idx_ = tbp_.get_or_create_bfi(bf_cur);
@@ -69,7 +76,12 @@ struct tb_preprocessing {
             return false;
           } else {
             bf_new |= tbp_.tt_.bitfields_[et_cur->bf_idx_];
-            data_.erase(et_cur);
+            if (overwrite_spot == data_.end()) {
+              overwrite_spot = et_cur;
+              ++et_cur;
+            } else {
+              data_.erase(et_cur);
+            }
           }
         } else {
           // new time is worse than current time, update bit set of new time
@@ -79,7 +91,13 @@ struct tb_preprocessing {
       }
 
       if (bf_new.any()) {
-        data_.emplace(et_cur, li_new, time_new, tbp_.get_or_create_bfi(bf_new));
+        if (overwrite_spot == data_.end()) {
+          data_.emplace(et_cur, li_new, time_new,
+                        tbp_.get_or_create_bfi(bf_new));
+        } else {
+          overwrite_spot->time_ = time_new;
+          overwrite_spot->bf_idx_ = tbp_.get_or_create_bfi(bf_new);
+        }
         return true;
       } else {
         return false;
