@@ -44,6 +44,8 @@ struct tb_preprocessing {
         return true;
       }
 
+      // iterator to first entry that would be erased, overwrite with new entry
+      // instead
       auto overwrite_spot = data_.end();
 
       // iterate entries for this li_new
