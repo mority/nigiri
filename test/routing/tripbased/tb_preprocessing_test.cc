@@ -468,57 +468,7 @@ TEST(initial_transfer_computation, earlier_stop_transfer) {
   // run preprocessing
   tbp.build_transfer_set(false, false);
 
-  /*
-  This fails because it finds the same transfer twice. Oddly, it says that 2
-  routes serve S1.
-
-  [tb_preprocessing.cc:89] tpi_from = 0, ri_from = 0, si_from = 4, li_from =
-  2(S1), t_arr_from = 240min, sa_tp_from = 0 [tb_preprocessing.cc:113] li_to =
-  2(S1), sa_fp = 0, a = 242min [tb_preprocessing.cc:123] Examining 2 routes at
-  S1... [tb_preprocessing.cc:172] tpi_from = 0, si_from = 4, from location: S1,
-  ri_to = 0, si_to = 1, to location:  = S1 Looking for earliest connecting
-  transport after a = 242min, initial omega = 00000000000100000
-  [tb_preprocessing.cc:202] tpi_to = 1: different route -> 0, earlier stop -> 1,
-  earlier transport -> 0 [tb_preprocessing.cc:258] new omega = 00000000000000000
-  [tb_preprocessing.cc:274] transfer added:
-  tpi_from = 0, li_from = 2
-  tpi_to = 1, li_to = 2
-  bf_tf_from = 00000000000100000
-  bf_tf_to = 00000000000100000
-  [tb_preprocessing.cc:172] tpi_from = 0, si_from = 4, from location: S1, ri_to
-  = 0, si_to = 4, to location:  = S1 Looking for earliest connecting transport
-  after a = 242min, initial omega = 00000000000100000 [tb_preprocessing.cc:202]
-  tpi_to = 1: different route -> 0, earlier stop -> 0, earlier transport -> 0
-  [tb_preprocessing.cc:291] passing midnight
-  [tb_preprocessing.cc:202] tpi_to = 0: different route -> 0, earlier stop -> 0,
-  earlier transport -> 0 [tb_preprocessing.cc:202] tpi_to = 1: different route
-  -> 0, earlier stop -> 0, earlier transport -> 0 [tb_preprocessing.cc:291]
-  passing midnight [tb_preprocessing.cc:299] Maximum waiting time reached
-  [tb_preprocessing.cc:172] tpi_from = 0, si_from = 4, from location: S1, ri_to
-  = 0, si_to = 1, to location:  = S1 Looking for earliest connecting transport
-  after a = 242min, initial omega = 00000000000100000 [tb_preprocessing.cc:202]
-  tpi_to = 1: different route -> 0, earlier stop -> 1, earlier transport -> 0
-  [tb_preprocessing.cc:258] new omega =  00000000000000000
-  [tb_preprocessing.cc:274] transfer added:
-  tpi_from = 0, li_from = 2
-  tpi_to = 1, li_to = 2
-  bf_tf_from = 00000000000100000
-  bf_tf_to = 00000000000100000
-  [tb_preprocessing.cc:172] tpi_from = 0, si_from = 4, from location: S1, ri_to
-  = 0, si_to = 4, to location:  = S1 Looking for earliest connecting transport
-  after a = 242min, initial omega = 00000000000100000 [tb_preprocessing.cc:202]
-  tpi_to = 1: different route -> 0, earlier stop -> 0, earlier transport -> 0
-  [tb_preprocessing.cc:291] passing midnight
-  [tb_preprocessing.cc:202] tpi_to = 0: different route -> 0, earlier stop -> 0,
-  earlier transport -> 0 [tb_preprocessing.cc:202] tpi_to = 1: different route
-  -> 0, earlier stop -> 0, earlier transport -> 0 [tb_preprocessing.cc:291]
-  passing midnight [tb_preprocessing.cc:299] Maximum waiting time reached
-  [tb_preprocessing.cc:89] tpi_from = 0, ri_from = 0, si_from = 5, li_from =
-  0(S4), t_arr_from = 300min, sa_tp_from = 0 [tb_preprocessing.cc:113] li_to =
-  0(S4), sa_fp = 0, a = 302min [tb_preprocessing.cc:123] Examining 1 routes at
-  S4... [tb_preprocessing.cc:70]
-  -----------------------------------------------------------------*/
-  //  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
 
   auto const transfers =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{2U});
@@ -550,16 +500,13 @@ TEST(initial_transfer_computation, earlier_transport_transfer) {
   // run preprocessing
   tbp.build_transfer_set(false, false);
 
-  // fails, see test case above
-  // EXPECT_EQ(1, tbp.ts_.transfers_.size());
+  EXPECT_EQ(1, tbp.ts_.transfers_.size());
 
   auto const transfers =
       tbp.ts_.get_transfers(transport_idx_t{1U}, location_idx_t{2U});
   ASSERT_TRUE(transfers.has_value());
   ASSERT_EQ(0, transfers->first);
-
-  // fails, see test case above
-  //  ASSERT_EQ(1, transfers->second);
+  ASSERT_EQ(1, transfers->second);
 
   auto const t = tbp.ts_.transfers_[transfers->first];
   bitfield const bf_exp{"100000"};
@@ -767,64 +714,14 @@ TEST(uturn_removal, earlier_stop_transfer) {
   // run preprocessing
   tbp.build_transfer_set(true, false);
 
-  /*
-  This fails because it finds the same transfer twice. Oddly, it says that 2
-  routes serve S1.
-
-  [tb_preprocessing.cc:89] tpi_from = 0, ri_from = 0, si_from = 4, li_from =
-  2(S1), t_arr_from = 240min, sa_tp_from = 0 [tb_preprocessing.cc:113] li_to =
-  2(S1), sa_fp = 0, a = 242min [tb_preprocessing.cc:123] Examining 2 routes at
-  S1... [tb_preprocessing.cc:172] tpi_from = 0, si_from = 4, from location: S1,
-  ri_to = 0, si_to = 1, to location:  = S1 Looking for earliest connecting
-  transport after a = 242min, initial omega = 00000000000100000
-  [tb_preprocessing.cc:202] tpi_to = 1: different route -> 0, earlier stop -> 1,
-  earlier transport -> 0 [tb_preprocessing.cc:258] new omega = 00000000000000000
-  [tb_preprocessing.cc:274] transfer added:
-  tpi_from = 0, li_from = 2
-  tpi_to = 1, li_to = 2
-  bf_tf_from = 00000000000100000
-  bf_tf_to = 00000000000100000
-  [tb_preprocessing.cc:172] tpi_from = 0, si_from = 4, from location: S1, ri_to
-  = 0, si_to = 4, to location:  = S1 Looking for earliest connecting transport
-  after a = 242min, initial omega = 00000000000100000 [tb_preprocessing.cc:202]
-  tpi_to = 1: different route -> 0, earlier stop -> 0, earlier transport -> 0
-  [tb_preprocessing.cc:291] passing midnight
-  [tb_preprocessing.cc:202] tpi_to = 0: different route -> 0, earlier stop -> 0,
-  earlier transport -> 0 [tb_preprocessing.cc:202] tpi_to = 1: different route
-  -> 0, earlier stop -> 0, earlier transport -> 0 [tb_preprocessing.cc:291]
-  passing midnight [tb_preprocessing.cc:299] Maximum waiting time reached
-  [tb_preprocessing.cc:172] tpi_from = 0, si_from = 4, from location: S1, ri_to
-  = 0, si_to = 1, to location:  = S1 Looking for earliest connecting transport
-  after a = 242min, initial omega = 00000000000100000 [tb_preprocessing.cc:202]
-  tpi_to = 1: different route -> 0, earlier stop -> 1, earlier transport -> 0
-  [tb_preprocessing.cc:258] new omega =  00000000000000000
-  [tb_preprocessing.cc:274] transfer added:
-  tpi_from = 0, li_from = 2
-  tpi_to = 1, li_to = 2
-  bf_tf_from = 00000000000100000
-  bf_tf_to = 00000000000100000
-  [tb_preprocessing.cc:172] tpi_from = 0, si_from = 4, from location: S1, ri_to
-  = 0, si_to = 4, to location:  = S1 Looking for earliest connecting transport
-  after a = 242min, initial omega = 00000000000100000 [tb_preprocessing.cc:202]
-  tpi_to = 1: different route -> 0, earlier stop -> 0, earlier transport -> 0
-  [tb_preprocessing.cc:291] passing midnight
-  [tb_preprocessing.cc:202] tpi_to = 0: different route -> 0, earlier stop -> 0,
-  earlier transport -> 0 [tb_preprocessing.cc:202] tpi_to = 1: different route
-  -> 0, earlier stop -> 0, earlier transport -> 0 [tb_preprocessing.cc:291]
-  passing midnight [tb_preprocessing.cc:299] Maximum waiting time reached
-  [tb_preprocessing.cc:89] tpi_from = 0, ri_from = 0, si_from = 5, li_from =
-  0(S4), t_arr_from = 300min, sa_tp_from = 0 [tb_preprocessing.cc:113] li_to =
-  0(S4), sa_fp = 0, a = 302min [tb_preprocessing.cc:123] Examining 1 routes at
-  S4... [tb_preprocessing.cc:70]
-  -----------------------------------------------------------------*/
-  //  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
 
   auto const transfers =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{2U});
   ASSERT_TRUE(transfers.has_value());
 
   ASSERT_EQ(0U, transfers->first);
-  //  ASSERT_EQ(1U, transfers->second);
+  ASSERT_EQ(1U, transfers->second);
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
@@ -849,16 +746,13 @@ TEST(uturn_removal, earlier_transport_transfer) {
   // run preprocessing
   tbp.build_transfer_set(true, false);
 
-  // fails, see test case above
-  // EXPECT_EQ(1, tbp.ts_.transfers_.size());
+  EXPECT_EQ(1, tbp.ts_.transfers_.size());
 
   auto const transfers =
       tbp.ts_.get_transfers(transport_idx_t{1U}, location_idx_t{2U});
   ASSERT_TRUE(transfers.has_value());
   ASSERT_EQ(0, transfers->first);
-
-  // fails, see test case above
-  //  ASSERT_EQ(1, transfers->second);
+  ASSERT_EQ(1, transfers->second);
 
   auto const t = tbp.ts_.transfers_[transfers->first];
   bitfield const bf_exp{"100000"};
