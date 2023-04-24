@@ -328,7 +328,7 @@ TEST(initial_transfer_computation, no_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(false);
+  tbp.build_transfer_set(false, false);
 
   EXPECT_EQ(0U, tbp.ts_.transfers_.size());
 }
@@ -344,7 +344,7 @@ TEST(initial_transfer_computation, same_day_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build_transfer_set(false, false);
 
   EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
@@ -374,7 +374,7 @@ TEST(initial_transfer_computation, from_long_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(false);
+  tbp.build_transfer_set(false, false);
 
   EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
@@ -405,7 +405,7 @@ TEST(initial_transfer_computation, weekday_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build_transfer_set(false, false);
 
   EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
@@ -436,7 +436,7 @@ TEST(initial_transfer_computation, daily_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(false);
+  tbp.build_transfer_set(false, false);
 
   EXPECT_EQ(1, tbp.ts_.transfers_.size());
   auto const transfers =
@@ -466,7 +466,7 @@ TEST(initial_transfer_computation, earlier_stop_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(false);
+  tbp.build_transfer_set(false, false);
 
   /*
   This fails because it finds the same transfer twice. Oddly, it says that 2
@@ -548,7 +548,7 @@ TEST(initial_transfer_computation, earlier_transport_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(false);
+  tbp.build_transfer_set(false, false);
 
   // fails, see test case above
   // EXPECT_EQ(1, tbp.ts_.transfers_.size());
@@ -582,7 +582,7 @@ TEST(initial_transfer_computation, uturn_transport_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(false);
+  tbp.build_transfer_set(false, false);
 
   EXPECT_EQ(2, tbp.ts_.transfers_.size());
 
@@ -627,7 +627,7 @@ TEST(uturn_removal, no_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true);
+  tbp.build_transfer_set(true, false);
 
   EXPECT_EQ(0U, tbp.ts_.transfers_.size());
 }
@@ -643,7 +643,7 @@ TEST(uturn_removal, same_day_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true);
+  tbp.build_transfer_set(true, false);
 
   EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
@@ -673,7 +673,7 @@ TEST(uturn_removal, from_long_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true);
+  tbp.build_transfer_set(true, false);
 
   EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
@@ -704,7 +704,7 @@ TEST(uturn_removal, weekday_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true);
+  tbp.build_transfer_set(true, false);
 
   EXPECT_EQ(1U, tbp.ts_.transfers_.size());
   auto const transfers =
@@ -735,7 +735,7 @@ TEST(uturn_removal, daily_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true);
+  tbp.build_transfer_set(true, false);
 
   EXPECT_EQ(1, tbp.ts_.transfers_.size());
   auto const transfers =
@@ -765,7 +765,7 @@ TEST(uturn_removal, earlier_stop_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true);
+  tbp.build_transfer_set(true, false);
 
   /*
   This fails because it finds the same transfer twice. Oddly, it says that 2
@@ -847,7 +847,7 @@ TEST(uturn_removal, earlier_transport_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true);
+  tbp.build_transfer_set(true, false);
 
   // fails, see test case above
   // EXPECT_EQ(1, tbp.ts_.transfers_.size());
@@ -881,7 +881,7 @@ TEST(uturn_removal, uturn_transport_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true);
+  tbp.build_transfer_set(true, false);
 
   EXPECT_EQ(1, tbp.ts_.transfers_.size());
 

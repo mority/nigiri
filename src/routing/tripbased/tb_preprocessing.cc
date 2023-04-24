@@ -23,8 +23,7 @@ bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   });
 }
 
-void tb_preprocessing::build_transfer_set(
-    bool uturn_removal /* , bool reduction */) {
+void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
 
 #ifndef NDEBUG
   TBDL << "Beginning initial transfer computation, sa_w_max_ = " << sa_w_max_
@@ -46,13 +45,19 @@ void tb_preprocessing::build_transfer_set(
   // earliest arrival time per stop
   earliest_times ets_arr{*this};
 
-  // earliest time of connecting trip per stop
+  // earliest time a connecting trip may depart per stop
   earliest_times ets_ch{*this};
 
   // iterate over all trips of the timetable
   // tpi: transport idx from
   for (transport_idx_t tpi_from{0U};
        tpi_from != tt_.transport_traffic_days_.size(); ++tpi_from) {
+
+    if (reduction) {
+      // clear earliest times
+      ets_arr.clear();
+      ets_ch.clear();
+    }
 
     // ri from: route index from
     auto const ri_from = tt_.transport_route_[tpi_from];
@@ -66,7 +71,18 @@ void tb_preprocessing::build_transfer_set(
 #endif
 
     // si_from: stop index from
-    for (std::size_t si_from = 1U; si_from != stops_from.size(); ++si_from) {
+    auto si_from = reduction ? stops_from.size() - 1 : 1U;
+    // reversed iteration direction for transfer reduction
+    auto const si_limit = reduction ? 0U : stops_from.size();
+    auto const si_step = [&si_from, reduction]() {
+      if (reduction) {
+        --si_from;
+      } else {
+        ++si_from;
+      }
+    };
+
+    for (; si_from != si_limit; si_step()) {
 
       auto const stop = timetable::stop{stops_from[si_from]};
 
@@ -79,6 +95,9 @@ void tb_preprocessing::build_transfer_set(
       // sa_tp_from: shift amount transport from
       auto const sa_tp_from = num_midnights(t_arr_from);
 
+      auto const& bf_tp_from =
+          tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
+
 #ifndef NDEBUG
       TBDL << "tpi_from = " << tpi_from << ", ri_from = " << ri_from
            << ", si_from = " << si_from << ", li_from = " << li_from << "("
@@ -87,6 +106,15 @@ void tb_preprocessing::build_transfer_set(
            << "), t_arr_from = " << t_arr_from
            << ", sa_tp_from = " << sa_tp_from << std::endl;
 #endif
+
+      if (reduction) {
+        // init earliest times
+        ets_arr.update(li_from, t_arr_from, bf_tp_from);
+        for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
+          ets_arr.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
+          ets_ch.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
+        }
+      }
 
       // outgoing footpaths of location
       for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
@@ -144,7 +172,8 @@ void tb_preprocessing::build_transfer_set(
                   tt_.event_times_at_stop(ri_to, si_to, event_type::kDep);
 
               // find first departure at or after a
-              // tp_to_cur_it: iterator of current element in deps_tod
+              // tp_to_cur_it: iterator to departure time of current
+              // transport_to
               auto tp_to_cur_it =
                   std::lower_bound(event_times.begin(), event_times.end(), a,
                                    [&](auto&& x, auto&& y) {
@@ -159,8 +188,7 @@ void tb_preprocessing::build_transfer_set(
               }
 
               // omega: days of transport_from that still require connection
-              bitfield omega =
-                  tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
+              bitfield omega = bf_tp_from;
 
 #ifndef NDEBUG
               TBDL << "tpi_from = " << tpi_from << ", si_from = " << si_from
@@ -252,7 +280,9 @@ void tb_preprocessing::build_transfer_set(
 #ifndef NDEBUG
                     TBDL << "new omega =  " << first_n(omega) << std::endl;
 #endif
-                    auto const check_uturn = [&]() {
+                    auto const check_uturn = [&si_to, this, &ri_to, &si_from,
+                                              &ri_from, &dep_cur, &tpi_to, &a,
+                                              &fp, &tpi_from]() {
                       // check if next stop for tpi_to and previous stop for
                       // tpi_from exists
                       if (si_to + 1 < tt_.route_location_seq_[ri_to].size() &&
@@ -292,30 +322,71 @@ void tb_preprocessing::build_transfer_set(
                     auto const is_uturn = uturn_removal ? check_uturn() : false;
 
                     if (!is_uturn) {
-                      // construct and add transfer to transfer set
-                      auto const bfi_from = get_or_create_bfi(bf_tf_from);
-                      // bitfield transfer to
-                      auto bf_tf_to = bf_tf_from;
-                      if (sa_total < 0) {
-                        bf_tf_to <<= static_cast<unsigned>(-1 * sa_total);
-                      } else {
-                        bf_tf_to >>= static_cast<unsigned>(sa_total);
-                      }
-                      auto const bfi_to = get_or_create_bfi(bf_tf_to);
-                      ts_.add(tpi_from, li_from, tpi_to, li_to, bfi_from,
-                              bfi_to);
+
+                      auto const check_impr = [&ta, &dep_cur, &a, &si_to, this,
+                                               &ri_to, &tpi_to, &tp_to_cur_it,
+                                               &ets_arr, &bf_tf_from,
+                                               &ets_ch]() {
+                        bool impr = false;
+                        auto const t_dep_to = ta + (dep_cur - a);
+                        for (auto si_to_later = si_to + 1;
+                             si_to_later <
+                             tt_.route_location_seq_[ri_to].size();
+                             ++si_to_later) {
+                          auto const t_arr_to_later =
+                              t_dep_to + (tt_.event_mam(tpi_to, si_to_later,
+                                                        event_type::kArr) -
+                                          *tp_to_cur_it);
+                          auto const li_to_later =
+                              timetable::stop{
+                                  tt_.route_location_seq_[ri_to][si_to_later]}
+                                  .location_idx();
+                          impr = impr ||
+                                 ets_arr.update(li_to_later, t_arr_to_later,
+                                                bf_tf_from);
+                          for (auto const& fp_later :
+                               tt_.locations_.footpaths_out_[li_to_later]) {
+                            auto const eta =
+                                t_arr_to_later + fp_later.duration_;
+                            impr = impr ||
+                                   ets_arr.update(fp_later.target_, eta,
+                                                  bf_tf_from) ||
+                                   ets_ch.update(fp_later.target_, eta,
+                                                 bf_tf_from);
+                          }
+                        }
+                        return impr;
+                      };
+
+                      auto const is_impr = reduction ? check_impr() : true;
+
+                      if (is_impr) {
+                        // construct and add transfer to transfer set
+                        auto const bfi_from = get_or_create_bfi(bf_tf_from);
+                        // bitfield transfer to
+                        auto bf_tf_to = bf_tf_from;
+                        if (sa_total < 0) {
+                          bf_tf_to <<= static_cast<unsigned>(-1 * sa_total);
+                        } else {
+                          bf_tf_to >>= static_cast<unsigned>(sa_total);
+                        }
+                        auto const bfi_to = get_or_create_bfi(bf_tf_to);
+                        ts_.add(tpi_from, li_from, tpi_to, li_to, bfi_from,
+                                bfi_to);
 
 #ifndef NDEBUG
-                      TBDL << "transfer added:" << std::endl
-                           << "tpi_from = " << tpi_from
-                           << ", li_from = " << li_from << std::endl
-                           << "tpi_to = " << tpi_to << ", li_to = " << li_to
-                           << std::endl
-                           << "bf_tf_from = " << first_n(bf_tf_from)
-                           << std::endl
-                           << "  bf_tf_to = " << first_n(bf_tf_to) << std::endl;
+                        TBDL << "transfer added:" << std::endl
+                             << "tpi_from = " << tpi_from
+                             << ", li_from = " << li_from << std::endl
+                             << "tpi_to = " << tpi_to << ", li_to = " << li_to
+                             << std::endl
+                             << "bf_tf_from = " << first_n(bf_tf_from)
+                             << std::endl
+                             << "  bf_tf_to = " << first_n(bf_tf_to)
+                             << std::endl;
 
 #endif
+                      }
                     }
                   }
                 }

@@ -106,11 +106,13 @@ struct tb_preprocessing {
       }
     }
 
-    constexpr unsigned long size() { return data_.size(); }
+    constexpr unsigned long size() const noexcept { return data_.size(); }
 
     constexpr earliest_time& operator[](unsigned long pos) {
       return data_[pos];
     }
+
+    constexpr void clear() noexcept { data_.clear(); }
 
     tb_preprocessing& tbp_;
     std::vector<earliest_time> data_{};
@@ -121,8 +123,7 @@ struct tb_preprocessing {
       : tt_(tt), sa_w_max_(sa_w_max) {}
 
   // preprocessing without reduction step
-  void build_transfer_set(
-      bool uturn_removal = true /*, bool reduction = true*/);
+  void build_transfer_set(bool uturn_removal = true, bool reduction = true);
 
   // load precomputed transfer set from file
   // also needs to load the corresponding timetable from file since bitfields
