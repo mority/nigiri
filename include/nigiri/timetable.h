@@ -194,7 +194,11 @@ struct timetable {
       std::basic_string<clasz> const& clasz_sections) {
     auto const idx = route_location_seq_.size();
     for (auto const& s : stop_seq) {
-      location_routes_[timetable::stop{s}.location_idx()].emplace_back(idx);
+      if (!(!location_routes_[timetable::stop{s}.location_idx()].empty() &&
+            location_routes_[timetable::stop{s}.location_idx()].back() ==
+                idx)) {
+        location_routes_[timetable::stop{s}.location_idx()].emplace_back(idx);
+      }
     }
     route_transport_ranges_.emplace_back(
         transport_idx_t{transport_traffic_days_.size()},
