@@ -10,7 +10,7 @@ constexpr std::string first_n(bitfield const& bf, std::size_t n = 16) {
   std::string s;
   n = n > bf.size() ? bf.size() : n;
   for (std::size_t i = n; i + 1 != 0; --i) {
-    s += std::to_string(bf[i]);
+    s += bf[i] ? "1" : "0";
   }
   return s;
 }
@@ -330,7 +330,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                         bool impr = false;
                         auto const t_dep_to = ta + (dep_cur - a);
                         for (auto si_to_later = si_to + 1;
-                             si_to_later <
+                             si_to_later !=
                              tt_.route_location_seq_[ri_to].size();
                              ++si_to_later) {
                           auto const t_arr_to_later =
@@ -341,18 +341,18 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                               timetable::stop{
                                   tt_.route_location_seq_[ri_to][si_to_later]}
                                   .location_idx();
-                          impr = impr ||
-                                 ets_arr.update(li_to_later, t_arr_to_later,
-                                                bf_tf_from);
+                          auto const ets_arr_res = ets_arr.update(
+                              li_to_later, t_arr_to_later, bf_tf_from);
+                          impr = impr || ets_arr_res;
                           for (auto const& fp_later :
                                tt_.locations_.footpaths_out_[li_to_later]) {
                             auto const eta =
                                 t_arr_to_later + fp_later.duration_;
-                            impr = impr ||
-                                   ets_arr.update(fp_later.target_, eta,
-                                                  bf_tf_from) ||
-                                   ets_ch.update(fp_later.target_, eta,
-                                                 bf_tf_from);
+                            auto const ets_arr_fp_res = ets_arr.update(
+                                fp_later.target_, eta, bf_tf_from);
+                            auto const ets_ch_fp_res = ets_ch.update(
+                                fp_later.target_, eta, bf_tf_from);
+                            impr = impr || ets_arr_fp_res || ets_ch_fp_res;
                           }
                         }
                         return impr;
