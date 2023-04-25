@@ -351,4 +351,91 @@ loader::mem_dir uturn_transfer_files() {
        {path{kStopTimesFile}, std::string{uturn_transfer_stop_times_content}}}};
 }
 
+constexpr auto const unnecessary0_transfer_routes_file_content = std::string_view{
+    R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R0,DTA,R0,R0,"S0 -> S1 -> S2",2
+R1,DTA,R1,R1,"S1 -> S2",2
+)"};
+
+constexpr auto const unnecessary0_transfer_trips_file_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R0,MON,R0_MON,R0_MON,0
+R1,MON,R1_MON,R1_MON,0
+)";
+
+constexpr auto const unnecessary0_transfer_stop_times_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R0_MON,00:00:00,00:00:00,S0,0,0,0
+R0_MON,01:00:00,01:00:00,S1,1,0,0
+R0_MON,02:00:00,02:00:00,S2,2,0,0
+R1_MON,01:00:00,01:10:00,S1,0,0,0
+R1_MON,04:00:00,04:00:00,S2,1,0,0
+)";
+
+loader::mem_dir unnecessary0_transfer_files() {
+  using std::filesystem::path;
+  return {{{path{kAgencyFile}, std::string{agency_file_content}},
+           {path{kStopFile}, std::string{simple_stops_file_content}},
+           {path{kCalenderFile}, std::string{calendar_file_content}},
+           {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+           {path{kTransfersFile}, std::string{transfers_file_content}},
+           {path{kRoutesFile},
+            std::string{unnecessary0_transfer_routes_file_content}},
+           {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+           {path{kTripsFile},
+            std::string{unnecessary0_transfer_trips_file_content}},
+           {path{kStopTimesFile},
+            std::string{unnecessary0_transfer_stop_times_content}}}};
+}
+
+constexpr auto const six_stops_file_content = std::string_view{
+    R"(stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+S0,S0,,,,,,
+S1,S1,,,,,,
+S2,S2,,,,,,
+S3,S3,,,,,,
+S4,S4,,,,,,
+S5,S5,,,,,,
+)"};
+
+constexpr auto const unnecessary1_transfer_routes_file_content = std::string_view{
+    R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R0,DTA,R0,R0,"S0 -> -> S2 -> S3 -> S4",2
+R1,DTA,R1,R1,"S1 -> S2 -> S3 -> S5",2
+)"};
+
+constexpr auto const unnecessary1_transfer_trips_file_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R0,MON,R0_MON,R0_MON,0
+R1,MON,R1_MON,R1_MON,0
+)";
+
+constexpr auto const unnecessary1_transfer_stop_times_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R0_MON,00:00:00,00:00:00,S0,0,0,0
+R0_MON,01:00:00,01:00:00,S2,1,0,0
+R0_MON,02:00:00,02:00:00,S3,2,0,0
+R0_MON,03:00:00,03:00:00,S4,3,0,0
+R1_MON,00:10:00,00:10:00,S1,0,0,0
+R1_MON,01:10:00,01:10:00,S2,1,0,0
+R1_MON,02:10:00,02:10:00,S3,2,0,0
+R1_MON,03:10:00,03:10:00,S5,3,0,0
+)";
+
+loader::mem_dir unnecessary1_transfer_files() {
+  using std::filesystem::path;
+  return {{{path{kAgencyFile}, std::string{agency_file_content}},
+           {path{kStopFile}, std::string{six_stops_file_content}},
+           {path{kCalenderFile}, std::string{calendar_file_content}},
+           {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+           {path{kTransfersFile}, std::string{transfers_file_content}},
+           {path{kRoutesFile},
+            std::string{unnecessary1_transfer_routes_file_content}},
+           {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+           {path{kTripsFile},
+            std::string{unnecessary1_transfer_trips_file_content}},
+           {path{kStopTimesFile},
+            std::string{unnecessary1_transfer_stop_times_content}}}};
+}
+
 }  // namespace nigiri::routing::tripbased::test

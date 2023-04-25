@@ -518,7 +518,7 @@ TEST(initial_transfer_computation, earlier_transport_transfer) {
   EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
 }
 
-TEST(initial_transfer_computation, uturn_transport_transfer) {
+TEST(initial_transfer_computation, uturn_transfer) {
   // load timetable
   timetable tt;
   tt.date_range_ = gtfs_full_period();
@@ -561,6 +561,37 @@ TEST(initial_transfer_computation, uturn_transport_transfer) {
   EXPECT_EQ(bitfield_idx_t{0U}, uturn_transfer.bitfield_idx_to_);
   EXPECT_EQ(bf_exp, tt.bitfields_[uturn_transfer.bitfield_idx_from_]);
   EXPECT_EQ(bf_exp, tt.bitfields_[uturn_transfer.bitfield_idx_to_]);
+}
+
+TEST(initial_transfer_computation, unnecessary_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, unnecessary0_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(false, false);
+
+  EXPECT_EQ(1, tbp.ts_.transfers_.size());
+
+  auto const transfers0 =
+      tbp.ts_.get_transfers(transport_idx_t{1U}, location_idx_t{1U});
+  ASSERT_TRUE(transfers0.has_value());
+  ASSERT_EQ(0, transfers0->first);
+  ASSERT_EQ(1, transfers0->second);
+
+  auto const t = tbp.ts_.transfers_[transfers0->first];
+  bitfield const bf_exp{"100000"};
+  EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
 }
 
 TEST(uturn_removal, no_transfer) {
@@ -764,7 +795,7 @@ TEST(uturn_removal, earlier_transport_transfer) {
   EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
 }
 
-TEST(uturn_removal, uturn_transport_transfer) {
+TEST(uturn_removal, uturn_transfer) {
   // load timetable
   timetable tt;
   tt.date_range_ = gtfs_full_period();
@@ -797,4 +828,303 @@ TEST(uturn_removal, uturn_transport_transfer) {
   auto const transfers1 =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{3U});
   ASSERT_FALSE(transfers1.has_value());
+}
+
+TEST(uturn_removal, unnecessary_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, unnecessary0_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, false);
+
+  EXPECT_EQ(1, tbp.ts_.transfers_.size());
+
+  auto const transfers0 =
+      tbp.ts_.get_transfers(transport_idx_t{1U}, location_idx_t{1U});
+  ASSERT_TRUE(transfers0.has_value());
+  ASSERT_EQ(0, transfers0->first);
+  ASSERT_EQ(1, transfers0->second);
+
+  auto const t = tbp.ts_.transfers_[transfers0->first];
+  bitfield const bf_exp{"100000"};
+  EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+}
+
+TEST(transfer_reduction, no_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, no_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(0U, tbp.ts_.transfers_.size());
+}
+
+TEST(transfer_reduction, same_day_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, same_day_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
+  auto const transfers =
+      tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{1U});
+  ASSERT_TRUE(transfers.has_value());
+  ASSERT_EQ(0U, transfers->first);
+  ASSERT_EQ(1U, transfers->second);
+  auto const t = tbp.ts_.transfers_[transfers->first];
+  EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+
+  bitfield const bf_exp{"100000"};
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+}
+
+TEST(transfer_reduction, from_long_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, long_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
+  auto const transfers =
+      tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{1U});
+  ASSERT_TRUE(transfers.has_value());
+  ASSERT_EQ(0U, transfers->first);
+  ASSERT_EQ(1U, transfers->second);
+  auto const t = tbp.ts_.transfers_[transfers->first];
+  EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_to_);
+
+  bitfield const bf_tf_from_exp{"100000"};
+  bitfield const bf_tf_to_exp{"100000000"};
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+}
+
+TEST(transfer_reduction, weekday_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, weekday_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
+  auto const transfers =
+      tbp.ts_.get_transfers(transport_idx_t{1U}, location_idx_t{1U});
+  ASSERT_TRUE(transfers.has_value());
+  ASSERT_EQ(0U, transfers->first);
+  ASSERT_EQ(1U, transfers->second);
+  auto const t = tbp.ts_.transfers_[transfers->first];
+  EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{2U}, t.bitfield_idx_to_);
+
+  bitfield const bf_tf_from_exp{"0111100000"};
+  bitfield const bf_tf_to_exp{"1111000000"};
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+}
+
+TEST(transfer_reduction, daily_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, daily_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(1, tbp.ts_.transfers_.size());
+  auto const transfers =
+      tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{1U});
+  ASSERT_TRUE(transfers.has_value());
+  ASSERT_EQ(0U, transfers->first);
+  ASSERT_EQ(1U, transfers->second);
+  auto const t = tbp.ts_.transfers_[transfers->first];
+  EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+
+  bitfield const bf_exp{"111111100000"};
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+}
+
+TEST(transfer_reduction, earlier_stop_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, earlier_stop_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(1U, tbp.ts_.transfers_.size());
+
+  auto const transfers =
+      tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{2U});
+  ASSERT_TRUE(transfers.has_value());
+
+  ASSERT_EQ(0U, transfers->first);
+  ASSERT_EQ(1U, transfers->second);
+  auto const t = tbp.ts_.transfers_[transfers->first];
+  EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+
+  bitfield const bf_exp{"100000"};
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+}
+
+TEST(transfer_reduction, earlier_transport_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, earlier_transport_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(1, tbp.ts_.transfers_.size());
+
+  auto const transfers =
+      tbp.ts_.get_transfers(transport_idx_t{1U}, location_idx_t{2U});
+  ASSERT_TRUE(transfers.has_value());
+  ASSERT_EQ(0, transfers->first);
+  ASSERT_EQ(1, transfers->second);
+
+  auto const t = tbp.ts_.transfers_[transfers->first];
+  bitfield const bf_exp{"100000"};
+  EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+}
+
+TEST(transfer_reduction, uturn_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, uturn_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(1, tbp.ts_.transfers_.size());
+
+  auto const transfers0 =
+      tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{2U});
+  ASSERT_TRUE(transfers0.has_value());
+  ASSERT_EQ(0, transfers0->first);
+  ASSERT_EQ(1, transfers0->second);
+
+  auto const t = tbp.ts_.transfers_[transfers0->first];
+  bitfield const bf_exp{"100000"};
+  EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
+  EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+
+  auto const transfers1 =
+      tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{3U});
+  ASSERT_FALSE(transfers1.has_value());
+}
+
+TEST(transfer_reduction, unnecessary_transfer0) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, unnecessary0_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(0, tbp.ts_.transfers_.size());
+}
+
+TEST(transfer_reduction, unnecessary_transfer1) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, unnecessary1_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  EXPECT_EQ(1, tbp.ts_.transfers_.size());
 }

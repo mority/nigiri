@@ -26,5 +26,7 @@ nigiri::loader::mem_dir daily_transfer_files();
 nigiri::loader::mem_dir earlier_stop_transfer_files();
 nigiri::loader::mem_dir earlier_transport_transfer_files();
 nigiri::loader::mem_dir uturn_transfer_files();
+nigiri::loader::mem_dir unnecessary0_transfer_files();
+nigiri::loader::mem_dir unnecessary1_transfer_files();
 
 }  // namespace nigiri::routing::tripbased::test
