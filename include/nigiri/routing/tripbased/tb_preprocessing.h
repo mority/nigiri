@@ -22,89 +22,7 @@ struct tb_preprocessing {
     earliest_times() = delete;
     explicit earliest_times(tb_preprocessing& tbp) : tbp_(tbp) {}
 
-    bool update(location_idx_t li_new,
-                duration_t time_new,
-                bitfield const& bf) {
-
-      bitfield bf_new = bf;
-
-      // find first tuple of this li_new
-      auto et_cur = std::lower_bound(
-          data_.begin(), data_.end(), li_new,
-          [](earliest_time const& et, location_idx_t const& l) constexpr {
-            return et.location_idx_ < l;
-          });
-
-      // no entry for this li_new
-      if (et_cur == data_.end()) {
-        data_.emplace_back(li_new, time_new, tbp_.get_or_create_bfi(bf_new));
-        return true;
-      } else if (li_new < et_cur->location_idx_) {
-        data_.emplace(et_cur, li_new, time_new, tbp_.get_or_create_bfi(bf_new));
-        return true;
-      }
-
-      // iterator to first entry that would be erased, overwrite with new entry
-      // instead
-      auto overwrite_spot = data_.end();
-
-      // iterate entries for this li_new
-      while (et_cur != data_.end() && et_cur->location_idx_ == li_new) {
-        if (bf_new.none()) {
-          // all bits of new entry were set to zero, new entry does not improve
-          // upon any times
-          return false;
-        } else if (time_new < et_cur->time_) {
-          // new time is better than current time, update bit set of current
-          // time
-          bitfield bf_cur = tbp_.tt_.bitfields_[et_cur->bf_idx_] & ~bf_new;
-          if (bf_cur.none()) {
-            // if current time is no longer needed, we remove it from the vector
-            if (overwrite_spot == data_.end()) {
-              overwrite_spot = et_cur;
-              ++et_cur;
-            } else {
-              data_.erase(et_cur);
-            }
-          } else {
-            // save updated bitset index of current time
-            et_cur->bf_idx_ = tbp_.get_or_create_bfi(bf_cur);
-            ++et_cur;
-          }
-        } else if (time_new == et_cur->time_) {
-          // entry for this time already exists
-          if ((bf_new & ~tbp_.tt_.bitfields_[et_cur->bf_idx_]).none()) {
-            // all bits of bf_new already covered
-            return false;
-          } else {
-            bf_new |= tbp_.tt_.bitfields_[et_cur->bf_idx_];
-            if (overwrite_spot == data_.end()) {
-              overwrite_spot = et_cur;
-              ++et_cur;
-            } else {
-              data_.erase(et_cur);
-            }
-          }
-        } else {
-          // new time is worse than current time, update bit set of new time
-          bf_new &= ~tbp_.tt_.bitfields_[et_cur->bf_idx_];
-          ++et_cur;
-        }
-      }
-
-      if (bf_new.any()) {
-        if (overwrite_spot == data_.end()) {
-          data_.emplace(et_cur, li_new, time_new,
-                        tbp_.get_or_create_bfi(bf_new));
-        } else {
-          overwrite_spot->time_ = time_new;
-          overwrite_spot->bf_idx_ = tbp_.get_or_create_bfi(bf_new);
-        }
-        return true;
-      } else {
-        return false;
-      }
-    }
+    bool update(location_idx_t li_new, duration_t time_new, bitfield const& bf);
 
     constexpr unsigned long size() const noexcept { return data_.size(); }
 
@@ -122,7 +40,6 @@ struct tb_preprocessing {
   explicit tb_preprocessing(timetable& tt, int sa_w_max = 1)
       : tt_(tt), sa_w_max_(sa_w_max) {}
 
-  // preprocessing without reduction step
   void build_transfer_set(bool uturn_removal = true, bool reduction = true);
 
   // load precomputed transfer set from file
