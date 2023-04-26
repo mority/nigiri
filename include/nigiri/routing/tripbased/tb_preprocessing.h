@@ -8,9 +8,9 @@ namespace nigiri::routing::tripbased {
 struct tb_preprocessing {
 
   struct earliest_time {
-    constexpr earliest_time(const location_idx_t& location,
-                            const duration_t& time,
-                            const bitfield_idx_t& bf_idx)
+    constexpr earliest_time(location_idx_t const location,
+                            duration_t const time,
+                            bitfield_idx_t const bf_idx)
         : location_idx_(location), time_(time), bf_idx_(bf_idx) {}
 
     location_idx_t location_idx_{};

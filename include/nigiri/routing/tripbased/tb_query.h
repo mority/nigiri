@@ -20,16 +20,16 @@ struct tb_query {
 
   // R(t) data structure - BEGIN
   struct r_entry {
-    r_entry(transport_idx_t const transport_idx,
-            unsigned const stop_idx,
-            bitfield_idx_t bitfield_idx)
+    constexpr r_entry(transport_idx_t const transport_idx,
+                      unsigned const stop_idx,
+                      bitfield_idx_t const bitfield_idx)
         : transport_idx_(transport_idx),
           stop_idx_(stop_idx),
           bitfield_idx_(bitfield_idx) {}
 
-    transport_idx_t const transport_idx_;
-    unsigned const stop_idx_;
-    bitfield_idx_t const bitfield_idx_;
+    transport_idx_t transport_idx_{};
+    unsigned stop_idx_{};
+    bitfield_idx_t bitfield_idx_{};
   };
 
   void r_update(transport_idx_t const,
