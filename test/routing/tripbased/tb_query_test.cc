@@ -6,7 +6,7 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-TEST(r_update, basic) {
+TEST(r_, basic) {
   // init
   timetable tt;
   tb_preprocessing tbp{tt};
@@ -25,7 +25,7 @@ TEST(r_update, basic) {
   // update end
   transport_idx_t const tpi1{24U};
   unsigned const si1{41U};
-  bitfield const bf_110{"010"};
+  bitfield const bf_110{"110"};
   tbq.r_update(tpi1, si1, bf_110);
   ASSERT_EQ(2, tbq.r_.size());
   EXPECT_EQ(tpi0, tbq.r_[0].transport_idx_);
@@ -85,6 +85,11 @@ TEST(r_update, basic) {
   EXPECT_EQ(tpi1, tbq.r_[2].transport_idx_);
   EXPECT_EQ(si1, tbq.r_[2].stop_idx_);
   EXPECT_EQ(bf_110, tt.bitfields_[tbq.r_[2].bitfield_idx_]);
+
+  // r_query
+  EXPECT_EQ(si4, tbq.r_query(tpi4, bf_010));
+  EXPECT_EQ(si0, tbq.r_query(tpi0, bf_010));
+  EXPECT_EQ(si1, tbq.r_query(tpi1, bf_100));
 }
 
 TEST(r_update, same_stop_more_bits) {

@@ -72,10 +72,29 @@ void tb_query::r_update(transport_idx_t const transport_idx,
   }
 }
 
-// unsigned tb_query::r_query(transport_idx_t const transport_idx,
-//                            bitfield const& bf) {
-//   return 0U;
-// }
+unsigned tb_query::r_query(transport_idx_t const transport_idx,
+                           bitfield const& bf_query) {
+
+  // find first entry for this transport_idx
+  auto r_cur = std::lower_bound(
+      r_.begin(), r_.end(), transport_idx,
+      [](r_entry const& re, transport_idx_t const& tpi) constexpr {
+        return re.transport_idx_ < tpi;
+      });
+
+  // find matching entry for provided bitfield
+  while (r_cur != r_.end() || transport_idx == r_cur->transport_idx_) {
+    if ((tbp_.tt_.bitfields_[r_cur->bitfield_idx_] & bf_query).any()) {
+      return r_cur->stop_idx_;
+    }
+  }
+
+  // no entry for this transport_idx
+  // return stop index of final stop of the transport
+  return tbp_.tt_.route_location_seq_[tbp_.tt_.transport_route_[transport_idx]]
+             .size() -
+         1;
+}
 
 // void tb_query::enqueue(const transport_idx_t transport_idx,
 //                        const unsigned int stop_idx,
