@@ -27,7 +27,7 @@ void tb_query::r_update(transport_idx_t const transport_idx,
   // remember first erasure as possible overwrite spot
   auto overwrite_spot = r_.end();
 
-  while (r_cur != r_.end() && r_cur->transport_idx_ != transport_idx) {
+  while (r_cur != r_.end() && r_cur->transport_idx_ == transport_idx) {
     if (bf_new.none()) {
       // early termination
       return;
@@ -41,6 +41,9 @@ void tb_query::r_update(transport_idx_t const transport_idx,
         } else {
           r_.erase(r_cur);
         }
+      } else {
+        r_cur->bitfield_idx_ = tbp_.get_or_create_bfi(bf_cur);
+        ++r_cur;
       }
     } else if (stop_idx == r_cur->stop_idx_) {
       // new stop index is equal to current
@@ -69,12 +72,12 @@ void tb_query::r_update(transport_idx_t const transport_idx,
   }
 }
 
-unsigned tb_query::r_query(transport_idx_t const transport_idx,
-                           bitfield const& bf) {
-  return 0U;
-}
+// unsigned tb_query::r_query(transport_idx_t const transport_idx,
+//                            bitfield const& bf) {
+//   return 0U;
+// }
 
-void tb_query::enqueue(const transport_idx_t transport_idx,
-                       const unsigned int stop_idx,
-                       const bitfield_idx_t& bf,
-                       const unsigned int n) {}
+// void tb_query::enqueue(const transport_idx_t transport_idx,
+//                        const unsigned int stop_idx,
+//                        const bitfield_idx_t& bf,
+//                        const unsigned int n) {}
