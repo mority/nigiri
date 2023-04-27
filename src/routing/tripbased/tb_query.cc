@@ -96,7 +96,52 @@ unsigned tb_query::r_query(transport_idx_t const transport_idx,
          1;
 }
 
-// void tb_query::enqueue(const transport_idx_t transport_idx,
-//                        const unsigned int stop_idx,
-//                        const bitfield_idx_t& bf,
-//                        const unsigned int n) {}
+void tb_query::enqueue(const transport_idx_t transport_idx,
+                       const unsigned int stop_idx,
+                       bitfield const& bf,
+                       const unsigned int n) {
+  auto const r_query_res = r_query(transport_idx, bf);
+  if (stop_idx < r_query_res) {
+
+    // new n?
+    if (n == q_cur_.size()) {
+      q_cur_.emplace_back(q_.size());
+      q_start_.emplace_back(q_.size());
+      q_end_.emplace_back(q_.size());
+    }
+
+    // add transport segment
+    q_.emplace_back(transport_idx, stop_idx, r_query_res,
+                    tbp_.get_or_create_bfi(bf));
+    ++q_end_[n];
+
+    // construct bf_new
+    auto k{0U};
+    for (; k < bf.size(); ++k) {
+      if (bf.test(k)) {
+        break;
+      }
+    }
+    bitfield bf_new = ~bitfield{} >> k;
+
+    // update all transports of this route
+    auto const route_idx = tbp_.tt_.transport_route_[transport_idx];
+    for (auto const transport_idx_it :
+         tbp_.tt_.route_transport_ranges_[route_idx]) {
+
+      // set the bit of the day of the instance to false if the current
+      // transport is earlier than the newly enqueued
+      auto const mam_u =
+          tbp_.tt_.event_mam(transport_idx_it, 0U, event_type::kDep);
+      auto const mam_t =
+          tbp_.tt_.event_mam(transport_idx, 0U, event_type::kDep);
+      if (mam_u < mam_t) {
+        bf_new.set(k, false);
+      } else {
+        bf_new.set(k, true);
+      }
+
+      r_update(transport_idx_it, stop_idx, bf_new);
+    }
+  }
+}

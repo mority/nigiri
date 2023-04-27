@@ -60,11 +60,16 @@ struct tb_query {
 
   void enqueue(transport_idx_t const transport_idx,
                unsigned const stop_idx,
-               bitfield_idx_t const& bf,
+               bitfield const& bf,
                unsigned const n);
 
-  std::vector<std::size_t> q_cur_;
-  std::vector<std::size_t> q_start_;
+  // q_cur_[n] = cursor of Q_n
+  std::vector<std::size_t> q_cur_ = {0U};
+  // q_start_[n] = start of Q_n
+  std::vector<std::size_t> q_start_ = {0U};
+  // q_end_[n] = end of Q_n (exclusive)
+  std::vector<std::size_t> q_end_ = {0U};
+  // all Q_n back to back
   std::vector<transport_segment> q_;
   // Q_n data structure - END
 };
