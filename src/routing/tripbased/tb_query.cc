@@ -159,4 +159,53 @@ void tb_query::reset() {
   j_.clear();
 }
 
-void tb_query::earliest_arrival_query(nigiri::routing::query query) { reset(); }
+void tb_query::earliest_arrival_query(nigiri::routing::query query) {
+  reset();
+
+  // holds source location
+  auto const offset_source = query.start_[0];
+  // holds target location
+  auto const offset_target = query.destinations_[0][0];
+
+  // departure time
+  auto const start_unixtime = cista::get_if<unixtime_t>(query.start_time_);
+  assert(start_unixtime);
+  auto const day_idx_mam_pair = tbp_.tt_.day_idx_mam(*start_unixtime);
+  auto const day_idx = day_idx_mam_pair.first;
+  auto const start_mam = day_idx_mam_pair.second;
+
+  // fill l_
+  // iterate incoming footpaths of target location
+  for (auto const fp :
+       tbp_.tt_.locations_.footpaths_in_[offset_target.target_]) {
+    auto const delta_tau =
+        offset_target.target_ == fp.target_ ? duration_t{0U} : fp.duration_;
+    // iterate routes serving source of footpath
+    for (auto const route_idx : tbp_.tt_.location_routes_[fp.target_]) {
+      // iterate stop sequence of route
+      for (auto stop_idx{0U};
+           stop_idx < tbp_.tt_.route_location_seq_[route_idx].size();
+           ++stop_idx) {
+        auto const stop =
+            timetable::stop{tbp_.tt_.route_location_seq_[route_idx][stop_idx]};
+        if (stop.location_idx() == fp.target_) {
+          l_.emplace_back(route_idx, stop_idx, delta_tau);
+        }
+      }
+    }
+  }
+
+  // fill Q_0
+  // iterate outgoing footpaths of source location
+  for (auto const fp :
+       tbp_.tt_.locations_.footpaths_out_[offset_source.target_]) {
+    auto const ta = start_mam + fp.duration_;
+    auto const sa_fp = num_midnights(ta);
+    auto const a = time_of_day(ta);
+    // iterate routes at target stop of footpath
+    for (auto const route_idx : tbp_.tt_.location_routes_[fp.target_]) {
+      // earliest arrival query pseudo code anpassen, wie warten auf anschluss
+      // bei preprocessing
+    }
+  }
+}
