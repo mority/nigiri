@@ -146,3 +146,17 @@ void tb_query::enqueue(const transport_idx_t transport_idx,
     }
   }
 }
+
+void tb_query::reset() {
+  r_.clear();
+  q_cur_.clear();
+  q_cur_.emplace_back(0U);
+  q_start_.clear();
+  q_start_.emplace_back(0U);
+  q_end_.clear();
+  q_end_.emplace_back(0U);
+  l_.clear();
+  j_.clear();
+}
+
+void tb_query::earliest_arrival_query(nigiri::routing::query query) { reset(); }

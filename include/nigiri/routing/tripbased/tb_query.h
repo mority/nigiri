@@ -2,6 +2,8 @@
 
 #include <cinttypes>
 
+#include "nigiri/routing/journey.h"
+#include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/routing/routing_time.h"
 #include "tb_preprocessing.h"
@@ -72,6 +74,27 @@ struct tb_query {
   // all Q_n back to back
   std::vector<transport_segment> q_;
   // Q_n data structure - END
+
+  struct l_entry {
+    l_entry(route_idx_t const route_idx,
+            unsigned const stop_idx,
+            duration_t const time)
+        : route_idx_(route_idx), stop_idx_(stop_idx), time_(time) {}
+
+    route_idx_t const route_idx_{};
+    unsigned const stop_idx_;
+    duration_t time_{};
+  };
+
+  // routes that reach the target stop
+  std::vector<l_entry> l_;
+
+  // result set of pareto-optimal journeys
+  pareto_set<journey> j_;
+
+  void reset();
+
+  void earliest_arrival_query(query);
 };
 
 }  // namespace nigiri::routing::tripbased
