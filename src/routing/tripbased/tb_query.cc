@@ -83,10 +83,11 @@ unsigned tb_query::r_query(transport_idx_t const transport_idx,
       });
 
   // find matching entry for provided bitfield
-  while (r_cur != r_.end() || transport_idx == r_cur->transport_idx_) {
+  while (r_cur != r_.end() && transport_idx == r_cur->transport_idx_) {
     if ((tbp_.tt_.bitfields_[r_cur->bitfield_idx_] & bf_query).any()) {
       return r_cur->stop_idx_;
     }
+    ++r_cur;
   }
 
   // no entry for this transport_idx
@@ -122,7 +123,7 @@ void tb_query::enqueue(const transport_idx_t transport_idx,
         break;
       }
     }
-    bitfield bf_new = ~bitfield{} >> k;
+    bitfield bf_new = ~bitfield{} << k;
 
     // update all transports of this route
     auto const route_idx = tbp_.tt_.transport_route_[transport_idx];

@@ -438,4 +438,44 @@ loader::mem_dir unnecessary1_transfer_files() {
             std::string{unnecessary1_transfer_stop_times_content}}}};
 }
 
+constexpr auto const enqueue_routes_file_content = std::string_view{
+    R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R0,DTA,R0,R0,R0,2
+)"};
+
+constexpr auto const enqueue_trips_file_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R0,DLY,R0_0,R0_0,0
+R0,DLY,R0_1,R0_1,0
+)";
+
+constexpr auto const enqueue_stop_times_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R0_0,00:00:00,00:00:00,S0,0,0,0
+R0_0,01:00:00,01:00:00,S1,1,0,0
+R0_0,02:00:00,02:00:00,S2,2,0,0
+R0_0,03:00:00,03:00:00,S3,3,0,0
+R0_0,04:00:00,04:00:00,S4,4,0,0
+R0_0,05:00:00,05:00:00,S5,5,0,0
+R0_1,01:00:00,01:00:00,S0,0,0,0
+R0_1,02:00:00,02:00:00,S1,1,0,0
+R0_1,03:00:00,03:00:00,S2,2,0,0
+R0_1,04:00:00,04:00:00,S3,3,0,0
+R0_1,05:00:00,05:00:00,S4,4,0,0
+R0_1,06:00:00,06:00:00,S5,5,0,0
+)";
+
+loader::mem_dir enqueue_files() {
+  using std::filesystem::path;
+  return {{{path{kAgencyFile}, std::string{agency_file_content}},
+           {path{kStopFile}, std::string{six_stops_file_content}},
+           {path{kCalenderFile}, std::string{calendar_file_content}},
+           {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+           {path{kTransfersFile}, std::string{transfers_file_content}},
+           {path{kRoutesFile}, std::string{enqueue_routes_file_content}},
+           {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+           {path{kTripsFile}, std::string{enqueue_trips_file_content}},
+           {path{kStopTimesFile}, std::string{enqueue_stop_times_content}}}};
+}
+
 }  // namespace nigiri::routing::tripbased::test

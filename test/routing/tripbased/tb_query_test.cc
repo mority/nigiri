@@ -1,10 +1,16 @@
 #include <random>
 
-#include "nigiri/routing/tripbased/tb_query.h"
 #include "gtest/gtest.h"
 
+#include "nigiri/loader/gtfs/load_timetable.h"
+#include "nigiri/routing/tripbased/tb_query.h"
+
+#include "./test_data.h"
+
 using namespace nigiri;
+using namespace nigiri::loader::gtfs;
 using namespace nigiri::routing::tripbased;
+using namespace nigiri::routing::tripbased::test;
 
 TEST(r_, basic) {
   // init
@@ -256,4 +262,62 @@ TEST(r_update, random) {
       bf_or |= tt.bitfields_[it->bitfield_idx_];
     }
   }
+}
+
+TEST(tb_query, enqueue) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, enqueue_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // init query
+  tb_query tbq{tbp};
+
+  transport_idx_t const tpi0{0U};
+  auto const si0{3U};
+  bitfield const bf0{"100000"};
+  tbq.enqueue(tpi0, si0, bf0, 0);
+  EXPECT_EQ(0, tbq.q_start_[0]);
+  EXPECT_EQ(0, tbq.q_cur_[0]);
+  EXPECT_EQ(1, tbq.q_end_[0]);
+  ASSERT_EQ(1, tbq.q_.size());
+  EXPECT_EQ(tpi0, tbq.q_[0].transport_idx_);
+  EXPECT_EQ(si0, tbq.q_[0].stop_idx_start_);
+  EXPECT_EQ(5, tbq.q_[0].stop_idx_end_);
+  EXPECT_EQ(tbp.get_or_create_bfi(bf0), tbq.q_[0].bitfield_idx_);
+
+  ASSERT_EQ(2, tbq.r_.size());
+  bitfield const bf1{"1000000"};
+  EXPECT_EQ(si0, tbq.r_query(tpi0, bf0));
+  EXPECT_EQ(si0, tbq.r_query(tpi0, bf1));
+  transport_idx_t const tpi1{1U};
+  EXPECT_EQ(si0, tbq.r_query(tpi1, bf0));
+  EXPECT_EQ(si0, tbq.r_query(tpi1, bf1));
+
+  auto const si1{2U};
+  tbq.enqueue(tpi1, si1, bf0, 1);
+  EXPECT_EQ(0, tbq.q_start_[0]);
+  EXPECT_EQ(0, tbq.q_cur_[0]);
+  EXPECT_EQ(1, tbq.q_end_[0]);
+  EXPECT_EQ(1, tbq.q_start_[1]);
+  EXPECT_EQ(1, tbq.q_cur_[1]);
+  EXPECT_EQ(2, tbq.q_end_[1]);
+  ASSERT_EQ(2, tbq.q_.size());
+  EXPECT_EQ(tpi0, tbq.q_[0].transport_idx_);
+  EXPECT_EQ(si0, tbq.q_[0].stop_idx_start_);
+  EXPECT_EQ(5, tbq.q_[0].stop_idx_end_);
+  EXPECT_EQ(tbp.get_or_create_bfi(bf0), tbq.q_[0].bitfield_idx_);
+  EXPECT_EQ(tpi1, tbq.q_[1].transport_idx_);
+  EXPECT_EQ(si1, tbq.q_[1].stop_idx_start_);
+  EXPECT_EQ(si0, tbq.q_[1].stop_idx_end_);
+  EXPECT_EQ(tbp.get_or_create_bfi(bf0), tbq.q_[1].bitfield_idx_);
+  ASSERT_EQ(3, tbq.r_.size());
+  bitfield const bf2{"10000000000000000000000"};
+  EXPECT_EQ(si1, tbq.r_query(tpi0, bf2));
+  EXPECT_EQ(si0, tbq.r_query(tpi0, bf0));
+  EXPECT_EQ(si1, tbq.r_query(tpi1, bf0));
 }
