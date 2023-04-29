@@ -92,6 +92,9 @@ struct tb_query {
   // result set of pareto-optimal journeys
   pareto_set<journey> j_;
 
+  // for a bitset with only one bit set to one, returns the index of this bit
+  constexpr unsigned day_idx(bitfield const&);
+
   void reset();
 
   void earliest_arrival_query(query);

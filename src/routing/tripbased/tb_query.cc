@@ -147,6 +147,17 @@ void tb_query::enqueue(const transport_idx_t transport_idx,
   }
 }
 
+constexpr unsigned day_idx(bitfield const& bf) {
+  assert(bf.count() == 1);
+  auto i{0U};
+  for (; i != bf.size(); ++i) {
+    if (bf.test(i)) {
+      break;
+    }
+  }
+  return i;
+}
+
 void tb_query::reset() {
   r_.clear();
   q_cur_.clear();
