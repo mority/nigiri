@@ -255,19 +255,17 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                   tt_.event_times_at_stop(ri_to, si_to, event_type::kDep);
 
               // find first departure at or after a
-              // tp_to_cur_it: iterator to departure time of current
-              // transport_to
-              auto tp_to_cur_it =
+              // departure time of current transport_to
+              auto dep_it =
                   std::lower_bound(event_times.begin(), event_times.end(), a,
                                    [&](auto&& x, auto&& y) {
                                      return time_of_day(x) < time_of_day(y);
                                    });
 
               // no departure on this day at or after a
-              if (tp_to_cur_it == event_times.end()) {
+              if (dep_it == event_times.end()) {
                 ++sa_w;  // start looking on the following day
-                tp_to_cur_it =
-                    event_times.begin();  // with the earliest transport
+                dep_it = event_times.begin();  // with the earliest transport
               }
 
               // omega: days of transport_from that still require connection
@@ -292,11 +290,11 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
               while (omega.any()) {
 
                 // departure time of current transport in relation to time a
-                auto const dep_cur = *tp_to_cur_it + duration_t{sa_w * 1440};
+                auto const dep_cur = *dep_it + duration_t{sa_w * 1440};
 
                 // offset from begin of tp_to interval
                 auto const tp_to_offset =
-                    std::distance(event_times.begin(), tp_to_cur_it);
+                    std::distance(event_times.begin(), dep_it);
 
                 // transport index of transport that we transfer to
                 auto const tpi_to =
@@ -332,8 +330,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                 if (req) {
                   // shift amount due to number of times transport_to passed
                   // midnight
-                  auto const sa_tp_to = num_midnights(
-                      tt_.event_mam(tpi_to, si_to, event_type::kDep));
+                  auto const sa_tp_to = num_midnights(*dep_it);
 
                   // total shift amount
                   auto const sa_total = sa_tp_to - (sa_tp_from + sa_fp + sa_w);
@@ -407,7 +404,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                     if (!is_uturn) {
 
                       auto const check_impr = [&ta, &dep_cur, &a, &si_to, this,
-                                               &ri_to, &tpi_to, &tp_to_cur_it,
+                                               &ri_to, &tpi_to, &dep_it,
                                                &ets_arr, &bf_tf_from,
                                                &ets_ch]() {
                         bool impr = false;
@@ -419,7 +416,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                           auto const t_arr_to_later =
                               t_dep_to + (tt_.event_mam(tpi_to, si_to_later,
                                                         event_type::kArr) -
-                                          *tp_to_cur_it);
+                                          *dep_it);
                           auto const li_to_later =
                               timetable::stop{
                                   tt_.route_location_seq_[ri_to][si_to_later]}
@@ -476,7 +473,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
 
                 // prep next iteration
                 // is this the last transport of the day?
-                if (std::next(tp_to_cur_it) == event_times.end()) {
+                if (std::next(dep_it) == event_times.end()) {
 
 #ifndef NDEBUG
                   if (omega.any()) {
@@ -494,9 +491,9 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                   }
 
                   // start with the earliest transport on the next day
-                  tp_to_cur_it = event_times.begin();
+                  dep_it = event_times.begin();
                 } else {
-                  ++tp_to_cur_it;
+                  ++dep_it;
                 }
               }
             }
