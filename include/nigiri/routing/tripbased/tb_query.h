@@ -82,7 +82,7 @@ struct tb_query {
         : route_idx_(route_idx), stop_idx_(stop_idx), time_(time) {}
 
     route_idx_t const route_idx_{};
-    unsigned const stop_idx_;
+    unsigned const stop_idx_{};
     duration_t time_{};
   };
 
@@ -93,7 +93,7 @@ struct tb_query {
   pareto_set<journey> j_;
 
   // for a bitset with only one bit set to one, returns the index of this bit
-  constexpr unsigned day_idx(bitfield const&);
+  constexpr int bitfield_to_day_idx(bitfield const&);
 
   void reset();
 

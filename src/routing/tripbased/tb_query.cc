@@ -147,9 +147,9 @@ void tb_query::enqueue(const transport_idx_t transport_idx,
   }
 }
 
-constexpr unsigned day_idx(bitfield const& bf) {
+constexpr int tb_query::bitfield_to_day_idx(bitfield const& bf) {
   assert(bf.count() == 1);
-  auto i{0U};
+  unsigned short i{0U};
   for (; i != bf.size(); ++i) {
     if (bf.test(i)) {
       break;
@@ -182,6 +182,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
   auto const start_unixtime = cista::get_if<unixtime_t>(query.start_time_);
   assert(start_unixtime);
   auto const day_idx_mam_pair = tbp_.tt_.day_idx_mam(*start_unixtime);
+  // day index of start day
   auto const day_idx = day_idx_mam_pair.first;
   // minutes after midnight on the start day
   auto const start_mam = day_idx_mam_pair.second;
@@ -261,21 +262,21 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
                                                 [static_cast<std::size_t>(
                                                     offset_transport)];
             // bitfield of the connecting transport
-            auto const bf_transport =
+            auto const& bf_transport =
                 tbp_.tt_.bitfields_
                     [tbp_.tt_.transport_traffic_days_[transport_idx]];
             // bitfield that identifies the instance of the connecting transport
-            auto bf_transport_seg = bf_transport;
+            // segment
+            auto bf_seg = bf_transport;
             // align bitfields and perform AND operation
             if (sa_total < 0) {
-              bf_transport_seg &=
-                  start_day >> static_cast<unsigned>(-1 * sa_total);
+              bf_seg &= start_day >> static_cast<unsigned>(-1 * sa_total);
             } else {
-              bf_transport_seg &= start_day << static_cast<unsigned>(sa_total);
+              bf_seg &= start_day << static_cast<unsigned>(sa_total);
             }
-            if (bf_transport_seg.any()) {
+            if (bf_seg.any()) {
               // enqueue if a matching bit is found
-              enqueue(transport_idx, stop_idx, bf_transport_seg, 0);
+              enqueue(transport_idx, stop_idx, bf_seg, 0);
               break;
             }
           }
@@ -300,6 +301,79 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
   for (auto n{0U}; n != q_start_.size(); ++n) {
     // iterate trip segments in Q_n
     for (; q_cur_[n] < q_end_[n]; ++q_cur_[n]) {
+      // the current transport segment
+      auto const& tp_seg = q_[q_cur_[n]];
+      // departure time at the start of the transport segment
+      auto const dep_b = tbp_.tt_.event_mam(
+          tp_seg.transport_idx_, tp_seg.stop_idx_start_, event_type::kDep);
+      // day index of the query
+      auto const x = static_cast<int>(day_idx.v_);
+      // day index of the current transport segment
+      auto const y =
+          bitfield_to_day_idx(tbp_.tt_.bitfields_[tp_seg.bitfield_idx_]) +
+          num_midnights(dep_b);
+      // departure time at start of current transport segment in minutes after
+      // midnight on the day of the query
+      auto const t_b = (y - x) * duration_t{1440} + time_of_day(dep_b);
+
+      // check if target location is reached from current transport segment
+      for (auto const& le : l_) {
+        if (le.route_idx_ == tbp_.tt_.transport_route_[tp_seg.transport_idx_] &&
+            tp_seg.stop_idx_start_ < le.stop_idx_) {
+          // the time it takes to travel on this transport segment
+          auto const travel_time_seg =
+              tbp_.tt_.event_mam(tp_seg.transport_idx_, le.stop_idx_,
+                                 event_type::kArr) -
+              dep_b;
+          // the time at which the target location is reached by using the
+          // current transport segment
+          auto const t_cur = t_b + travel_time_seg + le.time_;
+          if (t_cur < t_min) {
+            t_min = t_cur;
+            // TODO add journey
+            // j_.add(...)
+          }
+        }
+      }
+
+      // the time it takes to travel to the next stop of the transport segment
+      auto const travel_time_next =
+          tbp_.tt_.event_mam(tp_seg.transport_idx_, tp_seg.stop_idx_start_ + 1,
+                             event_type::kArr) -
+          dep_b;
+
+      // transfer out of current transport segment?
+      if (t_b + travel_time_next < t_min) {
+        // iterate stops of the current transport segment
+        for (auto stop_idx{tp_seg.stop_idx_start_ + 1};
+             stop_idx <= tp_seg.stop_idx_end_; ++stop_idx) {
+          auto const stop = timetable::stop{
+              tbp_.tt_.route_location_seq_
+                  [tbp_.tt_.transport_route_[tp_seg.transport_idx_]][stop_idx]};
+          auto const ts_pair = tbp_.ts_.get_transfers(tp_seg.transport_idx_,
+                                                      stop.location_idx());
+          // check if there are transfers from this stop
+          if (ts_pair.has_value()) {
+            auto const transfers_start = ts_pair->first;
+            auto const transfers_end = ts_pair->second;
+            // iterate transfers from this stop
+            for (auto transfer_idx = transfers_start;
+                 transfer_idx != transfers_end; ++transfer_idx) {
+              // the current transfer
+              auto const& transfer_cur = tbp_.ts_[transfer_idx];
+              // bitset specifying the instance of the transport segment
+              auto const& bf_seg = tbp_.tt_.bitfields_[tp_seg.bitfield_idx_];
+              // bitset specifying the days on which the transfer is possible
+              // from the current transport segment
+              auto const& bf_transfer =
+                  tbp_.tt_.bitfields_[transfer_cur.bitfield_idx_from_];
+              // TODO we actually need the transfer shift amount in the entries
+              // of the transfer set -> adjust transfer set implementation
+              // accordingly
+            }
+          }
+        }
+      }
     }
   }
 }
