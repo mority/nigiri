@@ -296,6 +296,11 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
 
   // minimal travel time observed so far
   auto t_min = duration_t::max();
+
+  // identifies instances of a transport segment that is the target of a
+  // transfer
+  bitfield bf_seg_to{};
+
   // process all Q_n in ascending order, i.e., transport segments reached after
   // n transfers
   for (auto n{0U}; n != q_start_.size(); ++n) {
@@ -367,10 +372,21 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
               // from the current transport segment
               auto const& bf_transfer =
                   tbp_.tt_.bitfields_[transfer_cur.bitfield_idx_];
-              // TODO we actually need the transfer shift amount in the entries
-              // of the transfer set -> adjust transfer set implementation
-              // accordingly
-              std::cout << bf_seg << bf_transfer;
+              // compute the instance of transport segment that we are
+              // transferring to
+              if (transfer_cur.shift_amount_ < 0) {
+                bf_seg_to = (bf_seg & bf_transfer) >>
+                            static_cast<unsigned>(-transfer_cur.shift_amount_);
+              } else {
+                bf_seg_to =
+                    (bf_seg & bf_transfer)
+                    << static_cast<unsigned>(transfer_cur.shift_amount_);
+              }
+              // enqueue if transfer is possible
+              if (bf_seg_to.any()) {
+                enqueue(transfer_cur.transport_idx_to_, stop_idx, bf_seg_to,
+                        n + 1);
+              }
             }
           }
         }
