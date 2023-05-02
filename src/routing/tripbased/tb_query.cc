@@ -366,10 +366,11 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
               // bitset specifying the days on which the transfer is possible
               // from the current transport segment
               auto const& bf_transfer =
-                  tbp_.tt_.bitfields_[transfer_cur.bitfield_idx_from_];
+                  tbp_.tt_.bitfields_[transfer_cur.bitfield_idx_];
               // TODO we actually need the transfer shift amount in the entries
               // of the transfer set -> adjust transfer set implementation
               // accordingly
+              std::cout << bf_seg << bf_transfer;
             }
           }
         }

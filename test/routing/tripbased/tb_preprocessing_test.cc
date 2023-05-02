@@ -355,12 +355,11 @@ TEST(initial_transfer_computation, same_day_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(initial_transfer_computation, from_long_transfer) {
@@ -385,13 +384,11 @@ TEST(initial_transfer_computation, from_long_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(3, t.shift_amount_);
 
   bitfield const bf_tf_from_exp{"100000"};
-  bitfield const bf_tf_to_exp{"100000000"};
-  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(initial_transfer_computation, weekday_transfer) {
@@ -416,13 +413,11 @@ TEST(initial_transfer_computation, weekday_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{2U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_);
+  EXPECT_EQ(1, t.shift_amount_);
 
   bitfield const bf_tf_from_exp{"0111100000"};
-  bitfield const bf_tf_to_exp{"1111000000"};
-  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(initial_transfer_computation, daily_transfer) {
@@ -447,12 +442,11 @@ TEST(initial_transfer_computation, daily_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"111111100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(initial_transfer_computation, earlier_stop_transfer) {
@@ -479,12 +473,11 @@ TEST(initial_transfer_computation, earlier_stop_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(initial_transfer_computation, earlier_transport_transfer) {
@@ -512,10 +505,9 @@ TEST(initial_transfer_computation, earlier_transport_transfer) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(initial_transfer_computation, uturn_transfer) {
@@ -543,10 +535,9 @@ TEST(initial_transfer_computation, uturn_transfer) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 
   auto const transfers1 =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{3U});
@@ -557,10 +548,9 @@ TEST(initial_transfer_computation, uturn_transfer) {
   auto const uturn_transfer = tbp.ts_.transfers_[transfers1->first];
   EXPECT_EQ(transport_idx_t{1U}, uturn_transfer.transport_idx_to_);
   EXPECT_EQ(location_idx_t{3U}, uturn_transfer.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, uturn_transfer.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, uturn_transfer.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[uturn_transfer.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[uturn_transfer.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, uturn_transfer.bitfield_idx_);
+  EXPECT_EQ(0, uturn_transfer.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[uturn_transfer.bitfield_idx_]);
 }
 
 TEST(initial_transfer_computation, unnecessary_transfer0) {
@@ -588,10 +578,9 @@ TEST(initial_transfer_computation, unnecessary_transfer0) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(initial_transfer_computation, unnecessary_transfer1) {
@@ -619,10 +608,9 @@ TEST(initial_transfer_computation, unnecessary_transfer1) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{1U}, t0.transport_idx_to_);
   EXPECT_EQ(location_idx_t{5U}, t0.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t0.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t0.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t0.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t0.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t0.bitfield_idx_);
+  EXPECT_EQ(0, t0.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t0.bitfield_idx_]);
 
   auto const transfers1 =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{4U});
@@ -633,10 +621,9 @@ TEST(initial_transfer_computation, unnecessary_transfer1) {
   auto const t1 = tbp.ts_.transfers_[transfers1->first];
   EXPECT_EQ(transport_idx_t{1U}, t1.transport_idx_to_);
   EXPECT_EQ(location_idx_t{4U}, t1.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t1.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t1.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t1.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t1.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t1.bitfield_idx_);
+  EXPECT_EQ(0, t1.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t1.bitfield_idx_]);
 }
 
 TEST(uturn_removal, no_transfer) {
@@ -677,12 +664,11 @@ TEST(uturn_removal, same_day_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(uturn_removal, from_long_transfer) {
@@ -707,13 +693,11 @@ TEST(uturn_removal, from_long_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(3, t.shift_amount_);
 
   bitfield const bf_tf_from_exp{"100000"};
-  bitfield const bf_tf_to_exp{"100000000"};
-  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(uturn_removal, weekday_transfer) {
@@ -738,13 +722,11 @@ TEST(uturn_removal, weekday_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{2U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_);
+  EXPECT_EQ(1, t.shift_amount_);
 
   bitfield const bf_tf_from_exp{"0111100000"};
-  bitfield const bf_tf_to_exp{"1111000000"};
-  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(uturn_removal, daily_transfer) {
@@ -769,12 +751,11 @@ TEST(uturn_removal, daily_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"111111100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(uturn_removal, earlier_stop_transfer) {
@@ -801,12 +782,11 @@ TEST(uturn_removal, earlier_stop_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(uturn_removal, earlier_transport_transfer) {
@@ -834,10 +814,9 @@ TEST(uturn_removal, earlier_transport_transfer) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(uturn_removal, uturn_transfer) {
@@ -865,10 +844,9 @@ TEST(uturn_removal, uturn_transfer) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 
   auto const transfers1 =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{3U});
@@ -900,10 +878,9 @@ TEST(uturn_removal, unnecessary_transfer) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(uturn_removal, unnecessary_transfer1) {
@@ -931,10 +908,9 @@ TEST(uturn_removal, unnecessary_transfer1) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{1U}, t0.transport_idx_to_);
   EXPECT_EQ(location_idx_t{5U}, t0.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t0.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t0.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t0.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t0.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t0.bitfield_idx_);
+  EXPECT_EQ(0, t0.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t0.bitfield_idx_]);
 
   auto const transfers1 =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{4U});
@@ -945,10 +921,9 @@ TEST(uturn_removal, unnecessary_transfer1) {
   auto const t1 = tbp.ts_.transfers_[transfers1->first];
   EXPECT_EQ(transport_idx_t{1U}, t1.transport_idx_to_);
   EXPECT_EQ(location_idx_t{4U}, t1.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t1.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t1.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t1.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t1.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t1.bitfield_idx_);
+  EXPECT_EQ(0, t1.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t1.bitfield_idx_]);
 }
 
 TEST(transfer_reduction, no_transfer) {
@@ -989,12 +964,11 @@ TEST(transfer_reduction, same_day_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(transfer_reduction, from_long_transfer) {
@@ -1019,13 +993,11 @@ TEST(transfer_reduction, from_long_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(3, t.shift_amount_);
 
   bitfield const bf_tf_from_exp{"100000"};
-  bitfield const bf_tf_to_exp{"100000000"};
-  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(transfer_reduction, weekday_transfer) {
@@ -1050,13 +1022,11 @@ TEST(transfer_reduction, weekday_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{2U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{1U}, t.bitfield_idx_);
+  EXPECT_EQ(1, t.shift_amount_);
 
   bitfield const bf_tf_from_exp{"0111100000"};
-  bitfield const bf_tf_to_exp{"1111000000"};
-  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_tf_to_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_tf_from_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(transfer_reduction, daily_transfer) {
@@ -1081,12 +1051,11 @@ TEST(transfer_reduction, daily_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{1U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"111111100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(transfer_reduction, earlier_stop_transfer) {
@@ -1113,12 +1082,11 @@ TEST(transfer_reduction, earlier_stop_transfer) {
   auto const t = tbp.ts_.transfers_[transfers->first];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
 
   bitfield const bf_exp{"100000"};
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(transfer_reduction, earlier_transport_transfer) {
@@ -1146,10 +1114,9 @@ TEST(transfer_reduction, earlier_transport_transfer) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{0U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
 
 TEST(transfer_reduction, uturn_transfer) {
@@ -1177,10 +1144,9 @@ TEST(transfer_reduction, uturn_transfer) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{2U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 
   auto const transfers1 =
       tbp.ts_.get_transfers(transport_idx_t{0U}, location_idx_t{3U});
@@ -1227,8 +1193,7 @@ TEST(transfer_reduction, unnecessary_transfer1) {
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(location_idx_t{5U}, t.location_idx_to_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_from_);
-  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_to_);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_from_]);
-  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_to_]);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(0, t.shift_amount_);
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }

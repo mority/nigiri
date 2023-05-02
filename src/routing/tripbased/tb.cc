@@ -7,7 +7,7 @@ void hash_transfer_set::add(transport_idx_t const& transport_idx_from,
                             transport_idx_t const& transport_idx_to,
                             location_idx_t const& location_idx_to,
                             bitfield_idx_t const& bitfield_idx_from,
-                            bitfield_idx_t const& bitfield_idx_to) {
+                            int shift_amount) {
   assert(!finalized_);
 
   if (!initialized_) {
@@ -35,7 +35,7 @@ void hash_transfer_set::add(transport_idx_t const& transport_idx_from,
   }
 
   transfers_.emplace_back(transport_idx_to, location_idx_to, bitfield_idx_from,
-                          bitfield_idx_to);
+                          shift_amount);
   ++cur_length_;
 }
 

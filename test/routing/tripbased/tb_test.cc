@@ -27,7 +27,7 @@ TEST(hash_transfer_set, basic) {
   std::uint64_t transport_to = 30000U;
   std::uint64_t location_to = 40000U;
   std::uint64_t bitfield_from = 50000U;
-  std::uint64_t bitfield_to = 60000U;
+  int shift_amount = 60000;
   for (std::uint64_t transport = 10000U; transport < 10010U; ++transport) {
     transport_idx_t const transport_idx_from{transport};
     for (std::uint64_t location = 20000U; location < 20010U; ++location) {
@@ -36,9 +36,8 @@ TEST(hash_transfer_set, basic) {
         transport_idx_t const transport_idx_to{transport_to++};
         location_idx_t const location_idx_to{location_to++};
         bitfield_idx_t const bitfield_idx_from{bitfield_from++};
-        bitfield_idx_t const bitfield_idx_to{bitfield_to++};
         ts.add(transport_idx_from, location_idx_from, transport_idx_to,
-               location_idx_to, bitfield_idx_from, bitfield_idx_to);
+               location_idx_to, bitfield_idx_from, shift_amount++);
       }
     }
   }
@@ -49,7 +48,7 @@ TEST(hash_transfer_set, basic) {
   transport_to = 30000U;
   location_to = 40000U;
   bitfield_from = 50000U;
-  bitfield_to = 60000U;
+  shift_amount = 60000;
   for (std::uint64_t transport = 10000U; transport < 10010U; ++transport) {
     transport_idx_t const transport_idx_from{transport};
     for (std::uint64_t location = 20000U; location < 20010U; ++location) {
@@ -65,11 +64,10 @@ TEST(hash_transfer_set, basic) {
         transport_idx_t const transport_idx_to{transport_to++};
         location_idx_t const location_idx_to{location_to++};
         bitfield_idx_t const bitfield_idx_from{bitfield_from++};
-        bitfield_idx_t const bitfield_idx_to{bitfield_to++};
         EXPECT_EQ(transport_idx_to, t.transport_idx_to_);
         EXPECT_EQ(location_idx_to, t.location_idx_to_);
-        EXPECT_EQ(bitfield_idx_from, t.bitfield_idx_from_);
-        EXPECT_EQ(bitfield_idx_to, t.bitfield_idx_to_);
+        EXPECT_EQ(bitfield_idx_from, t.bitfield_idx_);
+        EXPECT_EQ(shift_amount++, t.shift_amount_);
       }
     }
   }

@@ -6,28 +6,26 @@
 
 namespace nigiri::routing::tripbased {
 
-// transfer: trip t, stop p -> trip u, stop q
-// DoOBS for trip t and u: instances of trip t for which transfer is possible
-// from is implicit -> given by indexing of transfer set
-// via footpath -> can be accessed by location idx of from and to
 struct transfer {
   transfer() = default;
   transfer(transport_idx_t transport_idx_to,
            location_idx_t location_idx_to,
-           bitfield_idx_t bitfield_idx_from,
-           bitfield_idx_t bitfield_idx_to)
+           bitfield_idx_t bitfield_idx,
+           int shift_amount)
       : transport_idx_to_(transport_idx_to),
         location_idx_to_(location_idx_to),
-        bitfield_idx_from_(bitfield_idx_from),
-        bitfield_idx_to_(bitfield_idx_to) {}
+        bitfield_idx_(bitfield_idx),
+        shift_amount_(shift_amount) {}
 
   // to
   transport_idx_t transport_idx_to_{};
   location_idx_t location_idx_to_{};
 
-  // bitfields to mark instances of transport
-  bitfield_idx_t bitfield_idx_from_{};
-  bitfield_idx_t bitfield_idx_to_{};
+  // bitfield to mark instances of transport
+  bitfield_idx_t bitfield_idx_{};
+  // how far into the future/past the bitfield has to be shifted to mark
+  // instances of the target transport of the transfer
+  int shift_amount_{};
 };
 
 struct hash_transfer_set {
@@ -39,7 +37,7 @@ struct hash_transfer_set {
            transport_idx_t const& transport_idx_to,
            location_idx_t const& location_idx_to,
            bitfield_idx_t const& bitfield_idx_from,
-           bitfield_idx_t const& bitfield_idx_to);
+           int shift_amount);
 
   void finalize();
 

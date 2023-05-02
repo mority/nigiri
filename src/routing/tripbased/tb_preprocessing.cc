@@ -443,16 +443,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                       if (is_impr) {
                         // construct and add transfer to transfer set
                         auto const bfi_from = get_or_create_bfi(bf_tf_from);
-                        // bitfield transfer to
-                        auto bf_tf_to = bf_tf_from;
-                        if (sa_total < 0) {
-                          bf_tf_to <<= static_cast<unsigned>(-1 * sa_total);
-                        } else {
-                          bf_tf_to >>= static_cast<unsigned>(sa_total);
-                        }
-                        auto const bfi_to = get_or_create_bfi(bf_tf_to);
                         ts_.add(tpi_from, li_from, tpi_to, li_to, bfi_from,
-                                bfi_to);
+                                -sa_total);
 
 #ifndef NDEBUG
                         TBDL << "transfer added:" << std::endl
@@ -462,8 +454,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                              << std::endl
                              << "bf_tf_from = " << first_n(bf_tf_from)
                              << std::endl
-                             << "  bf_tf_to = " << first_n(bf_tf_to)
-                             << std::endl;
+                             << "  shift_amount = " << -sa_total << std::endl;
 
 #endif
                       }
