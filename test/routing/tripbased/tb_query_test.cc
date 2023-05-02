@@ -277,10 +277,14 @@ TEST(tb_query, enqueue) {
   // init query
   tb_query tbq{tbp};
 
+  // transferred from
+  tb_query::transport_segment transferred_from(transport_idx_t{23U}, 42U, 43U,
+                                               bitfield_idx_t{0U}, nullptr);
+
   transport_idx_t const tpi0{0U};
   auto const si0{3U};
   bitfield const bf0{"100000"};
-  tbq.enqueue(tpi0, si0, bf0, 0);
+  tbq.enqueue(tpi0, si0, bf0, 0, &transferred_from);
   EXPECT_EQ(0, tbq.q_start_[0]);
   EXPECT_EQ(0, tbq.q_cur_[0]);
   EXPECT_EQ(1, tbq.q_end_[0]);
@@ -299,7 +303,7 @@ TEST(tb_query, enqueue) {
   EXPECT_EQ(si0, tbq.r_query(tpi1, bf1));
 
   auto const si1{2U};
-  tbq.enqueue(tpi1, si1, bf0, 1);
+  tbq.enqueue(tpi1, si1, bf0, 1, &transferred_from);
   EXPECT_EQ(0, tbq.q_start_[0]);
   EXPECT_EQ(0, tbq.q_cur_[0]);
   EXPECT_EQ(1, tbq.q_end_[0]);

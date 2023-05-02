@@ -100,7 +100,8 @@ unsigned tb_query::r_query(transport_idx_t const transport_idx,
 void tb_query::enqueue(const transport_idx_t transport_idx,
                        const unsigned int stop_idx,
                        bitfield const& bf,
-                       const unsigned int n) {
+                       const unsigned int n,
+                       transport_segment const* transferred_from) {
   auto const r_query_res = r_query(transport_idx, bf);
   if (stop_idx < r_query_res) {
 
@@ -113,7 +114,7 @@ void tb_query::enqueue(const transport_idx_t transport_idx,
 
     // add transport segment
     q_.emplace_back(transport_idx, stop_idx, r_query_res,
-                    tbp_.get_or_create_bfi(bf));
+                    tbp_.get_or_create_bfi(bf), transferred_from);
     ++q_end_[n];
 
     // construct bf_new
@@ -276,7 +277,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
             }
             if (bf_seg.any()) {
               // enqueue if a matching bit is found
-              enqueue(transport_idx, stop_idx, bf_seg, 0);
+              enqueue(transport_idx, stop_idx, bf_seg, 0, nullptr);
               break;
             }
           }
@@ -385,7 +386,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
               // enqueue if transfer is possible
               if (bf_seg_to.any()) {
                 enqueue(transfer_cur.transport_idx_to_, stop_idx, bf_seg_to,
-                        n + 1);
+                        n + 1, &tp_seg);
               }
             }
           }

@@ -48,22 +48,26 @@ struct tb_query {
     transport_segment(transport_idx_t const transport_idx,
                       unsigned const stop_idx_start,
                       unsigned const stop_idx_end,
-                      bitfield_idx_t const bitfield_idx)
+                      bitfield_idx_t const bitfield_idx,
+                      transport_segment const* transferred_from)
         : transport_idx_(transport_idx),
           stop_idx_start_(stop_idx_start),
           stop_idx_end_(stop_idx_end),
-          bitfield_idx_(bitfield_idx) {}
+          bitfield_idx_(bitfield_idx),
+          transferred_from_(transferred_from) {}
 
     transport_idx_t const transport_idx_{};
     unsigned const stop_idx_start_{};
     unsigned const stop_idx_end_{};
     bitfield_idx_t const bitfield_idx_{};
+    transport_segment const* transferred_from_;
   };
 
   void enqueue(transport_idx_t const transport_idx,
                unsigned const stop_idx,
                bitfield const& bf,
-               unsigned const n);
+               unsigned const n,
+               transport_segment const* transferred_from);
 
   // q_cur_[n] = cursor of Q_n
   std::vector<std::size_t> q_cur_ = {0U};
