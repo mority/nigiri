@@ -16,9 +16,10 @@ namespace nigiri::routing::tripbased {
 
 struct tb_query {
   tb_query() = delete;
-  explicit tb_query(tb_preprocessing& tbp) : tbp_(tbp) {}
+  explicit tb_query(tb_preprocessing& tbp) : tbp_(tbp), tt_(tbp.tt_) {}
 
   tb_preprocessing& tbp_;
+  timetable& tt_;
 
   // R(t) data structure - BEGIN
   struct r_entry {
@@ -96,12 +97,18 @@ struct tb_query {
   // result set of pareto-optimal journeys
   pareto_set<journey> j_;
 
+  // least recently processed query
+  query query_;
+
   // for a bitset with only one bit set to one, returns the index of this bit
   constexpr int bitfield_to_day_idx(bitfield const&);
 
   void reset();
 
   void earliest_arrival_query(query);
+
+  // reconstructs the journey that ends with the given transport segment
+  void reconstruct_journey(transport_segment const& tp_seg, journey& j);
 };
 
 }  // namespace nigiri::routing::tripbased
