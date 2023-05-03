@@ -30,5 +30,6 @@ nigiri::loader::mem_dir unnecessary0_transfer_files();
 nigiri::loader::mem_dir unnecessary1_transfer_files();
 nigiri::loader::mem_dir enqueue_files();
 nigiri::loader::mem_dir footpath_files();
+nigiri::loader::mem_dir reuse_block_id_files();
 
 }  // namespace nigiri::routing::tripbased::test

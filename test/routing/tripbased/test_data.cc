@@ -519,4 +519,25 @@ loader::mem_dir footpath_files() {
            {path{kStopTimesFile}, std::string{footpath_stop_times_content}}}};
 }
 
+constexpr auto const reuse_block_id_trips_file_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R0,MON,R0_MON,R0_MON,0
+R1,MON,R1_MON,R1_MON,0
+)";
+
+loader::mem_dir reuse_block_id_files() {
+  using std::filesystem::path;
+  return {
+      {{path{kAgencyFile}, std::string{agency_file_content}},
+       {path{kStopFile}, std::string{simple_stops_file_content}},
+       {path{kCalenderFile}, std::string{calendar_file_content}},
+       {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+       {path{kTransfersFile}, std::string{transfers_file_content}},
+       {path{kRoutesFile}, std::string{same_day_transfer_routes_file_content}},
+       {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+       {path{kTripsFile}, std::string{reuse_block_id_trips_file_content}},
+       {path{kStopTimesFile},
+        std::string{same_day_transfer_stop_times_content}}}};
+}
+
 }  // namespace nigiri::routing::tripbased::test
