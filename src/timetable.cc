@@ -18,8 +18,9 @@ std::string reverse(std::string s) {
 }
 
 std::ostream& operator<<(std::ostream& out, timetable const& tt) {
-  auto const num_days = static_cast<size_t>(
-      (tt.date_range_.to_ - tt.date_range_.from_ + 1_days) / 1_days);
+  auto const internal = tt.internal_interval_days();
+  auto const num_days =
+      static_cast<size_t>((internal.to_ - internal.from_ + 1_days) / 1_days);
   for (auto i = 0U; i != tt.transport_traffic_days_.size(); ++i) {
     auto const transport_idx = transport_idx_t{i};
     auto const traffic_days =
@@ -27,10 +28,10 @@ std::ostream& operator<<(std::ostream& out, timetable const& tt) {
     out << "TRANSPORT=" << transport_idx << ", TRAFFIC_DAYS="
         << reverse(traffic_days.to_string().substr(kMaxDays - num_days))
         << "\n";
-    for (auto d = tt.date_range_.from_; d != tt.date_range_.to_;
+    for (auto d = internal.from_; d != internal.to_;
          d += std::chrono::days{1}) {
-      auto const day_idx = day_idx_t{static_cast<day_idx_t::value_t>(
-          (d - tt.internal_interval_days().from_) / 1_days)};
+      auto const day_idx = day_idx_t{
+          static_cast<day_idx_t::value_t>((d - internal.from_) / 1_days)};
       if (traffic_days.test(to_idx(day_idx))) {
         date::to_stream(out, "%F", d);
         out << " (day_idx=" << day_idx << ")\n";
@@ -43,7 +44,7 @@ std::ostream& operator<<(std::ostream& out, timetable const& tt) {
   return out;
 }
 
-cista::wrapped<timetable> timetable::read(cista::memory_holder mem) {
+cista::wrapped<timetable> timetable::read(cista::memory_holder&& mem) {
   return std::visit(
       utl::overloaded{
           [&](cista::buf<cista::mmap>& b) {
@@ -67,9 +68,24 @@ void timetable::write(std::filesystem::path const& p) const {
   auto writer = cista::buf<cista::mmap>(std::move(mmap));
 
   {
-    scoped_timer t{"writing timetable"};
+    auto const timer = scoped_timer{"timetable.write"};
     cista::serialize<kMode>(writer, *this);
   }
+}
+
+void timetable::write(cista::memory_holder& mem) const {
+  std::visit(utl::overloaded{[&](cista::buf<cista::mmap>& writer) {
+                               cista::serialize<kMode>(writer, *this);
+                             },
+                             [&](cista::buffer&) {
+                               throw std::runtime_error{"not supported"};
+                             },
+                             [&](cista::byte_buf& b) {
+                               auto writer = cista::buf{std::move(b)};
+                               cista::serialize<kMode>(writer, *this);
+                               b = std::move(writer.buf_);
+                             }},
+             mem);
 }
 
 }  // namespace nigiri

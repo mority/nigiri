@@ -4,8 +4,8 @@
 #include "utl/parser/csv_range.h"
 #include "utl/parser/line_range.h"
 #include "utl/pipes/for_each.h"
-#include "utl/pipes/transform.h"
 #include "utl/pipes/vec.h"
+#include "utl/progress_tracker.h"
 
 #include "nigiri/loader/gtfs/parse_date.h"
 
@@ -25,14 +25,23 @@ hash_map<std::string, std::vector<calendar_date>> read_calendar_date(
                            auto&& key) mutable {
     if (!prev_it.has_value() || (*prev_it)->first != key) {
       if (auto const it = services.find(key); it == end(services)) {
-        prev_it = services.emplace(decltype(services)::key_type{key}).first;
+        prev_it = services
+                      .emplace(decltype(services)::key_type{key},
+                               std::vector<calendar_date>{})
+                      .first;
       } else {
         prev_it = it;
       }
     }
     return *prev_it;
   };
-  utl::line_range{utl::buf_reader{file_content}}  //
+
+  auto const progress_tracker = utl::get_active_progress_tracker();
+  progress_tracker->status("Parse Calendar Date")
+      .out_bounds(34.F, 36.F)
+      .in_high(file_content.size());
+  utl::line_range{utl::buf_reader{
+      utl::make_buf_reader(file_content, progress_tracker->update_fn())}}  //
       | utl::csv<entry>()  //
       | utl::for_each([&](entry const& e) {
           cached_lookup(e.id_->view())

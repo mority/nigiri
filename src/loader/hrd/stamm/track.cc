@@ -15,7 +15,7 @@ void parse_track_rules(config const& c,
                        std::string_view file_content,
                        track_rule_map_t& track_rules,
                        track_location_map_t& track_locations) {
-  scoped_timer timer("parsing track rules");
+  auto const timer = scoped_timer{"loader.hrd.tracks"};
   hash_map<std::string, track_name_idx_t> track_names;
   utl::for_each_line_numbered(file_content, [&](utl::cstr line,
                                                 unsigned line_number) {
@@ -52,11 +52,11 @@ void parse_track_rules(config const& c,
         track_at_station{.parent_station_ = parent, .track_ = track_name_idx},
         [&]() {
           auto const l = location{tt, parent};
-          auto const id = fmt::format("{}-{}", l.id_,
+          auto const id = fmt::format("T:{}:{}", l.id_,
                                       tt.track_names_[track_name_idx].view());
           auto const name = string{tt.track_names_[track_name_idx].view()};
           auto const child = tt.locations_.register_location(
-              location{id, name, l.pos_, l.src_, location_type::kTrack,
+              location{id, name, l.pos_, l.src_, location_type::kGeneratedTrack,
                        l.osm_id_, parent, l.timezone_idx_, l.transfer_time_,
                        l.equivalences_, l.footpaths_in_, l.footpaths_out_});
           tt.locations_.children_[parent].emplace_back(child);

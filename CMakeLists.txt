@@ -29,10 +29,8 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         -Wno-zero-as-null-pointer-constant
         -Wno-missing-noreturn
         -Wno-undefined-func-template
+        -Wno-unsafe-buffer-usage
         -Werror)
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
-    set(nigiri-compile-options ${nigiri-compile-options} -Wno-unsafe-buffer-usage)
-  endif()
 elseif(MSVC)
   set(nigiri-compile-options /WX)
 else()
@@ -46,7 +44,7 @@ endif()
 file(GLOB_RECURSE nigiri-files src/*.cc)
 add_library(nigiri ${nigiri-files})
 target_include_directories(nigiri PUBLIC include)
-target_link_libraries(nigiri PUBLIC cista geo utl fmt date miniz date-tz wyhash tsl::hopscotch_map)
+target_link_libraries(nigiri PUBLIC cista geo utl fmt date miniz date-tz wyhash unordered_dense)
 target_compile_features(nigiri PUBLIC cxx_std_20)
 target_compile_options(nigiri PRIVATE ${nigiri-compile-options})
 

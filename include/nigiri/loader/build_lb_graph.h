@@ -2,13 +2,14 @@
 
 #include "utl/pairwise.h"
 
+#include "nigiri/logging.h"
 #include "nigiri/timetable.h"
 
 namespace nigiri::loader {
 
 template <direction SearchDir>
 void build_lb_graph(timetable& tt) {
-  std::map<location_idx_t, duration_t> weights;
+  hash_map<location_idx_t, duration_t> weights;
 
   auto const update_weight = [&](location_idx_t const target,
                                  duration_t const d) {
@@ -68,6 +69,7 @@ void build_lb_graph(timetable& tt) {
     }
   };
 
+  auto const timer = scoped_timer{"nigiri.loader.lb"};
   std::vector<footpath> footpaths;
   auto& lb_graph = SearchDir == direction::kForward ? tt.fwd_search_lb_graph_
                                                     : tt.bwd_search_lb_graph_;
