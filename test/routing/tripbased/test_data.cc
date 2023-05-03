@@ -236,7 +236,7 @@ R0,DTA,R0,R0,"S0 -> S4",2
 constexpr auto const earlier_stop_transfer_trips_file_content =
     R"(route_id,service_id,trip_id,trip_headsign,block_id
 R0,MON,R0_MON0,R0_MON0,0
-R0,MON,R0_MON1,R0_MON1,0
+R0,MON,R0_MON1,R0_MON1,1
 )";
 
 constexpr auto const earlier_stop_transfer_stop_times_content =
@@ -280,7 +280,7 @@ R0,DTA,R0,R0,"S0 -> S4",2
 constexpr auto const earlier_transport_transfer_trips_file_content =
     R"(route_id,service_id,trip_id,trip_headsign,block_id
 R0,MON,R0_MON0,R0_MON0,0
-R0,MON,R0_MON1,R0_MON1,0
+R0,MON,R0_MON1,R0_MON1,1
 )";
 
 constexpr auto const earlier_transport_transfer_stop_times_content =
@@ -324,7 +324,7 @@ R1,DTA,R1,R1,"S2 -> S1 -> S3",2
 constexpr auto const uturn_transfer_trips_file_content =
     R"(route_id,service_id,trip_id,trip_headsign,block_id
 R0,MON,R0_MON,R0_MON,0
-R1,MON,R1_MON,R1_MON,0
+R1,MON,R1_MON,R1_MON,1
 )";
 
 constexpr auto const uturn_transfer_stop_times_content =
@@ -360,7 +360,7 @@ R1,DTA,R1,R1,"S1 -> S2",2
 constexpr auto const unnecessary0_transfer_trips_file_content =
     R"(route_id,service_id,trip_id,trip_headsign,block_id
 R0,MON,R0_MON,R0_MON,0
-R1,MON,R1_MON,R1_MON,0
+R1,MON,R1_MON,R1_MON,1
 )";
 
 constexpr auto const unnecessary0_transfer_stop_times_content =
@@ -407,7 +407,7 @@ R1,DTA,R1,R1,"S1 -> S2 -> S3 -> S5",2
 constexpr auto const unnecessary1_transfer_trips_file_content =
     R"(route_id,service_id,trip_id,trip_headsign,block_id
 R0,MON,R0_MON,R0_MON,0
-R1,MON,R1_MON,R1_MON,0
+R1,MON,R1_MON,R1_MON,1
 )";
 
 constexpr auto const unnecessary1_transfer_stop_times_content =
@@ -446,7 +446,7 @@ R0,DTA,R0,R0,R0,2
 constexpr auto const enqueue_trips_file_content =
     R"(route_id,service_id,trip_id,trip_headsign,block_id
 R0,DLY,R0_0,R0_0,0
-R0,DLY,R0_1,R0_1,0
+R0,DLY,R0_1,R0_1,1
 )";
 
 constexpr auto const enqueue_stop_times_content =
