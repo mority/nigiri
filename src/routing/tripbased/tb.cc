@@ -50,10 +50,10 @@ std::optional<hash_transfer_set::entry> hash_transfer_set::get_transfers(
     transport_idx_t const& transport_idx_from,
     location_idx_t const& location_idx_from) {
   assert(finalized_);
-  key key{};
-  key.first = transport_idx_from;
-  key.second = location_idx_from;
-  return index_.get(key);
+  key key{transport_idx_from, location_idx_from};
+  return index_.contains(key)
+             ? std::make_optional<hash_transfer_set::entry>(index_.at(key))
+             : std::nullopt;
 }
 
 }  // namespace nigiri::routing::tripbased
