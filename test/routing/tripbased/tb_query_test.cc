@@ -9,6 +9,7 @@
 
 using namespace nigiri;
 using namespace nigiri::loader::gtfs;
+using namespace nigiri::routing;
 using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
 
@@ -324,4 +325,88 @@ TEST(tb_query, enqueue) {
   EXPECT_EQ(si1, tbq.r_query(tpi0, bf2));
   EXPECT_EQ(si0, tbq.r_query(tpi0, bf0));
   EXPECT_EQ(si1, tbq.r_query(tpi1, bf0));
+}
+
+#include <chrono>
+using namespace std::chrono;
+
+TEST(reconstruct_journey, no_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, no_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  // init query
+  tb_query tbq{tbp};
+
+  // create transport segment
+  tb_query::transport_segment tp_seg{transport_idx_t{0U}, 0U, 1U,
+                                     bitfield_idx_t{0U}, nullptr};
+
+  journey j{};
+  tbq.reconstruct_journey(tp_seg, j);
+  ASSERT_EQ(1, j.legs_.size());
+  EXPECT_EQ(0, j.transfers_);
+  EXPECT_EQ(location_idx_t{1U}, j.dest_);
+  EXPECT_EQ(location_idx_t{0U}, j.legs_[0].from_);
+  EXPECT_EQ(location_idx_t{1U}, j.legs_[0].to_);
+  constexpr unixtime_t start_time_exp = sys_days{March / 1 / 2021};
+  constexpr unixtime_t dest_time_exp = sys_days{March / 1 / 2021} + 12h;
+  EXPECT_EQ(start_time_exp, j.start_time_);
+  EXPECT_EQ(dest_time_exp, j.dest_time_);
+}
+
+TEST(reconstruct_journey, transfer_with_footpath) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, footpath_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  for (auto fp : tt.locations_.footpaths_out_[location_idx_t{1}]) {
+    std::cerr << fp << std::endl;
+  }
+
+  ASSERT_EQ(1, tbp.ts_.transfers_.size());
+
+  // init query
+  tb_query tbq{tbp};
+
+  // create transport segments
+  tb_query::transport_segment tp_seg0{transport_idx_t{0U}, 0U, 1U,
+                                      bitfield_idx_t{0U}, nullptr};
+  tb_query::transport_segment tp_seg1{transport_idx_t{1U}, 2U, 3U,
+                                      bitfield_idx_t{0U}, &tp_seg0};
+
+  journey j{};
+  tbq.reconstruct_journey(tp_seg1, j);
+
+  j.print(std::cerr, tbq.tt_);
+
+  ASSERT_EQ(3, j.legs_.size());
+  EXPECT_EQ(1, j.transfers_);
+  EXPECT_EQ(location_idx_t{3U}, j.dest_);
+  EXPECT_EQ(location_idx_t{0U}, j.legs_[0].from_);
+  EXPECT_EQ(location_idx_t{1U}, j.legs_[0].to_);
+  EXPECT_EQ(location_idx_t{1U}, j.legs_[1].from_);
+  EXPECT_EQ(location_idx_t{2U}, j.legs_[1].to_);
+  EXPECT_EQ(location_idx_t{2U}, j.legs_[2].from_);
+  EXPECT_EQ(location_idx_t{3U}, j.legs_[2].to_);
+  constexpr unixtime_t start_time_exp = sys_days{March / 1 / 2021};
+  constexpr unixtime_t dest_time_exp = sys_days{March / 1 / 2021} + 13h;
+  EXPECT_EQ(start_time_exp, j.start_time_);
+  EXPECT_EQ(dest_time_exp, j.dest_time_);
 }

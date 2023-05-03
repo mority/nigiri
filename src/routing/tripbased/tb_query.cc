@@ -441,8 +441,11 @@ void tb_query::reconstruct_journey(
                       unix_start,          unix_end,           std::move(tee)};
     j.add(std::move(l_tp));
 
-    // add journey leg for footpath to next transport segment
+    // handle transfer to next transport segment
     if (std::next(rev_it) != segment_stack.rend()) {
+      // increment number of transfers
+      ++j.transfers_;
+
       // the next transport segment
       auto const& tp_seg_next = *std::next(rev_it);
 
@@ -452,7 +455,7 @@ void tb_query::reconstruct_journey(
               tt_.route_location_seq_[route_idx][tp_seg_next->stop_idx_start_]}
               .location_idx();
 
-      // only add footpath journey leg between different locations
+      // add footpath journey leg between different locations
       if (location_idx_end != location_idx_start_next) {
         // get footpath from timetable
         footpath const* fp = nullptr;
@@ -478,4 +481,10 @@ void tb_query::reconstruct_journey(
       }
     }
   }
+
+  // set journey attributes
+  j.start_time_ = j.legs_.front().dep_time_;
+  j.dest_time_ = j.legs_.back().arr_time_;
+  j.dest_ = j.legs_.back().to_;
+  // transfers are counted when creating the legs of the journey above
 }
