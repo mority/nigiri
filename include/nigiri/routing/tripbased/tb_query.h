@@ -61,6 +61,8 @@ struct tb_query {
     unsigned const stop_idx_start_{};
     unsigned const stop_idx_end_{};
     bitfield_idx_t const bitfield_idx_{};
+
+    // previous transport segment for reconstruction of journey
     transport_segment const* transferred_from_;
   };
 
@@ -108,7 +110,7 @@ struct tb_query {
   void earliest_arrival_query(query);
 
   // reconstructs the journey that ends with the given transport segment
-  void reconstruct_journey(transport_segment const& tp_seg, journey& j);
+  void reconstruct_journey(transport_segment const& last_tp_seg, journey& j);
 };
 
 }  // namespace nigiri::routing::tripbased
