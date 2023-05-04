@@ -50,12 +50,12 @@ struct tb_query {
                       unsigned const stop_idx_start,
                       unsigned const stop_idx_end,
                       bitfield_idx_t const bitfield_idx,
-                      transport_segment const* transferred_from)
+                      std::optional<unsigned> const prev_segment_idx)
         : transport_idx_(transport_idx),
           stop_idx_start_(stop_idx_start),
           stop_idx_end_(stop_idx_end),
           bitfield_idx_(bitfield_idx),
-          transferred_from_(transferred_from) {}
+          prev_segment_idx_(prev_segment_idx) {}
 
     transport_idx_t const transport_idx_{};
     unsigned const stop_idx_start_{};
@@ -63,21 +63,21 @@ struct tb_query {
     bitfield_idx_t const bitfield_idx_{};
 
     // previous transport segment for reconstruction of journey
-    transport_segment const* transferred_from_;
+    std::optional<unsigned> const prev_segment_idx_;
   };
 
   void enqueue(transport_idx_t const transport_idx,
                unsigned const stop_idx,
                bitfield const& bf,
                unsigned const n,
-               transport_segment const* transferred_from);
+               std::optional<unsigned> const prev_segment_idx);
 
   // q_cur_[n] = cursor of Q_n
-  std::vector<std::size_t> q_cur_ = {0U};
+  std::vector<unsigned> q_cur_ = {0U};
   // q_start_[n] = start of Q_n
-  std::vector<std::size_t> q_start_ = {0U};
+  std::vector<unsigned> q_start_ = {0U};
   // q_end_[n] = end of Q_n (exclusive)
-  std::vector<std::size_t> q_end_ = {0U};
+  std::vector<unsigned> q_end_ = {0U};
   // all Q_n back to back
   std::vector<transport_segment> q_;
   // Q_n data structure - END
@@ -103,7 +103,7 @@ struct tb_query {
   query query_;
 
   // for a bitset with only one bit set to one, returns the index of this bit
-  constexpr int bitfield_to_day_idx(bitfield const&);
+  static constexpr int bitfield_to_day_idx(bitfield const&);
 
   void reset();
 

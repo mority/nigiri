@@ -102,7 +102,7 @@ void tb_query::enqueue(const transport_idx_t transport_idx,
                        const unsigned int stop_idx,
                        bitfield const& bf,
                        const unsigned int n,
-                       transport_segment const* transferred_from) {
+                       std::optional<unsigned> const prev_segment_idx) {
   auto const r_query_res = r_query(transport_idx, bf);
   if (stop_idx < r_query_res) {
 
@@ -115,7 +115,7 @@ void tb_query::enqueue(const transport_idx_t transport_idx,
 
     // add transport segment
     q_.emplace_back(transport_idx, stop_idx, r_query_res,
-                    tbp_.get_or_create_bfi(bf), transferred_from);
+                    tbp_.get_or_create_bfi(bf), prev_segment_idx);
     ++q_end_[n];
 
     // construct bf_new
@@ -272,18 +272,17 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
             }
             if (bf_seg.any()) {
               // enqueue if a matching bit is found
-              enqueue(transport_idx, stop_idx, bf_seg, 0, nullptr);
+              enqueue(transport_idx, stop_idx, bf_seg, 0, std::nullopt);
               break;
             }
-          }
-
-          // passing midnight?
-          if (dep_it + 1 == event_times.end()) {
-            ++sa_w;
-            // start with the earliest transport on the next day
-            dep_it = event_times.begin();
-          } else {
-            ++dep_it;
+            // passing midnight?
+            if (dep_it + 1 == event_times.end()) {
+              ++sa_w;
+              // start with the earliest transport on the next day
+              dep_it = event_times.begin();
+            } else {
+              ++dep_it;
+            }
           }
         }
       }
@@ -303,7 +302,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
     // iterate trip segments in Q_n
     for (; q_cur_[n] < q_end_[n]; ++q_cur_[n]) {
       // the current transport segment
-      auto const& tp_seg = q_[q_cur_[n]];
+      auto const tp_seg = q_[q_cur_[n]];
       // departure time at the start of the transport segment
       auto const tp_seg_dep = tt_.event_mam(
           tp_seg.transport_idx_, tp_seg.stop_idx_start_, event_type::kDep);
@@ -351,11 +350,8 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
         // iterate stops of the current transport segment
         for (auto stop_idx{tp_seg.stop_idx_start_ + 1};
              stop_idx <= tp_seg.stop_idx_end_; ++stop_idx) {
-          auto const stop = timetable::stop{
-              tt_.route_location_seq_
-                  [tt_.transport_route_[tp_seg.transport_idx_]][stop_idx]};
-          auto const ts_pair = tbp_.ts_.get_transfers(tp_seg.transport_idx_,
-                                                      stop.location_idx());
+          auto const ts_pair =
+              tbp_.ts_.get_transfers(tp_seg.transport_idx_, stop_idx);
           // check if there are transfers from this stop
           if (ts_pair.has_value()) {
             auto const transfers_start = ts_pair->first;
@@ -383,8 +379,8 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
               }
               // enqueue if transfer is possible
               if (bf_seg_to.any()) {
-                enqueue(transfer_cur.transport_idx_to_, stop_idx, bf_seg_to,
-                        n + 1, &tp_seg);
+                enqueue(transfer_cur.transport_idx_to_,
+                        transfer_cur.stop_idx_to_, bf_seg_to, n + 1, q_cur_[n]);
               }
             }
           }
@@ -399,8 +395,8 @@ void tb_query::reconstruct_journey(
 
   // the transport segment currently processed
   auto const* tp_seg = &last_tp_seg;
-  // follow transferred_from pointers back to the start of the journey
-  while (tp_seg != nullptr) {
+  // follow prev_segment_idx back to the start of the journey
+  while (true) {
     // the route index of the current segment
     auto const& route_idx = tt_.transport_route_[tp_seg->transport_idx_];
     // the location index of the start of the segment
@@ -435,21 +431,21 @@ void tb_query::reconstruct_journey(
     j.add(std::move(l_tp));
 
     // handle transfer from previous transport segment
-    if (tp_seg->transferred_from_ != nullptr) {
+    if (tp_seg->prev_segment_idx_.has_value()) {
       // increment number of transfers
       ++j.transfers_;
 
       // the previous transport segment
-      auto tp_seg_prev = tp_seg->transferred_from_;
+      auto const& tp_seg_prev = q_[tp_seg->prev_segment_idx_.value()];
 
       // the route index of the previous transport segment
       auto const route_idx_prev =
-          tt_.transport_route_[tp_seg_prev->transport_idx_];
+          tt_.transport_route_[tp_seg_prev.transport_idx_];
 
       // the location index of the start of the next transport segment
       auto const location_idx_end_prev =
           timetable::stop{tt_.route_location_seq_[route_idx_prev]
-                                                 [tp_seg_prev->stop_idx_end_]}
+                                                 [tp_seg_prev.stop_idx_end_]}
               .location_idx();
 
       // add footpath journey leg between different locations
@@ -461,13 +457,13 @@ void tb_query::reconstruct_journey(
           // this segment
           if (fp.target_ == location_idx_start) {
             // the day index identifies the instance of the transport segment
-            day_idx_t const day_idx_prev{bitfield_to_day_idx(
-                tt_.bitfields_[tp_seg_prev->bitfield_idx_])};
+            day_idx_t const day_idx_prev{
+                bitfield_to_day_idx(tt_.bitfields_[tp_seg_prev.bitfield_idx_])};
 
             // arrival time at the end of the previous segment
             auto const time_arr_end_prev =
-                tt_.event_mam(tp_seg_prev->transport_idx_,
-                              tp_seg_prev->stop_idx_end_, event_type::kArr);
+                tt_.event_mam(tp_seg_prev.transport_idx_,
+                              tp_seg_prev.stop_idx_end_, event_type::kArr);
 
             // unix time: arrival at the end of the previous segment
             auto const unix_end_prev =
@@ -487,10 +483,14 @@ void tb_query::reconstruct_journey(
           }
         }
       }
+    } else {
+      // processed a transport segment without previous segment, i.e., beginning
+      // of journey is reached
+      break;
     }
 
     // prep next iteration
-    tp_seg = tp_seg->transferred_from_;
+    tp_seg = &q_[tp_seg->prev_segment_idx_.value()];
   }
 
   // reverse order of journey legs

@@ -24,20 +24,19 @@ TEST(hash_transfer_set, basic) {
 
   // fill
   hash_transfer_set ts;
-  std::uint64_t transport_to = 30000U;
-  std::uint64_t location_to = 40000U;
-  std::uint64_t bitfield_from = 50000U;
+  unsigned transport_to = 30000U;
+  unsigned stop_idx_to = 40000U;
+  unsigned bitfield_from = 50000U;
   int shift_amount = 60000;
   for (std::uint64_t transport = 10000U; transport < 10010U; ++transport) {
     transport_idx_t const transport_idx_from{transport};
-    for (std::uint64_t location = 20000U; location < 20010U; ++location) {
-      location_idx_t const location_idx_from{location};
+    for (unsigned stop_idx_from = 20000U; stop_idx_from < 20010U;
+         ++stop_idx_from) {
       for (int i = 0; i < 10; ++i) {
         transport_idx_t const transport_idx_to{transport_to++};
-        location_idx_t const location_idx_to{location_to++};
         bitfield_idx_t const bitfield_idx_from{bitfield_from++};
-        ts.add(transport_idx_from, location_idx_from, transport_idx_to,
-               location_idx_to, bitfield_idx_from, shift_amount++);
+        ts.add(transport_idx_from, stop_idx_from, transport_idx_to,
+               stop_idx_to++, bitfield_idx_from, shift_amount++);
       }
     }
   }
@@ -46,26 +45,23 @@ TEST(hash_transfer_set, basic) {
   // check
   EXPECT_EQ(1000, ts.transfers_.size());
   transport_to = 30000U;
-  location_to = 40000U;
+  stop_idx_to = 40000U;
   bitfield_from = 50000U;
   shift_amount = 60000;
-  for (std::uint64_t transport = 10000U; transport < 10010U; ++transport) {
+  for (unsigned transport = 10000U; transport < 10010U; ++transport) {
     transport_idx_t const transport_idx_from{transport};
-    for (std::uint64_t location = 20000U; location < 20010U; ++location) {
-      location_idx_t const location_idx_from{location};
-
+    for (unsigned location = 20000U; location < 20010U; ++location) {
       std::optional<hash_transfer_set::entry> e =
-          ts.get_transfers(transport_idx_from, location_idx_from);
+          ts.get_transfers(transport_idx_from, location);
       ASSERT_TRUE(e.has_value());
       EXPECT_EQ(10, e->second - e->first);
 
       for (std::uint32_t i = e->first; i < e->second; ++i) {
         transfer const t = ts[i];
         transport_idx_t const transport_idx_to{transport_to++};
-        location_idx_t const location_idx_to{location_to++};
         bitfield_idx_t const bitfield_idx_from{bitfield_from++};
         EXPECT_EQ(transport_idx_to, t.transport_idx_to_);
-        EXPECT_EQ(location_idx_to, t.location_idx_to_);
+        EXPECT_EQ(stop_idx_to++, t.stop_idx_to_);
         EXPECT_EQ(bitfield_idx_from, t.bitfield_idx_);
         EXPECT_EQ(shift_amount++, t.shift_amount_);
       }
@@ -74,6 +70,6 @@ TEST(hash_transfer_set, basic) {
 
   // check non-existent key
   std::optional<hash_transfer_set::entry> const e =
-      ts.get_transfers(transport_idx_t{23U}, location_idx_t{42U});
+      ts.get_transfers(transport_idx_t{23U}, 42U);
   EXPECT_FALSE(e.has_value());
 }

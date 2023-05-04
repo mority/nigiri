@@ -400,7 +400,7 @@ S5,S5,,,,,,
 
 constexpr auto const unnecessary1_transfer_routes_file_content = std::string_view{
     R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
-R0,DTA,R0,R0,"S0 -> -> S2 -> S3 -> S4",2
+R0,DTA,R0,R0,"S0 -> S2 -> S3 -> S4",2
 R1,DTA,R1,R1,"S1 -> S2 -> S3 -> S5",2
 )"};
 

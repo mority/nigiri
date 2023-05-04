@@ -236,7 +236,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
 
           // ri_to might visit stop multiple times, skip if stop_to is the last
           // stop in the stop sequence of ri_to si_to: stop index to
-          for (std::size_t si_to = 0U;
+          for (unsigned si_to = 0U;
                si_to < tt_.route_location_seq_[ri_to].size() - 1; ++si_to) {
 
             auto const stop_to_cur =
@@ -443,7 +443,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                       if (is_impr) {
                         // construct and add transfer to transfer set
                         auto const bfi_from = get_or_create_bfi(bf_tf_from);
-                        ts_.add(tpi_from, li_from, tpi_to, li_to, bfi_from,
+                        ts_.add(tpi_from, si_from, tpi_to, si_to, bfi_from,
                                 -sa_total);
 
 #ifndef NDEBUG

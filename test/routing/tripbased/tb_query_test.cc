@@ -3,6 +3,7 @@
 #include "gtest/gtest.h"
 
 #include "nigiri/loader/gtfs/load_timetable.h"
+#include "nigiri/loader/init_finish.h"
 #include "nigiri/routing/tripbased/tb_query.h"
 
 #include "./test_data.h"
@@ -278,14 +279,10 @@ TEST(tb_query, enqueue) {
   // init query
   tb_query tbq{tbp};
 
-  // transferred from
-  tb_query::transport_segment transferred_from(transport_idx_t{23U}, 42U, 43U,
-                                               bitfield_idx_t{0U}, nullptr);
-
   transport_idx_t const tpi0{0U};
   auto const si0{3U};
   bitfield const bf0{"100000"};
-  tbq.enqueue(tpi0, si0, bf0, 0, &transferred_from);
+  tbq.enqueue(tpi0, si0, bf0, 0, std::nullopt);
   EXPECT_EQ(0, tbq.q_start_[0]);
   EXPECT_EQ(0, tbq.q_cur_[0]);
   EXPECT_EQ(1, tbq.q_end_[0]);
@@ -304,7 +301,7 @@ TEST(tb_query, enqueue) {
   EXPECT_EQ(si0, tbq.r_query(tpi1, bf1));
 
   auto const si1{2U};
-  tbq.enqueue(tpi1, si1, bf0, 1, &transferred_from);
+  tbq.enqueue(tpi1, si1, bf0, 1, std::nullopt);
   EXPECT_EQ(0, tbq.q_start_[0]);
   EXPECT_EQ(0, tbq.q_cur_[0]);
   EXPECT_EQ(1, tbq.q_end_[0]);
@@ -348,7 +345,7 @@ TEST(reconstruct_journey, no_transfer) {
 
   // create transport segment
   tb_query::transport_segment const tp_seg{transport_idx_t{0U}, 0U, 1U,
-                                           bitfield_idx_t{0U}, nullptr};
+                                           bitfield_idx_t{0U}, std::nullopt};
 
   journey j{};
   tbq.reconstruct_journey(tp_seg, j);
@@ -381,9 +378,11 @@ TEST(reconstruct_journey, same_day_transfer) {
 
   // create transport segments
   tb_query::transport_segment const tp_seg0{transport_idx_t{0U}, 0U, 1U,
-                                            bitfield_idx_t{0U}, nullptr};
+                                            bitfield_idx_t{0U}, std::nullopt};
   tb_query::transport_segment const tp_seg1{transport_idx_t{1U}, 0U, 1U,
-                                            bitfield_idx_t{0U}, &tp_seg0};
+                                            bitfield_idx_t{0U}, 0U};
+  tbq.q_.emplace_back(tp_seg0);
+  tbq.q_.emplace_back(tp_seg1);
 
   journey j{};
   tbq.reconstruct_journey(tp_seg1, j);
@@ -406,6 +405,7 @@ TEST(reconstruct_journey, transfer_with_footpath) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, footpath_files(), tt);
+  loader::finalize(tt);
 
   // hack footpath into timetable, somehow it is not created from test data
   location_id const li_s1{"S1", src};
@@ -428,9 +428,11 @@ TEST(reconstruct_journey, transfer_with_footpath) {
 
   // create transport segments
   tb_query::transport_segment const tp_seg0{transport_idx_t{0U}, 0U, 1U,
-                                            bitfield_idx_t{0U}, nullptr};
+                                            bitfield_idx_t{0U}, std::nullopt};
   tb_query::transport_segment const tp_seg1{transport_idx_t{1U}, 0U, 1U,
-                                            bitfield_idx_t{0U}, &tp_seg0};
+                                            bitfield_idx_t{0U}, 0U};
+  tbq.q_.emplace_back(tp_seg0);
+  tbq.q_.emplace_back(tp_seg1);
 
   journey j{};
   tbq.reconstruct_journey(tp_seg1, j);
@@ -463,6 +465,21 @@ TEST(reconstruct_journey, transfer_with_footpath) {
   EXPECT_EQ(dest_time_exp, j.dest_time_);
 }
 
+constexpr auto const same_day_transfer_journeys = R"(
+[2021-03-01 00:00, 2021-03-01 13:00]
+TRANSFERS: 1
+     FROM: (S0, S0) [2021-03-01 00:00]
+       TO: (S2, S2) [2021-03-01 13:00]
+leg 0: (S0, S0) [2021-03-01 00:00] -> (S1, S1) [2021-03-01 06:00]
+   0: S0      S0..............................................                               d: 01.03 00:00 [01.03 00:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON, src=0}]
+   1: S1      S1.............................................. a: 01.03 06:00 [01.03 06:00]
+leg 1: (S1, S1) [2021-03-01 12:00] -> (S2, S2) [2021-03-01 13:00]
+   0: S1      S1..............................................                               d: 01.03 12:00 [01.03 12:00]  [{name=R1 , day=2021-03-01, id=0/R1_MON, src=0}]
+   1: S2      S2.............................................. a: 01.03 13:00 [01.03 13:00]
+
+
+)";
+
 TEST(earliest_arrival_query, same_day_transfer) {
   // load timetable
   timetable tt;
@@ -475,4 +492,37 @@ TEST(earliest_arrival_query, same_day_transfer) {
 
   // run preprocessing
   tbp.build_transfer_set(true, true);
+
+  // init tb_query
+  tb_query tbq(tbp);
+
+  // construct input query
+  query const q{
+      .start_time_ = unixtime_t{sys_days{February / 28 / 2021} + 23h},
+      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
+      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
+      .use_start_footpaths_ = true,
+      .start_ = {nigiri::routing::offset{
+          tt.locations_.location_id_to_idx_.at({.id_ = "S0", .src_ = src}),
+          0_minutes, 0U}},
+      .destinations_ = {{nigiri::routing::offset{
+          tt.locations_.location_id_to_idx_.at({.id_ = "S2", .src_ = src}),
+          0_minutes, 0U}}},
+      .via_destinations_ = {},
+      .allowed_classes_ = bitset<kNumClasses>::max(),
+      .max_transfers_ = 6U,
+      .min_connection_count_ = 0U,
+      .extend_interval_earlier_ = false,
+      .extend_interval_later_ = false};
+
+  // process query
+  tbq.earliest_arrival_query(q);
+
+  std::stringstream ss;
+  ss << "\n";
+  for (auto const& x : tbq.j_) {
+    x.print(ss, tt);
+    ss << "\n\n";
+  }
+  EXPECT_EQ(std::string_view{same_day_transfer_journeys}, ss.str());
 }
