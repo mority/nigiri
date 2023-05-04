@@ -480,10 +480,10 @@ loader::mem_dir enqueue_files() {
 
 constexpr auto const footpath_stops_file_content = std::string_view{
     R"(stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
-S0,S0,,,,,,
+S0,S0,,49.931555,8.650017,,,
 S1,S1,footpath_start,49.87296,8.65152,,,
 S2,S2,footpath_end,49.87269, 8.65078,,,
-S3,S3,,,,,,
+S3,S3,,49.816721,8.644180,,,
 )"};
 
 constexpr auto const footpath_routes_file_content = std::string_view{
