@@ -380,7 +380,8 @@ TEST(reconstruct_journey, same_day_transfer) {
   tb_query::transport_segment const tp_seg0{transport_idx_t{0U}, 0U, 1U,
                                             bitfield_idx_t{0U}, std::nullopt};
   tb_query::transport_segment const tp_seg1{transport_idx_t{1U}, 0U, 1U,
-                                            bitfield_idx_t{0U}, 0U};
+                                            bitfield_idx_t{0U},
+                                            tb_query::transferred_from{0U, 1U}};
   tbq.q_.emplace_back(tp_seg0);
   tbq.q_.emplace_back(tp_seg1);
 
@@ -525,4 +526,117 @@ TEST(earliest_arrival_query, same_day_transfer) {
     ss << "\n\n";
   }
   EXPECT_EQ(std::string_view{same_day_transfer_journeys}, ss.str());
+}
+
+constexpr auto const long_transfer_journeys = R"(
+[2021-03-01 00:00, 2021-03-04 07:00]
+TRANSFERS: 1
+     FROM: (S0, S0) [2021-03-01 00:00]
+       TO: (S2, S2) [2021-03-04 07:00]
+leg 0: (S0, S0) [2021-03-01 00:00] -> (S1, S1) [2021-03-04 04:00]
+   0: S0      S0..............................................                               d: 01.03 00:00 [01.03 00:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON, src=0}]
+   1: S1      S1.............................................. a: 04.03 04:00 [04.03 04:00]
+leg 1: (S1, S1) [2021-03-04 06:00] -> (S2, S2) [2021-03-04 07:00]
+   0: S1      S1..............................................                               d: 04.03 06:00 [04.03 06:00]  [{name=R1 , day=2021-03-04, id=0/R1_THU, src=0}]
+   1: S2      S2.............................................. a: 04.03 07:00 [04.03 07:00]
+
+
+)";
+
+TEST(earliest_arrival_query, long_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, long_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  // init tb_query
+  tb_query tbq(tbp);
+
+  // construct input query
+  query const q{
+      .start_time_ = unixtime_t{sys_days{February / 28 / 2021} + 23h},
+      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
+      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
+      .use_start_footpaths_ = true,
+      .start_ = {nigiri::routing::offset{
+          tt.locations_.location_id_to_idx_.at({.id_ = "S0", .src_ = src}),
+          0_minutes, 0U}},
+      .destinations_ = {{nigiri::routing::offset{
+          tt.locations_.location_id_to_idx_.at({.id_ = "S2", .src_ = src}),
+          0_minutes, 0U}}},
+      .via_destinations_ = {},
+      .allowed_classes_ = bitset<kNumClasses>::max(),
+      .max_transfers_ = 6U,
+      .min_connection_count_ = 0U,
+      .extend_interval_earlier_ = false,
+      .extend_interval_later_ = false};
+
+  // process query
+  tbq.earliest_arrival_query(q);
+
+  std::stringstream ss;
+  ss << "\n";
+  for (auto const& x : tbq.j_) {
+    x.print(ss, tt);
+    ss << "\n\n";
+  }
+
+  EXPECT_EQ(std::string_view{long_transfer_journeys}, ss.str());
+}
+
+TEST(earliest_arrival_query, earlier_stop_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(src, earlier_stop_transfer_files(), tt);
+
+  // init preprocessing
+  tb_preprocessing tbp{tt};
+
+  // run preprocessing
+  tbp.build_transfer_set(true, true);
+
+  // init tb_query
+  tb_query tbq(tbp);
+
+  // construct input query
+  query const q{
+      .start_time_ = unixtime_t{sys_days{February / 28 / 2021} + 23h},
+      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
+      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
+      .use_start_footpaths_ = true,
+      .start_ = {nigiri::routing::offset{
+          tt.locations_.location_id_to_idx_.at({.id_ = "S3", .src_ = src}),
+          0_minutes, 0U}},
+      .destinations_ = {{nigiri::routing::offset{
+          tt.locations_.location_id_to_idx_.at({.id_ = "S2", .src_ = src}),
+          0_minutes, 0U}}},
+      .via_destinations_ = {},
+      .allowed_classes_ = bitset<kNumClasses>::max(),
+      .max_transfers_ = 6U,
+      .min_connection_count_ = 0U,
+      .extend_interval_earlier_ = false,
+      .extend_interval_later_ = false};
+
+  // process query
+  tbq.earliest_arrival_query(q);
+
+  std::stringstream ss;
+  ss << "\n";
+  for (auto const& x : tbq.j_) {
+    x.print(ss, tt);
+    ss << "\n\n";
+  }
+
+  std::cerr << ss.str() << std::endl;
+
+  // EXPECT_EQ(std::string_view{long_transfer_journeys}, ss.str());
 }

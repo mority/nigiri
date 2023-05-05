@@ -45,32 +45,40 @@ struct tb_query {
   // R(t) data structure - END
 
   // Q_n data structure - BEGIN
+  // for reconstruction of the journey
+  struct transferred_from {
+    // the index of the previous transport segment in q_
+    unsigned const q_idx_{};
+    // the stop index at which we transferred out of the previous segment
+    unsigned const stop_idx_{};
+  };
+
   struct transport_segment {
     transport_segment(transport_idx_t const transport_idx,
                       unsigned const stop_idx_start,
                       unsigned const stop_idx_end,
                       bitfield_idx_t const bitfield_idx,
-                      std::optional<unsigned> const prev_segment_idx)
+                      std::optional<transferred_from> const transferred_from)
         : transport_idx_(transport_idx),
           stop_idx_start_(stop_idx_start),
           stop_idx_end_(stop_idx_end),
           bitfield_idx_(bitfield_idx),
-          prev_segment_idx_(prev_segment_idx) {}
+          transferred_from_(transferred_from) {}
 
     transport_idx_t const transport_idx_{};
     unsigned const stop_idx_start_{};
-    unsigned const stop_idx_end_{};
+    unsigned stop_idx_end_{};
     bitfield_idx_t const bitfield_idx_{};
 
-    // previous transport segment for reconstruction of journey
-    std::optional<unsigned> const prev_segment_idx_;
+    // from which segment and how we transferred to this segment
+    std::optional<transferred_from> const transferred_from_{};
   };
 
   void enqueue(transport_idx_t const transport_idx,
                unsigned const stop_idx,
                bitfield const& bf,
                unsigned const n,
-               std::optional<unsigned> const prev_segment_idx);
+               std::optional<transferred_from> const transferred_from);
 
   // q_cur_[n] = cursor of Q_n
   std::vector<unsigned> q_cur_ = {0U};
@@ -88,8 +96,12 @@ struct tb_query {
             duration_t const time)
         : route_idx_(route_idx), stop_idx_(stop_idx), time_(time) {}
 
+    // the route index of the route that reaches the target location
     route_idx_t const route_idx_{};
+    // the stop index at which the route reaches the target location
     unsigned const stop_idx_{};
+    // the time it takes after exiting the route until the target location is
+    // reached
     duration_t time_{};
   };
 
