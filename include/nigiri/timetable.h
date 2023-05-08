@@ -125,6 +125,8 @@ struct timetable {
       return get(location_id_to_idx_.at(id));
     }
 
+    void resolve_timezones();
+
     // Station access: external station id -> internal station idx
     hash_map<location_id, location_idx_t> location_id_to_idx_;
     vecvec<location_idx_t, char> names_;
@@ -220,7 +222,7 @@ struct timetable {
     return merged_trips_idx_t{static_cast<merged_trips_idx_t::value_t>(idx)};
   }
 
-  source_file_idx_t register_source_file(char const* path) {
+  source_file_idx_t register_source_file(std::string_view path) {
     auto const idx = source_file_idx_t{source_file_names_.size()};
     source_file_names_.emplace_back(path);
     return idx;

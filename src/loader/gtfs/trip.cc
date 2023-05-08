@@ -38,6 +38,11 @@ block::rule_services(trip_data& trips) {
     return is_empty;
   });
 
+  if (trips_.size() == 1) {
+    return {{std::pair{std::basic_string<gtfs_trip_idx_t>{trips_.front()},
+                       *trips.get(trips_.front()).service_}}};
+  }
+
   std::sort(begin(trips_), end(trips_),
             [&](gtfs_trip_idx_t const a_idx, gtfs_trip_idx_t const b_idx) {
               auto const& a = trips.get(a_idx);
@@ -50,7 +55,7 @@ block::rule_services(trip_data& trips) {
     bitfield traffic_days_;
   };
   auto rule_trips = utl::to_vec(trips_, [&](auto&& t) {
-    return rule_trip{t, *trips.data_[t].service_};
+    return rule_trip{t, *trips.get(t).service_};
   });
 
   struct queue_entry {
@@ -91,6 +96,7 @@ block::rule_services(trip_data& trips) {
         for (auto& rt : collected_trips) {
           rt->traffic_days_ &= ~traffic_days;
         }
+
         combinations.emplace_back(
             utl::transform_to<std::basic_string<gtfs_trip_idx_t>>(
                 collected_trips, [](auto&& rt) { return rt->trip_; }),
@@ -228,24 +234,33 @@ trip_data read_trips(route_map_t const& routes,
   utl::line_range{
       utl::make_buf_reader(file_content, progress_tracker->update_fn())}  //
       | utl::csv<csv_trip>()  //
-      | utl::for_each([&](csv_trip const& t) {
-          auto const blk = t.block_id_->trim().empty()
-                               ? nullptr
-                               : utl::get_or_create(
-                                     ret.blocks_, t.block_id_->trim().view(),
+      |
+      utl::for_each([&](csv_trip const& t) {
+        auto const traffic_days_it =
+            services.traffic_days_.find(t.service_id_->view());
+        if (traffic_days_it == end(services.traffic_days_)) {
+          log(log_lvl::error, "loader.gtfs.trip",
+              R"(trip "{}": service_id "{}" not found)", t.trip_id_->view(),
+              t.service_id_->view());
+          return;
+        }
+
+        auto const blk =
+            t.block_id_->trim().empty()
+                ? nullptr
+                : utl::get_or_create(ret.blocks_, t.block_id_->trim().view(),
                                      []() { return std::make_unique<block>(); })
-                                     .get();
-          auto const trp_idx = gtfs_trip_idx_t{ret.data_.size()};
-          ret.data_.emplace_back(
-              routes.at(t.route_id_->view()).get(),
-              services.traffic_days_.at(t.service_id_->view()).get(), blk,
-              t.trip_id_->to_str(), t.trip_headsign_->to_str(),
-              t.trip_short_name_->to_str());
-          ret.trips_.emplace(t.trip_id_->to_str(), trp_idx);
-          if (blk != nullptr) {
-            blk->trips_.emplace_back(trp_idx);
-          }
-        });
+                      .get();
+        auto const trp_idx = gtfs_trip_idx_t{ret.data_.size()};
+        ret.data_.emplace_back(routes.at(t.route_id_->view()).get(),
+                               traffic_days_it->second.get(), blk,
+                               t.trip_id_->to_str(), t.trip_headsign_->to_str(),
+                               t.trip_short_name_->to_str());
+        ret.trips_.emplace(t.trip_id_->to_str(), trp_idx);
+        if (blk != nullptr) {
+          blk->trips_.emplace_back(trp_idx);
+        }
+      });
   return ret;
 }
 
