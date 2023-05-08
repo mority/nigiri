@@ -431,7 +431,8 @@ TEST(reconstruct_journey, transfer_with_footpath) {
   tb_query::transport_segment const tp_seg0{transport_idx_t{0U}, 0U, 1U,
                                             bitfield_idx_t{0U}, std::nullopt};
   tb_query::transport_segment const tp_seg1{transport_idx_t{1U}, 0U, 1U,
-                                            bitfield_idx_t{0U}, 0U};
+                                            bitfield_idx_t{0U},
+                                            tb_query::transferred_from{0U, 1U}};
   tbq.q_.emplace_back(tp_seg0);
   tbq.q_.emplace_back(tp_seg1);
 
