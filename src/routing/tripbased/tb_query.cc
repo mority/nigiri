@@ -412,15 +412,14 @@ void tb_query::reconstruct_journey(
         timetable::stop{
             tt_.route_location_seq_[route_idx][tp_seg->stop_idx_start_]}
             .location_idx();
+    // the stop index of the end of the segment
+    auto const stop_idx_end = stop_idx_end_prev.has_value()
+                                  ? stop_idx_end_prev.value()
+                                  : tp_seg->stop_idx_end_;
     // the location index of the end of the segment
     auto const location_idx_end =
-        stop_idx_end_prev.has_value()
-            ? timetable::stop{tt_.route_location_seq_
-                                  [route_idx][stop_idx_end_prev.value()]}
-                  .location_idx()
-            : timetable::stop{tt_.route_location_seq_[route_idx]
-                                                     [tp_seg->stop_idx_end_]}
-                  .location_idx();
+        timetable::stop{tt_.route_location_seq_[route_idx][stop_idx_end]}
+            .location_idx();
     // the day index identifies the instance of the transport segment
     day_idx_t const day_idx{
         bitfield_to_day_idx(tt_.bitfields_[tp_seg->bitfield_idx_])};
@@ -437,7 +436,7 @@ void tb_query::reconstruct_journey(
     // add journey leg for this transport segment
     journey::transport_enter_exit tee{
         transport{tp_seg->transport_idx_, day_idx}, tp_seg->stop_idx_start_,
-        tp_seg->stop_idx_end_};
+        stop_idx_end};
     journey::leg l_tp{direction::kForward, location_idx_start, location_idx_end,
                       unix_start,          unix_end,           tee};
     j.add(std::move(l_tp));

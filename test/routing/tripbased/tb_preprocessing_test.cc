@@ -3,6 +3,8 @@
 #include "gtest/gtest.h"
 
 #include "nigiri/loader/gtfs/load_timetable.h"
+#include "nigiri/loader/init_finish.h"
+
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
 
 #include "./test_data.h"
@@ -323,6 +325,7 @@ TEST(initial_transfer_computation, no_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, no_transfer_files(), tt);
+  loader::finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -339,6 +342,26 @@ TEST(initial_transfer_computation, same_day_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, same_day_transfer_files(), tt);
+
+  std::cerr << "before finalize(tt)" << std::endl;
+  for (auto i{0U}; i < tt.locations_.ids_.size(); ++i) {
+    std::cerr << tt.locations_.get(location_idx_t{i}) << std::endl;
+    for (auto const& fp : tt.locations_.footpaths_out_[location_idx_t{i}]) {
+      std::cerr << "footpath to: " << tt.locations_.get(fp.target_)
+                << std::endl;
+    }
+  }
+
+  loader::finalize(tt);
+
+  std::cerr << "after finalize(tt)" << std::endl;
+  for (auto i{0U}; i < tt.locations_.ids_.size(); ++i) {
+    std::cerr << tt.locations_.get(location_idx_t{i}) << std::endl;
+    for (auto const& fp : tt.locations_.footpaths_out_[location_idx_t{i}]) {
+      std::cerr << "footpath to: " << tt.locations_.get(fp.target_)
+                << std::endl;
+    }
+  }
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -1172,6 +1195,7 @@ TEST(load_gtfs, reuse_block_id) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, reuse_block_id_files(), tt);
+  loader::finalize(tt);
 
   EXPECT_EQ(2, tt.route_location_seq_.size());
 }
