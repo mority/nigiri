@@ -63,8 +63,8 @@ struct hash_transfer_set {
 };
 
 // returns the number of times midnight is passed
-constexpr int num_midnights(duration_t const& d) {
-  return int(d.count() / 1440);
+constexpr day_idx_t num_midnights(duration_t const& d) {
+  return day_idx_t{d.count() / 1440};
 }
 
 // returns the time of day given a duration that starts at midnight

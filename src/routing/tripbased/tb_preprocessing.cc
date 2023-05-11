@@ -248,7 +248,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
             if (li_to_cur == li_to) {
 
               // sa_w: shift amount due to waiting for connection
-              int sa_w = 0;
+              day_idx_t sa_w{0U};
 
               // departure times of transports of route ri_to at stop si_to
               auto const event_times =
@@ -290,7 +290,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
               while (omega.any()) {
 
                 // departure time of current transport in relation to time a
-                auto const dep_cur = *dep_it + duration_t{sa_w * 1440};
+                auto const dep_cur = *dep_it + duration_t{sa_w.v_ * 1440};
 
                 // offset from begin of tp_to interval
                 auto const tp_to_offset =
@@ -333,7 +333,9 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                   auto const sa_tp_to = num_midnights(*dep_it);
 
                   // total shift amount
-                  auto const sa_total = sa_tp_to - (sa_tp_from + sa_fp + sa_w);
+                  auto const sa_total =
+                      static_cast<int>(sa_tp_to.v_) -
+                      static_cast<int>(sa_tp_from.v_ + sa_fp.v_ + sa_w.v_);
 
                   // bitfield transport to
                   auto const& bf_tp_to =
@@ -444,8 +446,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                         // construct and add transfer to transfer set
                         auto const bfi_from = get_or_create_bfi(bf_tf_from);
                         ts_.add(tpi_from, si_from, tpi_to, si_to, bfi_from,
-                                static_cast<std::uint32_t>(sa_fp) +
-                                    static_cast<std::uint32_t>(sa_w));
+                                sa_fp.v_ + sa_w.v_);
 
 #ifndef NDEBUG
                         TBDL << "transfer added:" << std::endl

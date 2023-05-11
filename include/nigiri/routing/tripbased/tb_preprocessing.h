@@ -37,7 +37,7 @@ struct tb_preprocessing {
   };
 
   tb_preprocessing() = delete;
-  explicit tb_preprocessing(timetable& tt, int sa_w_max = 1)
+  explicit tb_preprocessing(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
       : tt_(tt), sa_w_max_(sa_w_max) {}
 
   void build_transfer_set(bool uturn_removal = true, bool reduction = true);
@@ -54,7 +54,7 @@ struct tb_preprocessing {
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
   timetable& tt_;
-  int const sa_w_max_{};  // look-ahead
+  day_idx_t const sa_w_max_{};  // look-ahead
   hash_transfer_set ts_{};
 };
 

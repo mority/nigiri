@@ -23,16 +23,6 @@ struct tb_query {
 
   // R(t) data structure - BEGIN
   struct r_entry {
-    constexpr r_entry(transport_idx_t const transport_idx,
-                      std::uint16_t const stop_idx,
-                      day_idx_t day_idx_start,
-                      day_idx_t day_idx_end)
-        : transport_idx_(transport_idx),
-          stop_idx_(stop_idx),
-          day_idx_start_(day_idx_start),
-          day_idx_end_(day_idx_end) {}
-
-    transport_idx_t transport_idx_{};
     std::uint16_t stop_idx_{};
     day_idx_t day_idx_start_{};
     day_idx_t day_idx_end_{};
@@ -42,9 +32,9 @@ struct tb_query {
                 std::uint16_t const stop_idx,
                 day_idx_t const);
 
-  unsigned r_query(transport_idx_t const, day_idx_t const);
+  std::uint16_t r_query(transport_idx_t const, day_idx_t const);
 
-  std::vector<r_entry> r_;
+  mutable_fws_multimap<transport_idx_t, r_entry> r_{};
   // R(t) data structure - END
 
   // Q_n data structure - BEGIN
@@ -73,7 +63,7 @@ struct tb_query {
   void enqueue(transport_idx_t const transport_idx,
                std::uint16_t const stop_idx,
                day_idx_t day_idx,
-               std::uint8_t const n,
+               std::uint32_t const n,
                std::uint32_t const transferred_from);
 
   // q_cur_[n] = cursor of Q_n

@@ -9,92 +9,49 @@ void tb_query::r_update(transport_idx_t const transport_idx,
                         std::uint16_t const stop_idx,
                         day_idx_t day_idx) {
 
-  // find first tuple of this transport_idx
-  auto r_cur = std::lower_bound(
-      r_.begin(), r_.end(), transport_idx,
-      [](r_entry const& re, transport_idx_t const& tpi) constexpr {
-        return re.transport_idx_ < tpi;
-      });
+  auto day_idx_end = std::numeric_limits<day_idx_t>::max();
 
-  // no entry for this transport_idx
-  if (r_cur == r_.end()) {
-    r_.emplace_back(transport_idx, stop_idx, tbp_.get_or_create_bfi(bf_new));
-    return;
-  } else if (transport_idx < r_cur->transport_idx_) {
-    r_.emplace(r_cur, transport_idx, stop_idx, tbp_.get_or_create_bfi(bf_new));
-    return;
-  }
-
-  // remember first erasure as possible overwrite spot
-  auto overwrite_spot = r_.end();
-
-  while (r_cur != r_.end() && r_cur->transport_idx_ == transport_idx) {
-    if (bf_new.none()) {
-      // early termination
+  for (auto re : r_[transport_idx]) {
+    if (stop_idx < re.stop_idx_) {
+      if (day_idx <= re.day_idx_start_) {
+        // TODO this should be a deletion
+        re.day_idx_start_ = re.day_idx_end_;
+      } else if (day_idx < re.day_idx_end_) {
+        re.day_idx_end_ = day_idx;
+      }
+    } else if (stop_idx == re.stop_idx_) {
+      if (day_idx < re.day_idx_start_) {
+        // TODO this should be a deletion
+        re.day_idx_start_ = re.day_idx_end_;
+      } else {
+        // new entry already covered by current entry
+        return;
+      }
+    } else if (day_idx < re.day_idx_start_) {
+      day_idx_end = re.day_idx_start_;
+    } else {
+      // new entry already covered by current entry
       return;
-    } else if (stop_idx < r_cur->stop_idx_) {
-      // new stop index is better than current
-      auto const bf_cur = tt_.bitfields_[r_cur->bitfield_idx_] & ~bf_new;
-      if (bf_cur.none()) {
-        if (overwrite_spot == r_.end()) {
-          overwrite_spot = r_cur;
-          ++r_cur;
-        } else {
-          r_.erase(r_cur);
-        }
-      } else {
-        r_cur->bitfield_idx_ = tbp_.get_or_create_bfi(bf_cur);
-        ++r_cur;
-      }
-    } else if (stop_idx == r_cur->stop_idx_) {
-      // new stop index is equal to current
-      bf_new |= tt_.bitfields_[r_cur->bitfield_idx_];
-      if (overwrite_spot == r_.end()) {
-        overwrite_spot = r_cur;
-        ++r_cur;
-      } else {
-        r_.erase(r_cur);
-      }
-    } else {
-      // new stop index is worse than current
-      bf_new &= ~tt_.bitfields_[r_cur->bitfield_idx_];
-      ++r_cur;
     }
   }
 
-  if (bf_new.any()) {
-    if (overwrite_spot == r_.end()) {
-      r_.emplace(r_cur, transport_idx, stop_idx,
-                 tbp_.get_or_create_bfi(bf_new));
-    } else {
-      overwrite_spot->stop_idx_ = stop_idx;
-      overwrite_spot->bitfield_idx_ = tbp_.get_or_create_bfi(bf_new);
-    }
-  }
+  r_[transport_idx].emplace_back(stop_idx, day_idx, day_idx_end);
 }
 
-unsigned tb_query::r_query(transport_idx_t const transport_idx,
-                           day_idx_t const day_idx) {
+std::uint16_t tb_query::r_query(transport_idx_t const transport_idx,
+                                day_idx_t const day_idx) {
 
-  // find first entry for this transport_idx
-  auto r_cur = std::lower_bound(
-      r_.begin(), r_.end(), transport_idx,
-      [](r_entry const& re, transport_idx_t const& tpi) constexpr {
-        return re.transport_idx_ < tpi;
-      });
-
-  // find matching entry for provided bitfield
-  while (r_cur != r_.end() && transport_idx == r_cur->transport_idx_) {
-    if ((tt_.bitfields_[r_cur->bitfield_idx_] & bf_query).any()) {
-      return r_cur->stop_idx_;
+  // look up stop index for the provided day index
+  for (auto re : r_[transport_idx]) {
+    if (re.day_idx_start_ <= day_idx && day_idx < re.day_idx_end_) {
+      return re.stop_idx_;
     }
-    ++r_cur;
   }
 
-  // no entry for this transport_idx
+  // no entry for this transport_idx/day_idx combination
   // return stop index of final stop of the transport
-  return tt_.route_location_seq_[tt_.transport_route_[transport_idx]].size() -
-         1;
+  return static_cast<uint16_t>(
+      tt_.route_location_seq_[tt_.transport_route_[transport_idx]].size() - 1);
 }
 
 void tb_query::enqueue(const transport_idx_t transport_idx,
@@ -113,34 +70,25 @@ void tb_query::enqueue(const transport_idx_t transport_idx,
     }
 
     // add transport segment
-    q_.emplace_back(transport_idx, stop_idx, r_query_res,
-                    tbp_.get_or_create_bfi(bf), transferred_from);
+    q_.emplace_back(transport_idx, stop_idx, r_query_res, day_idx,
+                    transferred_from);
     ++q_end_[n];
-
-    // construct bf_new
-    auto k{0U};
-    for (; k < bf.size(); ++k) {
-      if (bf.test(k)) {
-        break;
-      }
-    }
-    bitfield bf_new = ~bitfield{} << k;
 
     // update all transports of this route
     auto const route_idx = tt_.transport_route_[transport_idx];
     for (auto const transport_idx_it : tt_.route_transport_ranges_[route_idx]) {
+      // construct d_new
+      auto day_idx_new = day_idx;
 
       // set the bit of the day of the instance to false if the current
       // transport is earlier than the newly enqueued
       auto const mam_u = tt_.event_mam(transport_idx_it, 0U, event_type::kDep);
       auto const mam_t = tt_.event_mam(transport_idx, 0U, event_type::kDep);
       if (mam_u < mam_t) {
-        bf_new.set(k, false);
-      } else {
-        bf_new.set(k, true);
+        ++day_idx_new;
       }
 
-      r_update(transport_idx_it, stop_idx, bf_new);
+      r_update(transport_idx_it, stop_idx, day_idx_new);
     }
   }
 }
@@ -186,6 +134,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
   auto const day_idx = day_idx_mam_pair.first;
   // minutes after midnight on the start day
   auto const start_mam = day_idx_mam_pair.second;
+
   // bit set identifying the start day
   bitfield start_day{};
   start_day.set(day_idx.v_);
@@ -221,14 +170,14 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
     // iterate routes at target stop of footpath
     for (auto const route_idx : tt_.location_routes_[fp.target_]) {
       // iterate stop sequence of route, skip last stop
-      for (auto stop_idx{0U};
+      for (std::uint16_t stop_idx = 0U;
            stop_idx < tt_.route_location_seq_[route_idx].size() - 1;
            ++stop_idx) {
         auto const stop =
             timetable::stop{tt_.route_location_seq_[route_idx][stop_idx]};
         if (stop.location_idx() == fp.target_) {
           // shift amount due to waiting for connection
-          int sa_w = 0;
+          std::uint16_t sa_w = 0;
           // departure times of this route at this stop
           auto const event_times =
               tt_.event_times_at_stop(route_idx, stop_idx, event_type::kDep);
@@ -249,7 +198,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
             // shift amount due to travel time of transport
             auto const sa_t = num_midnights(*dep_it);
             // total shift amount
-            auto const sa_total = sa_fp + sa_w - sa_t;
+            auto const day_idx_seg = day_idx + sa_fp + sa_w - sa_t;
             // offset of connecting transport in route_transport_ranges
             auto const offset_transport =
                 std::distance(event_times.begin(), dep_it);
@@ -260,18 +209,11 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
             // bitfield of the connecting transport
             auto const& bf_transport =
                 tt_.bitfields_[tt_.transport_traffic_days_[transport_idx]];
-            // bitfield that identifies the instance of the connecting transport
-            // segment
-            auto bf_seg = bf_transport;
-            // align bitfields and perform AND operation
-            if (sa_total < 0) {
-              bf_seg &= start_day >> static_cast<unsigned>(-1 * sa_total);
-            } else {
-              bf_seg &= start_day << static_cast<unsigned>(sa_total);
-            }
-            if (bf_seg.any()) {
-              // enqueue if a matching bit is found
-              enqueue(transport_idx, stop_idx, bf_seg, 0, std::nullopt);
+
+            if (bf_transport.test(day_idx_seg.v_)) {
+              // enqueue segment if a matching bit is found
+              enqueue(transport_idx, stop_idx, day_idx_seg, 0U,
+                      std::numeric_limits<std::uint32_t>::max());
               break;
             }
             // passing midnight?
@@ -291,10 +233,6 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
   // minimal travel time observed so far
   auto t_min = duration_t::max();
 
-  // identifies instances of a transport segment that is the target of a
-  // transfer
-  bitfield bf_seg_to{};
-
   // process all Q_n in ascending order, i.e., transport segments reached after
   // n transfers
   for (auto n{0U}; n != q_start_.size(); ++n) {
@@ -305,15 +243,13 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
       // departure time at the start of the transport segment
       auto const tp_seg_dep = tt_.event_mam(
           tp_seg.transport_idx_, tp_seg.stop_idx_start_, event_type::kDep);
-      // day index of the query
-      auto const x = static_cast<int>(day_idx.v_);
-      // day index of the current transport segment
-      auto const y = bitfield_to_day_idx(tt_.bitfields_[tp_seg.bitfield_idx_]) +
-                     num_midnights(tp_seg_dep);
       // departure time at start of current transport segment in minutes after
       // midnight on the day of the query
       auto const dep_query =
-          (y - x) * duration_t{1440} + time_of_day(tp_seg_dep);
+          duration_t{
+              (tp_seg.day_idx_.v_ + num_midnights(tp_seg_dep).v_ - day_idx.v_) *
+              1440U} +
+          time_of_day(tp_seg_dep);
 
       // check if target location is reached from current transport segment
       for (auto const& le : l_) {
@@ -350,7 +286,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
       // transfer out of current transport segment?
       if (dep_query + travel_time_next < t_min) {
         // iterate stops of the current transport segment
-        for (auto stop_idx{tp_seg.stop_idx_start_ + 1};
+        for (auto stop_idx{tp_seg.stop_idx_start_ + 1U};
              stop_idx <= tp_seg.stop_idx_end_; ++stop_idx) {
           auto const ts_pair =
               tbp_.ts_.get_transfers(tp_seg.transport_idx_, stop_idx);
@@ -363,27 +299,26 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
                  transfer_idx != transfers_end; ++transfer_idx) {
               // the current transfer
               auto const& transfer_cur = tbp_.ts_[transfer_idx];
-              // bitset specifying the instance of the transport segment
-              auto const& bf_seg = tt_.bitfields_[tp_seg.bitfield_idx_];
               // bitset specifying the days on which the transfer is possible
               // from the current transport segment
               auto const& bf_transfer =
                   tt_.bitfields_[transfer_cur.bitfield_idx_];
-              // compute the instance of transport segment that we are
-              // transferring to
-              if (transfer_cur.shift_amount_ < 0) {
-                bf_seg_to = (bf_seg & bf_transfer) >>
-                            static_cast<unsigned>(-transfer_cur.shift_amount_);
-              } else {
-                bf_seg_to =
-                    (bf_seg & bf_transfer)
-                    << static_cast<unsigned>(transfer_cur.shift_amount_);
-              }
               // enqueue if transfer is possible
-              if (bf_seg_to.any()) {
+              if (bf_transfer.test(tp_seg.day_idx_.v_)) {
+                // arrival time at start location of transfer
+                auto const time_arr = tt_.event_mam(tp_seg.transport_idx_,
+                                                    stop_idx, event_type::kArr);
+                // departure time at end location of transfer
+                auto const time_dep =
+                    tt_.event_mam(transfer_cur.transport_idx_to_,
+                                  transfer_cur.stop_idx_to_, event_type::kDep);
+
+                auto const day_index_transfer =
+                    tp_seg.day_idx_ + num_midnights(time_arr) -
+                    num_midnights(time_dep) + transfer_cur.passes_midnight_;
                 enqueue(transfer_cur.transport_idx_to_,
-                        transfer_cur.stop_idx_to_, bf_seg_to, n + 1,
-                        transferred_from{q_cur_[n], stop_idx});
+                        static_cast<std::uint16_t>(transfer_cur.stop_idx_to_),
+                        day_index_transfer, n + 1U, q_cur_[n]);
               }
             }
           }
