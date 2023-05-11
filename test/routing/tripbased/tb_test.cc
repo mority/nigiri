@@ -24,10 +24,10 @@ TEST(hash_transfer_set, basic) {
 
   // fill
   hash_transfer_set ts;
-  unsigned transport_to = 30000U;
-  unsigned stop_idx_to = 40000U;
-  unsigned bitfield_from = 50000U;
-  int shift_amount = 60000;
+  std::uint32_t transport_to = 30000U;
+  std::uint32_t stop_idx_to = 40000U;
+  std::uint32_t bitfield_from = 50000U;
+  std::uint32_t passes_midnight = 0U;
   for (std::uint64_t transport = 10000U; transport < 10010U; ++transport) {
     transport_idx_t const transport_idx_from{transport};
     for (unsigned stop_idx_from = 20000U; stop_idx_from < 20010U;
@@ -36,7 +36,7 @@ TEST(hash_transfer_set, basic) {
         transport_idx_t const transport_idx_to{transport_to++};
         bitfield_idx_t const bitfield_idx_from{bitfield_from++};
         ts.add(transport_idx_from, stop_idx_from, transport_idx_to,
-               stop_idx_to++, bitfield_idx_from, shift_amount++);
+               stop_idx_to++, bitfield_idx_from, passes_midnight);
       }
     }
   }
@@ -47,7 +47,7 @@ TEST(hash_transfer_set, basic) {
   transport_to = 30000U;
   stop_idx_to = 40000U;
   bitfield_from = 50000U;
-  shift_amount = 60000;
+  passes_midnight = 0U;
   for (unsigned transport = 10000U; transport < 10010U; ++transport) {
     transport_idx_t const transport_idx_from{transport};
     for (unsigned location = 20000U; location < 20010U; ++location) {
@@ -63,7 +63,7 @@ TEST(hash_transfer_set, basic) {
         EXPECT_EQ(transport_idx_to, t.transport_idx_to_);
         EXPECT_EQ(stop_idx_to++, t.stop_idx_to_);
         EXPECT_EQ(bitfield_idx_from, t.bitfield_idx_);
-        EXPECT_EQ(shift_amount++, t.shift_amount_);
+        EXPECT_EQ(passes_midnight++, t.passes_midnight_);
       }
     }
   }

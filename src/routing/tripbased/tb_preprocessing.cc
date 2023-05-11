@@ -444,7 +444,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                         // construct and add transfer to transfer set
                         auto const bfi_from = get_or_create_bfi(bf_tf_from);
                         ts_.add(tpi_from, si_from, tpi_to, si_to, bfi_from,
-                                -sa_total);
+                                static_cast<std::uint32_t>(sa_fp) +
+                                    static_cast<std::uint32_t>(sa_w));
 
 #ifndef NDEBUG
                         TBDL << "transfer added:" << std::endl

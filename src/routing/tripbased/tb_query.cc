@@ -6,9 +6,8 @@ using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
 void tb_query::r_update(transport_idx_t const transport_idx,
-                        unsigned const stop_idx,
-                        bitfield const& bf) {
-  bitfield bf_new = bf;
+                        std::uint16_t const stop_idx,
+                        day_idx_t day_idx) {
 
   // find first tuple of this transport_idx
   auto r_cur = std::lower_bound(
@@ -75,7 +74,7 @@ void tb_query::r_update(transport_idx_t const transport_idx,
 }
 
 unsigned tb_query::r_query(transport_idx_t const transport_idx,
-                           bitfield const& bf_query) {
+                           day_idx_t const day_idx) {
 
   // find first entry for this transport_idx
   auto r_cur = std::lower_bound(
@@ -99,11 +98,11 @@ unsigned tb_query::r_query(transport_idx_t const transport_idx,
 }
 
 void tb_query::enqueue(const transport_idx_t transport_idx,
-                       const unsigned int stop_idx,
-                       bitfield const& bf,
-                       const unsigned int n,
-                       std::optional<transferred_from> const transferred_from) {
-  auto const r_query_res = r_query(transport_idx, bf);
+                       std::uint16_t const stop_idx,
+                       day_idx_t const day_idx,
+                       std::uint8_t const n,
+                       std::uint32_t const transferred_from) {
+  auto const r_query_res = r_query(transport_idx, day_idx);
   if (stop_idx < r_query_res) {
 
     // new n?

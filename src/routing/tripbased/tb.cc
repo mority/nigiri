@@ -3,11 +3,11 @@
 namespace nigiri::routing::tripbased {
 
 void hash_transfer_set::add(transport_idx_t const& transport_idx_from,
-                            unsigned const stop_idx_from,
+                            std::uint32_t const stop_idx_from,
                             transport_idx_t const& transport_idx_to,
-                            unsigned const stop_idx_to,
-                            bitfield_idx_t const& bitfield_idx_from,
-                            int shift_amount) {
+                            std::uint32_t const stop_idx_to,
+                            bitfield_idx_t const& bitfield_idx,
+                            std::uint32_t passes_midnight) {
   assert(!finalized_);
 
   if (!initialized_) {
@@ -34,8 +34,8 @@ void hash_transfer_set::add(transport_idx_t const& transport_idx_from,
     cur_length_ = 0U;
   }
 
-  transfers_.emplace_back(transport_idx_to, stop_idx_to, bitfield_idx_from,
-                          shift_amount);
+  transfers_.emplace_back(bitfield_idx, transport_idx_to, stop_idx_to,
+                          passes_midnight);
   ++cur_length_;
 }
 
