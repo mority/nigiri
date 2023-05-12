@@ -7,11 +7,15 @@ using namespace nigiri::routing::tripbased;
 
 void tb_query::r_update(transport_idx_t const transport_idx,
                         std::uint16_t const stop_idx,
-                        day_idx_t day_idx) {
+                        day_idx_t const day_idx) {
 
   auto day_idx_end = std::numeric_limits<day_idx_t>::max();
 
   for (auto re : r_[transport_idx]) {
+    // TODO not necessary if invalid tuples are deleted
+    if (re.day_idx_start_ == re.day_idx_end_) {
+      continue;
+    }
     if (stop_idx < re.stop_idx_) {
       if (day_idx <= re.day_idx_start_) {
         // TODO this should be a deletion

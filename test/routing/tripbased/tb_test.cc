@@ -8,16 +8,16 @@ using namespace nigiri::routing::tripbased;
 
 TEST(tripbased, num_midnights) {
   duration_t zero{0U};
-  EXPECT_EQ(0, num_midnights(zero));
+  EXPECT_EQ(day_idx_t{0}, num_midnights(zero));
 
   duration_t half_day{720U};
-  EXPECT_EQ(0, num_midnights(half_day));
+  EXPECT_EQ(day_idx_t{0}, num_midnights(half_day));
 
   duration_t one_day{1440U};
-  EXPECT_EQ(1, num_midnights(one_day));
+  EXPECT_EQ(day_idx_t{1}, num_midnights(one_day));
 
   duration_t one_half_day{1440U + 720U};
-  EXPECT_EQ(1, num_midnights(one_half_day));
+  EXPECT_EQ(day_idx_t{1}, num_midnights(one_half_day));
 }
 
 TEST(hash_transfer_set, basic) {
@@ -36,7 +36,7 @@ TEST(hash_transfer_set, basic) {
         transport_idx_t const transport_idx_to{transport_to++};
         bitfield_idx_t const bitfield_idx_from{bitfield_from++};
         ts.add(transport_idx_from, stop_idx_from, transport_idx_to,
-               stop_idx_to++, bitfield_idx_from, passes_midnight);
+               stop_idx_to++, bitfield_idx_from, passes_midnight++ % 2);
       }
     }
   }
@@ -63,7 +63,7 @@ TEST(hash_transfer_set, basic) {
         EXPECT_EQ(transport_idx_to, t.transport_idx_to_);
         EXPECT_EQ(stop_idx_to++, t.stop_idx_to_);
         EXPECT_EQ(bitfield_idx_from, t.bitfield_idx_);
-        EXPECT_EQ(passes_midnight++, t.passes_midnight_);
+        EXPECT_EQ(passes_midnight++ % 2, t.passes_midnight_);
       }
     }
   }

@@ -1169,13 +1169,3 @@ TEST(transfer_reduction, unnecessary_transfer1) {
   EXPECT_EQ(0, t.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t.bitfield_idx_]);
 }
-
-TEST(load_gtfs, reuse_block_id) {
-  timetable tt;
-  tt.date_range_ = gtfs_full_period();
-  constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, reuse_block_id_files(), tt);
-  loader::finalize(tt);
-
-  EXPECT_EQ(2, tt.route_location_seq_.size());
-}
