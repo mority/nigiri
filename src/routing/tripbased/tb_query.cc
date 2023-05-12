@@ -54,10 +54,10 @@ std::uint16_t tb_query::r_query(transport_idx_t const transport_idx,
       tt_.route_location_seq_[tt_.transport_route_[transport_idx]].size() - 1);
 }
 
-void tb_query::enqueue(const transport_idx_t transport_idx,
+void tb_query::enqueue(transport_idx_t const transport_idx,
                        std::uint16_t const stop_idx,
                        day_idx_t const day_idx,
-                       std::uint8_t const n,
+                       std::uint32_t const n,
                        std::uint32_t const transferred_from) {
   auto const r_query_res = r_query(transport_idx, day_idx);
   if (stop_idx < r_query_res) {
@@ -177,7 +177,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
             timetable::stop{tt_.route_location_seq_[route_idx][stop_idx]};
         if (stop.location_idx() == fp.target_) {
           // shift amount due to waiting for connection
-          std::uint16_t sa_w = 0;
+          day_idx_t sa_w{0U};
           // departure times of this route at this stop
           auto const event_times =
               tt_.event_times_at_stop(route_idx, stop_idx, event_type::kDep);
@@ -334,11 +334,9 @@ void tb_query::reconstruct_journey(
   // the transport segment currently processed
   auto const* tp_seg = &last_tp_seg;
 
-  // the stop_index at which to leave this transport segment
-  std::optional<unsigned> stop_idx_end_prev = std::nullopt;
-
-  // follow prev_segment_idx back to the start of the journey
+  // follow transferred_from_ back to the start of the journey
   while (true) {
+
     // the route index of the current segment
     auto const& route_idx = tt_.transport_route_[tp_seg->transport_idx_];
     // the location index of the start of the segment
@@ -346,101 +344,93 @@ void tb_query::reconstruct_journey(
         timetable::stop{
             tt_.route_location_seq_[route_idx][tp_seg->stop_idx_start_]}
             .location_idx();
+    // unix time: departure time at the start of the segment
+    auto const unix_start =
+        tt_.to_unixtime(tp_seg->day_idx_, tt_.event_mam(tp_seg->transport_idx_,
+                                                        tp_seg->stop_idx_start_,
+                                                        event_type::kDep));
     // the stop index of the end of the segment
-    auto const stop_idx_end = stop_idx_end_prev.has_value()
-                                  ? stop_idx_end_prev.value()
-                                  : tp_seg->stop_idx_end_;
+    auto stop_idx_end = tp_seg->stop_idx_end_;
+    // arrival time at the end of the segment
+    auto time_arr_end =
+        tt_.event_mam(tp_seg->transport_idx_, stop_idx_end, event_type::kArr);
+    // unix time: arrival time at the end of the segment
+    auto unix_end = tt_.to_unixtime(tp_seg->day_idx_, time_arr_end);
     // the location index of the end of the segment
-    auto const location_idx_end =
+    auto location_idx_end =
         timetable::stop{tt_.route_location_seq_[route_idx][stop_idx_end]}
             .location_idx();
-    // the day index identifies the instance of the transport segment
-    day_idx_t const day_idx{
-        bitfield_to_day_idx(tt_.bitfields_[tp_seg->bitfield_idx_])};
-    // unix time: departure time at the start of the segment
-    auto const unix_start = tt_.to_unixtime(
-        day_idx, tt_.event_mam(tp_seg->transport_idx_, tp_seg->stop_idx_start_,
-                               event_type::kDep));
-    // arrival time at the end of the segment
-    auto const time_arr_end = tt_.event_mam(
-        tp_seg->transport_idx_, tp_seg->stop_idx_end_, event_type::kArr);
-    // unix time: arrival time at the end of the segment
-    auto const unix_end = tt_.to_unixtime(day_idx, time_arr_end);
+
+    // reconstruct transfer to following segment, i.e., the back of j.legs_
+    if (!j.legs_.empty()) {
+      // increment number of transfers
+      ++j.transfers_;
+      // rescan for transfer to next leg
+      for (std::uint16_t stop_idx = tp_seg->stop_idx_start_ + 1U;
+           stop_idx <= tp_seg->stop_idx_end_; ++stop_idx) {
+        // get transfer indices for this stop
+        auto const ts_pair =
+            tbp_.ts_.get_transfers(tp_seg->transport_idx_, stop_idx);
+        // iterate transfers for this stop
+        for (auto tr_idx = ts_pair->first; tr_idx < ts_pair->second; ++tr_idx) {
+          auto& tr_cur = tbp_.ts_[tr_idx];
+          if (tr_cur.transport_idx_to_ ==
+                  get<journey::transport_enter_exit>(j.legs_.back().uses_)
+                      .t_.t_idx_ &&
+              tr_cur.stop_idx_to_ ==
+                  get<journey::transport_enter_exit>(j.legs_.back().uses_)
+                      .stop_range_.from_ &&
+              tt_.bitfields_[tr_cur.bitfield_idx_].test(tp_seg->day_idx_.v_)) {
+            // set end stop index of current segment according to found transfer
+            if (stop_idx_end != stop_idx) {
+              stop_idx_end = stop_idx;
+              // recalculate because end stop idx changed
+              time_arr_end = tt_.event_mam(tp_seg->transport_idx_, stop_idx_end,
+                                           event_type::kArr);
+              unix_end = tt_.to_unixtime(tp_seg->day_idx_, time_arr_end);
+              location_idx_end =
+                  timetable::stop{
+                      tt_.route_location_seq_[route_idx][stop_idx_end]}
+                      .location_idx();
+            }
+            // create footpath journey leg for the transfer
+            for (auto const fp :
+                 tt_.locations_.footpaths_out_[location_idx_end]) {
+              // check if footpath reaches the start of the next journey leg
+              if (fp.target_ == j.legs_.back().from_) {
+                // unix time: arrival at the end of the footpath
+                auto const unix_fp_end = tt_.to_unixtime(
+                    tp_seg->day_idx_, time_arr_end + fp.duration_);
+
+                journey::leg l_fp{direction::kForward,  location_idx_end,
+                                  j.legs_.back().from_, unix_end,
+                                  unix_fp_end,          fp};
+                j.add(std::move(l_fp));
+                goto transfer_handled;
+              }
+            }
+          }
+        }
+      }
+    }
+
+  transfer_handled:
 
     // add journey leg for this transport segment
     journey::transport_enter_exit tee{
-        transport{tp_seg->transport_idx_, day_idx}, tp_seg->stop_idx_start_,
-        stop_idx_end};
+        transport{tp_seg->transport_idx_, tp_seg->day_idx_},
+        tp_seg->stop_idx_start_, stop_idx_end};
     journey::leg l_tp{direction::kForward, location_idx_start, location_idx_end,
                       unix_start,          unix_end,           tee};
     j.add(std::move(l_tp));
 
-    // handle transfer from previous transport segment
-    if (tp_seg->transferred_from_.has_value()) {
-      // increment number of transfers
-      ++j.transfers_;
-
-      // set stop_index_end for journey leg of previous segment which is handled
-      // in the next iteration
-      stop_idx_end_prev = tp_seg->transferred_from_.value().stop_idx_;
-
-      // the previous transport segment
-      auto const& tp_seg_prev = q_[tp_seg->transferred_from_.value().q_idx_];
-
-      // the route index of the previous transport segment
-      auto const route_idx_prev =
-          tt_.transport_route_[tp_seg_prev.transport_idx_];
-
-      // the location index of the end of the previous transport segment
-      auto const location_idx_end_prev =
-          timetable::stop{
-              tt_.route_location_seq_[route_idx_prev]
-                                     [tp_seg->transferred_from_->stop_idx_]}
-              .location_idx();
-
-      // add footpath journey leg between different locations
-      if (location_idx_end_prev != location_idx_start) {
-        // get footpath from timetable
-        for (auto const fp :
-             tt_.locations_.footpaths_out_[location_idx_end_prev]) {
-          // check if footpath leads from end of previous segment to start of
-          // this segment
-          if (fp.target_ == location_idx_start) {
-            // the day index identifies the instance of the transport segment
-            day_idx_t const day_idx_prev{
-                bitfield_to_day_idx(tt_.bitfields_[tp_seg_prev.bitfield_idx_])};
-
-            // arrival time at the end of the previous segment
-            auto const time_arr_end_prev =
-                tt_.event_mam(tp_seg_prev.transport_idx_,
-                              tp_seg_prev.stop_idx_end_, event_type::kArr);
-
-            // unix time: arrival at the end of the previous segment
-            auto const unix_end_prev =
-                tt_.to_unixtime(day_idx_prev, time_arr_end_prev);
-
-            // unix time: arrival at the target of the footpath
-            auto const unix_fp_end =
-                tt_.to_unixtime(day_idx_prev, time_arr_end_prev + fp.duration_);
-
-            journey::leg l_fp{direction::kForward, location_idx_end_prev,
-                              location_idx_start,  unix_end_prev,
-                              unix_fp_end,         fp};
-            j.add(std::move(l_fp));
-
-            // break if we added a journey leg for the connecting footpath
-            break;
-          }
-        }
-      }
-    } else {
-      // processed a transport segment without previous segment, i.e., beginning
-      // of journey is reached
+    // first segment reached?
+    if (tp_seg->transferred_from_ == TRANSFERRED_FROM_NULL) {
       break;
     }
 
     // prep next iteration
-    tp_seg = &q_[tp_seg->transferred_from_.value().q_idx_];
+    tp_seg = &q_[tp_seg->transferred_from_];
   }
 
   // reverse order of journey legs

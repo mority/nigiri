@@ -60,9 +60,11 @@ struct tb_query {
     std::uint32_t const transferred_from_{};
   };
 
+#define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()
+
   void enqueue(transport_idx_t const transport_idx,
                std::uint16_t const stop_idx,
-               day_idx_t day_idx,
+               day_idx_t const day_idx,
                std::uint32_t const n,
                std::uint32_t const transferred_from);
 
