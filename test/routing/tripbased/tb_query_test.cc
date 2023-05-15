@@ -565,6 +565,13 @@ TEST(earliest_arrival_query, raptor_forward) {
   std::cerr << "num_footpaths: " << tt.locations_.footpaths_out_.size()
             << std::endl;
 
+  auto const location_idx =
+      tt.locations_.location_id_to_idx_.at({.id_ = "0000002", .src_ = src});
+  for (auto const& fp : tt.locations_.footpaths_out_[location_idx]) {
+    std::cerr << "footpath: " << fp.target_ << ", " << fp.duration_
+              << std::endl;
+  }
+
   tb_preprocessing tbp{tt};
   tbp.build_transfer_set(true, true);
 
