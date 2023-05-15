@@ -731,7 +731,7 @@ void raptor<SearchDir, IntermodalTarget>::set_time_at_destination(
 
 template <direction SearchDir, bool IntermodalTarget>
 bool raptor<SearchDir, IntermodalTarget>::start_dest_overlap() const {
-  if (q_.start_match_mode_ == location_match_mode::kIntermodal &&
+  if (q_.start_match_mode_ == location_match_mode::kIntermodal ||
       q_.dest_match_mode_ == location_match_mode::kIntermodal) {
     // Handled by fastest_direct
     return false;
@@ -765,6 +765,7 @@ void raptor<SearchDir, IntermodalTarget>::route() {
   state_.results_.resize(
       std::max(state_.results_.size(), state_.destinations_.size()));
   if (start_dest_overlap()) {
+    trace_always("start/dest overlap - finished");
     return;
   }
 
@@ -803,6 +804,7 @@ void raptor<SearchDir, IntermodalTarget>::route() {
 #endif
 
   stats_.fastest_direct_ = static_cast<std::uint64_t>(fastest_direct_.count());
+  trace_always("fastest direct {}", stats_.fastest_direct_);
 
   auto const number_of_results_in_interval = [&]() {
     if (holds_alternative<interval<unixtime_t>>(q_.start_time_)) {
@@ -879,9 +881,10 @@ void raptor<SearchDir, IntermodalTarget>::route() {
             state_.station_mark_[to_idx(s.stop_)] = true;
           }
           time_at_destination_ =
-              routing_time{tt_, from_it->time_at_start_} + duration_t{1} +
+              routing_time{tt_, from_it->time_at_start_} +
               (kFwd ? 1 : -1) *
-                  std::min(fastest_direct_, duration_t{kMaxTravelTime});
+                  (std::min(fastest_direct_, duration_t{kMaxTravelTime}) +
+                   1_minutes);
           trace_always(
               "time_at_destination={} + kMaxTravelTime/fastest_direct={} = "
               "{}\n",
