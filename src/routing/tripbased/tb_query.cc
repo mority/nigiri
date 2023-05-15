@@ -11,7 +11,7 @@ void tb_query::r_update(transport_idx_t const transport_idx,
 
   auto day_idx_end = std::numeric_limits<day_idx_t>::max();
 
-  for (auto re : r_[transport_idx]) {
+  for (auto& re : r_[transport_idx]) {
     // TODO not necessary if invalid tuples are deleted
     if (re.day_idx_start_ == re.day_idx_end_) {
       continue;
@@ -46,7 +46,7 @@ std::uint16_t tb_query::r_query(transport_idx_t const transport_idx,
                                 day_idx_t const day_idx) {
 
   // look up stop index for the provided day index
-  for (auto re : r_[transport_idx]) {
+  for (auto const& re : r_[transport_idx]) {
     if (re.day_idx_start_ <= day_idx && day_idx < re.day_idx_end_) {
       return re.stop_idx_;
     }
@@ -95,17 +95,6 @@ void tb_query::enqueue(transport_idx_t const transport_idx,
       r_update(transport_idx_it, stop_idx, day_idx_new);
     }
   }
-}
-
-constexpr int tb_query::bitfield_to_day_idx(bitfield const& bf) {
-  assert(bf.count() == 1);
-  unsigned short i{0U};
-  for (; i != bf.size(); ++i) {
-    if (bf.test(i)) {
-      break;
-    }
-  }
-  return i;
 }
 
 void tb_query::reset() {

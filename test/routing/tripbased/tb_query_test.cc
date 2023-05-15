@@ -24,51 +24,44 @@ TEST(tb_query, r_) {
   tb_preprocessing tbp{tt};
   tb_query tbq{tbp};
 
+  // constants
+  transport_idx_t const tpi{22U};
+  day_idx_t const day0{0U};
+  day_idx_t const day1{1U};
+  day_idx_t const day2{2U};
+  day_idx_t const day3{3U};
+
   // update empty
-  transport_idx_t const tpi0{22U};
-  unsigned const si0{42U};
-  day_idx_t const day_idx0{2U};
-  tbq.r_update(tpi0, si0, day_idx0);
-  ASSERT_EQ(1, tbq.r_[tpi0].size());
-  EXPECT_EQ(si0, tbq.r_query(tpi0, day_idx0));
+  tbq.r_update(tpi, 42, day2);
+  EXPECT_EQ(42, tbq.r_query(tpi, day2));
 
   // update partial dominance
-  unsigned const si1{41U};
-  day_idx_t const day_idx1{3U};
-  tbq.r_update(tpi0, si1, day_idx1);
-  ASSERT_EQ(2, tbq.r_[tpi0].size());
-  EXPECT_EQ(si0, tbq.r_query(tpi0, day_idx0));
-  EXPECT_EQ(si1, tbq.r_query(tpi0, day_idx1));
-  EXPECT_EQ(si1, tbq.r_query(tpi0, day_idx_t{23U}));
+  tbq.r_update(tpi, 41, day3);
+  EXPECT_EQ(42, tbq.r_query(tpi, day2));
+  EXPECT_EQ(41, tbq.r_query(tpi, day3));
+  EXPECT_EQ(41, tbq.r_query(tpi, day_idx_t{23U}));
 
   // update complete dominance
-  unsigned const si2{23U};
-  day_idx_t const day_idx2{1U};
-  tbq.r_update(tpi0, si2, day_idx2);
-  ASSERT_EQ(3, tbq.r_[tpi0].size());
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx0));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx1));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx2));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx_t{23U}));
+  tbq.r_update(tpi, 23, day1);
+  EXPECT_EQ(23, tbq.r_query(tpi, day1));
+  EXPECT_EQ(23, tbq.r_query(tpi, day2));
+  EXPECT_EQ(23, tbq.r_query(tpi, day3));
+  EXPECT_EQ(23, tbq.r_query(tpi, day_idx_t{23U}));
 
   // update no change
-  unsigned const si3{24U};
-  tbq.r_update(tpi0, si3, day_idx2);
-  ASSERT_EQ(3, tbq.r_[tpi0].size());
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx0));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx1));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx2));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx_t{23U}));
+  tbq.r_update(tpi, 24, day1);
+  EXPECT_EQ(23, tbq.r_query(tpi, day1));
+  EXPECT_EQ(23, tbq.r_query(tpi, day2));
+  EXPECT_EQ(23, tbq.r_query(tpi, day3));
+  EXPECT_EQ(23, tbq.r_query(tpi, day_idx_t{23U}));
 
   // update partial dominance
-  day_idx_t const day_idx3{0U};
-  tbq.r_update(tpi0, si3, day_idx3);
-  ASSERT_EQ(4, tbq.r_[tpi0].size());
-  EXPECT_EQ(si3, tbq.r_query(tpi0, day_idx3));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx0));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx1));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx2));
-  EXPECT_EQ(si2, tbq.r_query(tpi0, day_idx_t{23U}));
+  tbq.r_update(tpi, 24, day0);
+  EXPECT_EQ(24, tbq.r_query(tpi, day0));
+  EXPECT_EQ(23, tbq.r_query(tpi, day1));
+  EXPECT_EQ(23, tbq.r_query(tpi, day2));
+  EXPECT_EQ(23, tbq.r_query(tpi, day3));
+  EXPECT_EQ(23, tbq.r_query(tpi, day_idx_t{23U}));
 }
 
 TEST(tb_query, enqueue) {
@@ -122,7 +115,7 @@ TEST(tb_query, enqueue) {
   EXPECT_EQ(si1, tbq.q_[1].stop_idx_start_);
   EXPECT_EQ(si0, tbq.q_[1].stop_idx_end_);
   EXPECT_EQ(day_idx0, tbq.q_[1].day_idx_);
-  ASSERT_EQ(3, tbq.r_.size());
+  ASSERT_EQ(2, tbq.r_.size());
   day_idx_t const day_idx23{23U};
   EXPECT_EQ(si1, tbq.r_query(tpi0, day_idx23));
   EXPECT_EQ(si0, tbq.r_query(tpi0, day_idx0));
@@ -201,7 +194,9 @@ TEST(reconstruct_journey, same_day_transfer) {
   EXPECT_EQ(location_idx_t{0U}, j.legs_[0].from_);
   EXPECT_EQ(location_idx_t{1U}, j.legs_[0].to_);
   EXPECT_EQ(location_idx_t{1U}, j.legs_[1].from_);
-  EXPECT_EQ(location_idx_t{2U}, j.legs_[1].to_);
+  EXPECT_EQ(location_idx_t{1U}, j.legs_[1].to_);
+  EXPECT_EQ(location_idx_t{1U}, j.legs_[2].from_);
+  EXPECT_EQ(location_idx_t{2U}, j.legs_[2].to_);
   constexpr unixtime_t start_time_exp = sys_days{March / 1 / 2021};
   constexpr unixtime_t dest_time_exp = sys_days{March / 1 / 2021} + 13h;
   EXPECT_EQ(start_time_exp, j.start_time_);
@@ -283,7 +278,9 @@ TRANSFERS: 1
 leg 0: (S0, S0) [2021-03-01 00:00] -> (S1, S1) [2021-03-01 06:00]
    0: S0      S0..............................................                               d: 01.03 00:00 [01.03 00:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON, src=0}]
    1: S1      S1.............................................. a: 01.03 06:00 [01.03 06:00]
-leg 1: (S1, S1) [2021-03-01 12:00] -> (S2, S2) [2021-03-01 13:00]
+leg 1: (S1, S1) [2021-03-01 06:00] -> (S1, S1) [2021-03-01 06:02]
+  FOOTPATH (duration=2)
+leg 2: (S1, S1) [2021-03-01 12:00] -> (S2, S2) [2021-03-01 13:00]
    0: S1      S1..............................................                               d: 01.03 12:00 [01.03 12:00]  [{name=R1 , day=2021-03-01, id=0/R1_MON, src=0}]
    1: S2      S2.............................................. a: 01.03 13:00 [01.03 13:00]
 
@@ -296,8 +293,6 @@ TEST(earliest_arrival_query, same_day_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, same_day_transfer_files(), tt);
-
-  std::cerr << tt << std::endl;
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -348,7 +343,9 @@ TRANSFERS: 1
 leg 0: (S0, S0) [2021-03-01 00:00] -> (S1, S1) [2021-03-04 04:00]
    0: S0      S0..............................................                               d: 01.03 00:00 [01.03 00:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON, src=0}]
    1: S1      S1.............................................. a: 04.03 04:00 [04.03 04:00]
-leg 1: (S1, S1) [2021-03-04 06:00] -> (S2, S2) [2021-03-04 07:00]
+leg 1: (S1, S1) [2021-03-04 04:00] -> (S1, S1) [2021-03-04 04:02]
+  FOOTPATH (duration=2)
+leg 2: (S1, S1) [2021-03-04 06:00] -> (S2, S2) [2021-03-04 07:00]
    0: S1      S1..............................................                               d: 04.03 06:00 [04.03 06:00]  [{name=R1 , day=2021-03-04, id=0/R1_THU, src=0}]
    1: S2      S2.............................................. a: 04.03 07:00 [04.03 07:00]
 
@@ -408,10 +405,12 @@ constexpr auto const earlier_stop_transfer_journeys = R"(
 TRANSFERS: 1
      FROM: (S3, S3) [2021-03-01 03:00]
        TO: (S2, S2) [2021-03-01 06:00]
-leg 0: (S3, S3) [2021-03-01 03:00] -> (S1, S1) [2021-03-01 05:00]
+leg 0: (S3, S3) [2021-03-01 03:00] -> (S1, S1) [2021-03-01 04:00]
    3: S3      S3..............................................                               d: 01.03 03:00 [01.03 03:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON0, src=0}]
    4: S1      S1.............................................. a: 01.03 04:00 [01.03 04:00]
-leg 1: (S1, S1) [2021-03-01 05:00] -> (S2, S2) [2021-03-01 06:00]
+leg 1: (S1, S1) [2021-03-01 04:00] -> (S1, S1) [2021-03-01 04:02]
+  FOOTPATH (duration=2)
+leg 2: (S1, S1) [2021-03-01 05:00] -> (S2, S2) [2021-03-01 06:00]
    1: S1      S1..............................................                               d: 01.03 05:00 [01.03 05:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON1, src=0}]
    2: S2      S2.............................................. a: 01.03 06:00 [01.03 06:00]
 
@@ -557,16 +556,50 @@ using namespace nigiri::test_data::hrd_timetable;
 //)";
 
 TEST(earliest_arrival_query, raptor_forward) {
-  using namespace date;
   constexpr auto const src = source_idx_t{0U};
-
   timetable tt;
   tt.date_range_ = full_period();
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
+  std::cerr << "num_footpaths: " << tt.locations_.footpaths_out_.size()
+            << std::endl;
+
   tb_preprocessing tbp{tt};
   tbp.build_transfer_set(true, true);
 
+  std::cerr << "num_transfers: " << tbp.ts_.transfers_.size() << std::endl;
+
   tb_query tbq{tbp};
+
+  query const q{
+      .start_time_ = unixtime_t{sys_days{March / 30 / 2020} + 5h},
+      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
+      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
+      .use_start_footpaths_ = true,
+      .start_ = {nigiri::routing::offset{
+          tt.locations_.location_id_to_idx_.at({.id_ = "0000001", .src_ = src}),
+          0_minutes, 0U}},
+      .destinations_ = {{nigiri::routing::offset{
+          tt.locations_.location_id_to_idx_.at({.id_ = "0000003", .src_ = src}),
+          0_minutes, 0U}}},
+      .via_destinations_ = {},
+      .allowed_classes_ = bitset<kNumClasses>::max(),
+      .max_transfers_ = 6U,
+      .min_connection_count_ = 0U,
+      .extend_interval_earlier_ = false,
+      .extend_interval_later_ = false};
+
+  tbq.earliest_arrival_query(q);
+
+  EXPECT_EQ(1, tbq.j_.size());
+
+  std::stringstream ss;
+  ss << "\n";
+  for (auto const& x : tbq.j_) {
+    x.print(ss, tt);
+    ss << "\n\n";
+  }
+
+  std::cerr << ss.str() << std::endl;
 }

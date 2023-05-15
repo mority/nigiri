@@ -102,9 +102,6 @@ struct tb_query {
   // least recently processed query
   query query_;
 
-  // for a bitset with only one bit set to one, returns the index of this bit
-  static constexpr int bitfield_to_day_idx(bitfield const&);
-
   void reset();
 
   void earliest_arrival_query(query);
