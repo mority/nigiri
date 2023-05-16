@@ -317,6 +317,7 @@ TEST(earliest_times, random) {
   }
 }
 
+using namespace nigiri::loader;
 using namespace nigiri::loader::gtfs;
 
 TEST(initial_transfer_computation, no_transfer) {
@@ -325,7 +326,7 @@ TEST(initial_transfer_computation, no_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, no_transfer_files(), tt);
-  loader::finalize(tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -342,6 +343,7 @@ TEST(initial_transfer_computation, same_day_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, same_day_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -370,6 +372,7 @@ TEST(initial_transfer_computation, from_long_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, long_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -398,6 +401,7 @@ TEST(initial_transfer_computation, weekday_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, weekday_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -426,6 +430,7 @@ TEST(initial_transfer_computation, daily_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, daily_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -454,6 +459,7 @@ TEST(initial_transfer_computation, earlier_stop_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, earlier_stop_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -484,6 +490,7 @@ TEST(initial_transfer_computation, earlier_transport_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, earlier_transport_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -513,6 +520,7 @@ TEST(initial_transfer_computation, uturn_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, uturn_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -554,6 +562,7 @@ TEST(initial_transfer_computation, unnecessary_transfer0) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, unnecessary0_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -583,6 +592,7 @@ TEST(initial_transfer_computation, unnecessary_transfer1) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, unnecessary1_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -624,6 +634,7 @@ TEST(uturn_removal, no_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, no_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -640,6 +651,7 @@ TEST(uturn_removal, same_day_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, same_day_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -668,6 +680,7 @@ TEST(uturn_removal, from_long_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, long_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -696,6 +709,7 @@ TEST(uturn_removal, weekday_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, weekday_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -724,6 +738,7 @@ TEST(uturn_removal, daily_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, daily_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -752,6 +767,7 @@ TEST(uturn_removal, earlier_stop_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, earlier_stop_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -782,6 +798,7 @@ TEST(uturn_removal, earlier_transport_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, earlier_transport_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -811,6 +828,7 @@ TEST(uturn_removal, uturn_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, uturn_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -843,6 +861,7 @@ TEST(uturn_removal, unnecessary_transfer0) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, unnecessary0_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -872,6 +891,7 @@ TEST(uturn_removal, unnecessary_transfer1) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, unnecessary1_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -913,6 +933,7 @@ TEST(transfer_reduction, no_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, no_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -929,6 +950,7 @@ TEST(transfer_reduction, same_day_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, same_day_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -957,6 +979,7 @@ TEST(transfer_reduction, from_long_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, long_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -985,6 +1008,7 @@ TEST(transfer_reduction, weekday_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, weekday_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -1013,6 +1037,7 @@ TEST(transfer_reduction, daily_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, daily_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -1041,6 +1066,7 @@ TEST(transfer_reduction, earlier_stop_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, earlier_stop_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -1071,6 +1097,7 @@ TEST(transfer_reduction, earlier_transport_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, earlier_transport_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -1100,6 +1127,7 @@ TEST(transfer_reduction, uturn_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, uturn_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -1132,6 +1160,7 @@ TEST(transfer_reduction, unnecessary_transfer0) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, unnecessary0_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -1148,6 +1177,7 @@ TEST(transfer_reduction, unnecessary_transfer1) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, unnecessary1_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};

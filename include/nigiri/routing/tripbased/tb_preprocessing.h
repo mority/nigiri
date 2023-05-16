@@ -42,11 +42,38 @@ struct tb_preprocessing {
 
     // check system limits
     assert(tt.bitfields_.size() <= kBitfieldIdxMax);
+    if (tt.bitfields_.size() > kBitfieldIdxMax) {
+      std::cerr << "WARNING: number of bitfields exceeds maximum value of "
+                   "bitfield index\n";
+    }
     assert(tt.transport_route_.size() <= kTransportIdxMax);
+    if (tt.transport_route_.size() > kTransportIdxMax) {
+      std::cerr << "WARNING: number of transports exceeds maximum value of "
+                   "transport index\n";
+    }
     for (auto const stop_seq : tt_.route_location_seq_) {
       assert(stop_seq.size() <= kStopIdxMax);
+      if (stop_seq.size() > kStopIdxMax) {
+        std::cerr
+            << "WARNING: number of stops exceeds maximum value of stop index\n";
+      }
     }
     static_assert(kMaxDays <= kDayIdxMax);
+
+    // count elementary connections
+    for (route_idx_t route_idx{0U}; route_idx < tt_.route_location_seq_.size();
+         ++route_idx) {
+      num_el_con_ += (tt_.route_location_seq_[route_idx].size() - 1) *
+                     tt_.route_transport_ranges_[route_idx].size().v_;
+    }
+
+    // number of expected transfers
+    auto const num_exp_transfers = num_el_con_;
+
+    // reserve space for transfer set
+    std::cout << "Reserving " << num_exp_transfers * sizeof(transfer)
+              << " bytes for " << num_exp_transfers << " expected transfers\n";
+    ts_.transfers_.reserve(num_exp_transfers);
   }
 
   void build_transfer_set(bool uturn_removal = true, bool reduction = true);
@@ -63,6 +90,8 @@ struct tb_preprocessing {
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
   timetable& tt_;
+  // the number of elementary connections in the timetable
+  unsigned num_el_con_;
   day_idx_t const sa_w_max_{};  // look-ahead
   hash_transfer_set ts_{};
 };

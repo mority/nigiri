@@ -108,22 +108,12 @@ bool tb_preprocessing::earliest_times::update(location_idx_t li_new,
 
 void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
 
-#ifndef NDEBUG
-  TBDL << "Beginning initial transfer computation, sa_w_max_ = " << sa_w_max_
-       << std::endl;
-#endif
-
   // init bitfields hashmap with bitfields that are already used by the
   // timetable
   for (bitfield_idx_t bfi{0U}; bfi < tt_.bitfields_.size();
        ++bfi) {  // bfi: bitfield index
     bitfield_to_bitfield_idx_.emplace(tt_.bitfields_[bfi], bfi);
   }
-
-#ifndef NDEBUG
-  TBDL << "Added " << bitfield_to_bitfield_idx_.size()
-       << " KV-pairs to bitfield_to_bitfield_idx_" << std::endl;
-#endif
 
   // earliest arrival time per stop
   earliest_times ets_arr{*this};
@@ -148,11 +138,6 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
     // iterate over stops of transport (skip first stop)
     auto const stops_from = tt_.route_location_seq_[ri_from];
 
-#ifndef NDEBUG
-    TBDL << "-----------------------------------------------------------------"
-         << std::endl;
-#endif
-
     // si_from: stop index from
     auto si_from = reduction ? stops_from.size() - 1 : 1U;
     // reversed iteration direction for transfer reduction
@@ -167,10 +152,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
 
     for (; si_from != si_limit; si_step()) {
 
-      auto const stop = timetable::stop{stops_from[si_from]};
-
       // li_from: location index from
-      auto const li_from = stop.location_idx();
+      auto const li_from = timetable::stop{stops_from[si_from]}.location_idx();
 
       auto const t_arr_from =
           tt_.event_mam(tpi_from, si_from, event_type::kArr);
@@ -181,15 +164,6 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
       auto const& bf_tp_from =
           tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
 
-#ifndef NDEBUG
-      TBDL << "tpi_from = " << tpi_from << ", ri_from = " << ri_from
-           << ", si_from = " << si_from << ", li_from = " << li_from << "("
-           << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
-                                      tt_.locations_.names_[li_from].end()}
-           << "), t_arr_from = " << t_arr_from
-           << ", sa_tp_from = " << sa_tp_from << std::endl;
-#endif
-
       if (reduction) {
         // init earliest times
         ets_arr.update(li_from, t_arr_from, bf_tp_from);
@@ -199,9 +173,9 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
         }
       }
 
-      // outgoing footpaths of location
-      for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
-
+      auto handle_fp = [&t_arr_from, &sa_tp_from, this, &bf_tp_from, &tpi_from,
+                        &si_from, &ri_from, &uturn_removal, &ets_arr, &ets_ch,
+                        &reduction](footpath const& fp) {
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
 
@@ -214,22 +188,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
         // a: time of day when arriving at stop_to
         auto const a = time_of_day(ta);
 
-#ifndef NDEBUG
-        TBDL << "li_to = " << li_to << "("
-             << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
-                                        tt_.locations_.names_[li_from].end()}
-             << "), sa_fp = " << sa_fp << ", a = " << a << std::endl;
-#endif
-
         // iterate over lines serving stop_to
         auto const routes_at_stop_to = tt_.location_routes_[li_to];
-
-#ifndef NDEBUG
-        TBDL << "Examining " << routes_at_stop_to.size() << " routes at "
-             << std::basic_string<char>{tt_.locations_.names_[li_from].begin(),
-                                        tt_.locations_.names_[li_from].end()}
-             << "..." << std::endl;
-#endif
 
         // ri_to: route index to
         for (auto const ri_to : routes_at_stop_to) {
@@ -271,23 +231,9 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
               // omega: days of transport_from that still require connection
               bitfield omega = bf_tp_from;
 
-#ifndef NDEBUG
-              TBDL << "tpi_from = " << tpi_from << ", si_from = " << si_from
-                   << ", from location: "
-                   << std::basic_string<
-                          char>{tt_.locations_.names_[li_from].begin(),
-                                tt_.locations_.names_[li_from].end()}
-                   << ", ri_to = " << ri_to << ", si_to = " << si_to
-                   << ", to location:  = "
-                   << std::basic_string<
-                          char>{tt_.locations_.names_[li_to_cur].begin(),
-                                tt_.locations_.names_[li_to_cur].end()}
-                   << std::endl
-                   << "Looking for earliest connecting transport after a = "
-                   << a << ", initial omega = " << first_n(omega) << std::endl;
-#endif
-              // check if any bit in omega is set to 1
-              while (omega.any()) {
+              // check if any bit in omega is set to 1 and maximum waiting time
+              // not exceeded
+              while (omega.any() && sa_w <= sa_w_max_) {
 
                 // departure time of current transport in relation to time a
                 auto const dep_cur = *dep_it + duration_t{sa_w.v_ * 1440};
@@ -300,20 +246,6 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                 auto const tpi_to =
                     tt_.route_transport_ranges_[ri_to][static_cast<std::size_t>(
                         tp_to_offset)];
-
-#ifndef NDEBUG
-                TBDL << "tpi_to = " << tpi_to << " departing at " << dep_cur
-                     << ": different route -> " << (ri_from != ri_to)
-                     << ", earlier stop -> " << (si_to < si_from)
-                     << ", earlier transport -> "
-                     << (tpi_to != tpi_from &&
-                         (dep_cur -
-                              (tt_.event_mam(tpi_to, si_to, event_type::kDep) -
-                               tt_.event_mam(tpi_to, si_from,
-                                             event_type::kArr)) <=
-                          a - fp.duration_))
-                     << std::endl;
-#endif
 
                 // check conditions for required transfer
                 // 1. different route OR
@@ -359,9 +291,6 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                     // omega
                     omega &= ~bf_tf_from;
 
-#ifndef NDEBUG
-                    TBDL << "new omega =  " << first_n(omega) << std::endl;
-#endif
                     auto const check_uturn = [&si_to, this, &ri_to, &si_from,
                                               &ri_from, &dep_cur, &tpi_to, &a,
                                               &fp, &tpi_from]() {
@@ -447,18 +376,6 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                         auto const bfi_from = get_or_create_bfi(bf_tf_from);
                         ts_.add(tpi_from, si_from, tpi_to, si_to, bfi_from,
                                 sa_fp + sa_w);
-
-#ifndef NDEBUG
-                        TBDL << "transfer added:" << std::endl
-                             << "tpi_from = " << tpi_from
-                             << ", li_from = " << li_from << std::endl
-                             << "tpi_to = " << tpi_to << ", li_to = " << li_to
-                             << std::endl
-                             << "bf_tf_from = " << first_n(bf_tf_from)
-                             << std::endl
-                             << "  shift_amount = " << -sa_total << std::endl;
-
-#endif
                       }
                     }
                   }
@@ -468,20 +385,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                 // is this the last transport of the day?
                 if (std::next(dep_it) == event_times.end()) {
 
-#ifndef NDEBUG
-                  if (omega.any()) {
-                    TBDL << "passing midnight" << std::endl;
-                  }
-#endif
                   // passing midnight
                   ++sa_w;
-
-                  if (sa_w_max_ < sa_w) {
-#ifndef NDEBUG
-                    TBDL << "Maximum waiting time reached" << std::endl;
-#endif
-                    break;
-                  }
 
                   // start with the earliest transport on the next day
                   dep_it = event_times.begin();
@@ -492,10 +397,23 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
             }
           }
         }
+      };
+
+      // virtual reflexive footpath
+      footpath reflexive_fp{li_from, tt_.locations_.transfer_time_[li_from]};
+      handle_fp(reflexive_fp);
+
+      // outgoing footpaths of location
+      for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
+        handle_fp(fp);
       }
     }
   }
 
   // finalize transfer set
   ts_.finalize();
+
+  std::cout << "Found " << ts_.size()
+            << " transfers, the size of the transfer set is "
+            << ts_.size() * sizeof(transfer) << " bytes" << std::endl;
 }

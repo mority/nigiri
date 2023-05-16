@@ -70,6 +70,7 @@ TEST(tb_query, enqueue) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, enqueue_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -131,6 +132,7 @@ TEST(reconstruct_journey, no_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, no_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -166,6 +168,7 @@ TEST(reconstruct_journey, same_day_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, same_day_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -209,6 +212,7 @@ TEST(reconstruct_journey, transfer_with_footpath) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, footpath_files(), tt);
+  finalize(tt);
 
   // hack footpath into timetable, somehow it is not created from test data
   location_id const li_s1{"S1", src};
@@ -293,6 +297,7 @@ TEST(earliest_arrival_query, same_day_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, same_day_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -358,6 +363,7 @@ TEST(earliest_arrival_query, long_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, long_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -423,6 +429,7 @@ TEST(earliest_arrival_query, earlier_stop_transfer) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, earlier_stop_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -471,6 +478,7 @@ TEST(earliest_arrival_query, no_journey_possible) {
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, earlier_stop_transfer_files(), tt);
+  finalize(tt);
 
   // init preprocessing
   tb_preprocessing tbp{tt};
@@ -562,9 +570,6 @@ TEST(earliest_arrival_query, files_abc) {
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
-  std::cerr << "num_footpaths: " << tt.locations_.footpaths_out_.size()
-            << std::endl;
-
   auto const location_idx =
       tt.locations_.location_id_to_idx_.at({.id_ = "0000002", .src_ = src});
   for (auto const& fp : tt.locations_.footpaths_out_[location_idx]) {
@@ -574,8 +579,6 @@ TEST(earliest_arrival_query, files_abc) {
 
   tb_preprocessing tbp{tt};
   tbp.build_transfer_set(true, true);
-
-  std::cerr << "num_transfers: " << tbp.ts_.transfers_.size() << std::endl;
 
   tb_query tbq{tbp};
 

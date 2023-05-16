@@ -79,6 +79,8 @@ struct hash_transfer_set {
 
   transfer& operator[](std::uint32_t index) { return transfers_[index]; }
 
+  std::size_t size() const { return transfers_.size(); }
+
   bool initialized_ = false;
   bool finalized_ = false;
 

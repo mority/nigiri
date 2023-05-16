@@ -19,17 +19,10 @@ struct tb_query {
   explicit tb_query(tb_preprocessing& tbp) : tbp_(tbp), tt_(tbp.tt_) {
     // queue size is boundend by number of elementary connections in the time
     // table
-    unsigned num_el_con = 0;
-    for (route_idx_t route_idx{0U}; route_idx < tt_.route_location_seq_.size();
-         ++route_idx) {
-      num_el_con += (tt_.route_location_seq_[route_idx].size() - 1) *
-                    tt_.route_transport_ranges_[route_idx].size().v_;
-    }
-    std::cout << "Counted " << num_el_con
-              << " elementary connections, reserving "
-              << num_el_con * sizeof(transport_segment)
-              << " byte of memory for q_" << std::endl;
-    q_.reserve(num_el_con);
+    std::cout << "Number of elementary connections is " << tbp_.num_el_con_
+              << ", reserving " << tbp_.num_el_con_ * sizeof(transport_segment)
+              << " bytes of memory for q_" << std::endl;
+    q_.reserve(tbp_.num_el_con_);
   }
 
   tb_preprocessing& tbp_;

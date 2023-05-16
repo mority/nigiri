@@ -134,10 +134,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
   start_day.set(day_idx.v_);
 
   // fill l_
-  // iterate incoming footpaths of target location
-  for (auto const fp : tt_.locations_.footpaths_in_[offset_target.target_]) {
-    auto const delta_tau =
-        offset_target.target_ == fp.target_ ? duration_t{0U} : fp.duration_;
+  auto create_l_entry = [this](footpath const& fp) {
     // iterate routes serving source of footpath
     for (auto const route_idx : tt_.location_routes_[fp.target_]) {
       // iterate stop sequence of route
@@ -146,15 +143,20 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
         auto const stop =
             timetable::stop{tt_.route_location_seq_[route_idx][stop_idx]};
         if (stop.location_idx() == fp.target_) {
-          l_.emplace_back(route_idx, stop_idx, delta_tau);
+          l_.emplace_back(route_idx, stop_idx, fp.duration_);
         }
       }
     }
+  };
+  // virtual reflexive incoming footpath
+  create_l_entry(footpath{offset_target.target_, duration_t{0U}});
+  // iterate incoming footpaths of target location
+  for (auto const fp : tt_.locations_.footpaths_in_[offset_target.target_]) {
+    create_l_entry(fp);
   }
 
   // fill Q_0
-  // iterate outgoing footpaths of source location
-  for (auto const fp : tt_.locations_.footpaths_out_[offset_source.target_]) {
+  auto create_q0_entry = [&start_mam, this, &day_idx](footpath const& fp) {
     // arrival time after walking the footpath
     auto const t_a = start_mam + fp.duration_;
     // shift amount due to walking the footpath
@@ -222,6 +224,12 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
         }
       }
     }
+  };
+  // virtual reflexive footpath
+  create_q0_entry(footpath{offset_source.target_, duration_t{0U}});
+  // iterate outgoing footpaths of source location
+  for (auto const fp : tt_.locations_.footpaths_out_[offset_source.target_]) {
+    create_q0_entry(fp);
   }
 
   // minimal travel time observed so far
@@ -389,20 +397,36 @@ void tb_query::reconstruct_journey(
                       tt_.route_location_seq_[route_idx][stop_idx_end]}
                       .location_idx();
             }
-            // create footpath journey leg for the transfer
-            for (auto const fp :
-                 tt_.locations_.footpaths_out_[location_idx_end]) {
-              // check if footpath reaches the start of the next journey leg
-              if (fp.target_ == j.legs_.back().from_) {
-                // unix time: arrival at the end of the footpath
-                auto const unix_fp_end = tt_.to_unixtime(
-                    tp_seg->get_day_idx(), time_arr_end + fp.duration_);
 
-                journey::leg l_fp{direction::kForward,  location_idx_end,
-                                  j.legs_.back().from_, unix_end,
-                                  unix_fp_end,          fp};
-                j.add(std::move(l_fp));
-                goto transfer_handled;
+            // create footpath journey leg for the transfer
+            auto create_fp_leg = [this, &tp_seg, &time_arr_end,
+                                  &location_idx_end, &j,
+                                  &unix_end](footpath const& fp) {
+              auto const unix_fp_end = tt_.to_unixtime(
+                  tp_seg->get_day_idx(), time_arr_end + fp.duration_);
+
+              journey::leg l_fp{direction::kForward,  location_idx_end,
+                                j.legs_.back().from_, unix_end,
+                                unix_fp_end,          fp};
+              j.add(std::move(l_fp));
+            };
+
+            // handle reflexive footpath
+            if (location_idx_end == j.legs_.back().from_) {
+              footpath reflexive_fp{
+                  location_idx_end,
+                  tt_.locations_.transfer_time_[location_idx_end]};
+              create_fp_leg(reflexive_fp);
+              goto transfer_handled;
+            } else {
+              // find footpath used
+              for (auto const fp :
+                   tt_.locations_.footpaths_out_[location_idx_end]) {
+                // check if footpath reaches the start of the next journey leg
+                if (fp.target_ == j.legs_.back().from_) {
+                  create_fp_leg(fp);
+                  goto transfer_handled;
+                }
               }
             }
           }
