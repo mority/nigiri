@@ -38,7 +38,16 @@ struct tb_preprocessing {
 
   tb_preprocessing() = delete;
   explicit tb_preprocessing(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
-      : tt_(tt), sa_w_max_(sa_w_max) {}
+      : tt_(tt), sa_w_max_(sa_w_max) {
+
+    // check system limits
+    assert(tt.bitfields_.size() <= kBitfieldIdxMax);
+    assert(tt.transport_route_.size() <= kTransportIdxMax);
+    for (auto const stop_seq : tt_.route_location_seq_) {
+      assert(stop_seq.size() <= kStopIdxMax);
+    }
+    static_assert(kMaxDays <= kDayIdxMax);
+  }
 
   void build_transfer_set(bool uturn_removal = true, bool reduction = true);
 

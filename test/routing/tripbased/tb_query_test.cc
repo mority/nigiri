@@ -555,7 +555,7 @@ using namespace nigiri::test_data::hrd_timetable;
 //
 //)";
 
-TEST(earliest_arrival_query, raptor_forward) {
+TEST(earliest_arrival_query, files_abc) {
   constexpr auto const src = source_idx_t{0U};
   timetable tt;
   tt.date_range_ = full_period();

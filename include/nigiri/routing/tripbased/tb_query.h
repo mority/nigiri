@@ -16,16 +16,38 @@ namespace nigiri::routing::tripbased {
 
 struct tb_query {
   tb_query() = delete;
-  explicit tb_query(tb_preprocessing& tbp) : tbp_(tbp), tt_(tbp.tt_) {}
+  explicit tb_query(tb_preprocessing& tbp) : tbp_(tbp), tt_(tbp.tt_) {
+    // queue size is boundend by number of elementary connections in the time
+    // table
+    unsigned num_el_con = 0;
+    for (route_idx_t route_idx{0U}; route_idx < tt_.route_location_seq_.size();
+         ++route_idx) {
+      num_el_con += (tt_.route_location_seq_[route_idx].size() - 1) *
+                    tt_.route_transport_ranges_[route_idx].size().v_;
+    }
+    std::cout << "Counted " << num_el_con
+              << " elementary connections, reserving "
+              << num_el_con * sizeof(transport_segment)
+              << " byte of memory for q_" << std::endl;
+    q_.reserve(num_el_con);
+  }
 
   tb_preprocessing& tbp_;
   timetable& tt_;
 
   // R(t) data structure - BEGIN
   struct r_entry {
-    std::uint16_t stop_idx_{};
-    day_idx_t day_idx_start_{};
-    day_idx_t day_idx_end_{};
+    std::uint16_t get_stop_idx() const {
+      return static_cast<uint16_t>(stop_idx_);
+    }
+
+    day_idx_t get_day_idx_start() const { return day_idx_t{day_idx_start_}; }
+
+    day_idx_t get_day_idx_end() const { return day_idx_t{day_idx_end_}; }
+
+    std::uint32_t stop_idx_ : STOP_IDX_BITS;
+    std::uint32_t day_idx_start_ : DAY_IDX_BITS;
+    std::uint32_t day_idx_end_ : DAY_IDX_BITS;
   };
 
   void r_update(transport_idx_t const,
@@ -48,16 +70,27 @@ struct tb_query {
         : transport_idx_(transport_idx),
           stop_idx_start_(stop_idx_start),
           stop_idx_end_(stop_idx_end),
-          day_idx_(day_idx),
+          day_idx_(day_idx.v_),
           transferred_from_(transferred_from) {}
 
+    std::uint16_t get_stop_idx_start() const {
+      return static_cast<std::uint16_t>(stop_idx_start_);
+    }
+
+    std::uint16_t get_stop_idx_end() const {
+      return static_cast<std::uint16_t>(stop_idx_end_);
+    }
+
+    day_idx_t get_day_idx() const { return day_idx_t{day_idx_}; }
+
     transport_idx_t const transport_idx_{};
-    std::uint16_t const stop_idx_start_{};
-    std::uint16_t stop_idx_end_{};
-    day_idx_t const day_idx_{};
+
+    std::uint32_t const stop_idx_start_ : STOP_IDX_BITS;
+    std::uint32_t stop_idx_end_ : STOP_IDX_BITS;
+    std::uint32_t const day_idx_ : DAY_IDX_BITS;
 
     // from which segment we transferred to this segment
-    std::uint32_t const transferred_from_{};
+    std::uint32_t const transferred_from_;
   };
 
 #define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()

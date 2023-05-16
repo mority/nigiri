@@ -12,43 +12,44 @@ void tb_query::r_update(transport_idx_t const transport_idx,
   auto day_idx_end = std::numeric_limits<day_idx_t>::max();
 
   for (auto& re : r_[transport_idx]) {
-    // TODO not necessary if invalid tuples are deleted
     if (re.day_idx_start_ == re.day_idx_end_) {
       continue;
     }
     if (stop_idx < re.stop_idx_) {
       if (day_idx <= re.day_idx_start_) {
-        // TODO this should be a deletion
         re.day_idx_start_ = re.day_idx_end_;
       } else if (day_idx < re.day_idx_end_) {
-        re.day_idx_end_ = day_idx;
+        re.day_idx_end_ = day_idx.v_;
       }
     } else if (stop_idx == re.stop_idx_) {
       if (day_idx < re.day_idx_start_) {
-        // TODO this should be a deletion
         re.day_idx_start_ = re.day_idx_end_;
       } else {
         // new entry already covered by current entry
         return;
       }
     } else if (day_idx < re.day_idx_start_) {
-      day_idx_end = re.day_idx_start_;
+      day_idx_end = re.get_day_idx_start();
     } else {
       // new entry already covered by current entry
       return;
     }
   }
 
-  r_[transport_idx].emplace_back(stop_idx, day_idx, day_idx_end);
+  r_[transport_idx].emplace_back(stop_idx, day_idx.v_, day_idx_end.v_);
 }
 
 std::uint16_t tb_query::r_query(transport_idx_t const transport_idx,
                                 day_idx_t const day_idx) {
 
   // look up stop index for the provided day index
-  for (auto const& re : r_[transport_idx]) {
-    if (re.day_idx_start_ <= day_idx && day_idx < re.day_idx_end_) {
-      return re.stop_idx_;
+  // reverse iteration because newest entry is more likely to be valid
+  // newest entry is in the back
+  for (std::uint32_t i = static_cast<std::uint32_t>(r_[transport_idx].size());
+       i-- > 0;) {
+    auto const& re = &r_[transport_idx][i];
+    if (re->get_day_idx_start() <= day_idx && day_idx < re->get_day_idx_end()) {
+      return re->stop_idx_;
     }
   }
 
@@ -239,9 +240,9 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
       // departure time at start of current transport segment in minutes after
       // midnight on the day of the query
       auto const dep_query =
-          duration_t{
-              (tp_seg.day_idx_.v_ + num_midnights(tp_seg_dep).v_ - day_idx.v_) *
-              1440U} +
+          duration_t{(tp_seg.get_day_idx().v_ + num_midnights(tp_seg_dep).v_ -
+                      day_idx.v_) *
+                     1440U} +
           time_of_day(tp_seg_dep);
 
       // check if target location is reached from current transport segment
@@ -295,21 +296,22 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
               // bitset specifying the days on which the transfer is possible
               // from the current transport segment
               auto const& bf_transfer =
-                  tt_.bitfields_[transfer_cur.bitfield_idx_];
+                  tt_.bitfields_[transfer_cur.get_bitfield_idx()];
               // enqueue if transfer is possible
-              if (bf_transfer.test(tp_seg.day_idx_.v_)) {
+              if (bf_transfer.test(tp_seg.day_idx_)) {
                 // arrival time at start location of transfer
                 auto const time_arr = tt_.event_mam(tp_seg.transport_idx_,
                                                     stop_idx, event_type::kArr);
                 // departure time at end location of transfer
                 auto const time_dep =
-                    tt_.event_mam(transfer_cur.transport_idx_to_,
+                    tt_.event_mam(transfer_cur.get_transport_idx_to(),
                                   transfer_cur.stop_idx_to_, event_type::kDep);
 
                 auto const day_index_transfer =
-                    tp_seg.day_idx_ + num_midnights(time_arr) -
-                    num_midnights(time_dep) + transfer_cur.passes_midnight_;
-                enqueue(transfer_cur.transport_idx_to_,
+                    tp_seg.get_day_idx() + num_midnights(time_arr) -
+                    num_midnights(time_dep) +
+                    transfer_cur.get_passes_midnight();
+                enqueue(transfer_cur.get_transport_idx_to(),
                         static_cast<std::uint16_t>(transfer_cur.stop_idx_to_),
                         day_index_transfer, n + 1U, q_cur_[n]);
               }
@@ -338,17 +340,17 @@ void tb_query::reconstruct_journey(
             tt_.route_location_seq_[route_idx][tp_seg->stop_idx_start_]}
             .location_idx();
     // unix time: departure time at the start of the segment
-    auto const unix_start =
-        tt_.to_unixtime(tp_seg->day_idx_, tt_.event_mam(tp_seg->transport_idx_,
-                                                        tp_seg->stop_idx_start_,
-                                                        event_type::kDep));
+    auto const unix_start = tt_.to_unixtime(
+        tp_seg->get_day_idx(),
+        tt_.event_mam(tp_seg->transport_idx_, tp_seg->stop_idx_start_,
+                      event_type::kDep));
     // the stop index of the end of the segment
     auto stop_idx_end = tp_seg->stop_idx_end_;
     // arrival time at the end of the segment
     auto time_arr_end =
         tt_.event_mam(tp_seg->transport_idx_, stop_idx_end, event_type::kArr);
     // unix time: arrival time at the end of the segment
-    auto unix_end = tt_.to_unixtime(tp_seg->day_idx_, time_arr_end);
+    auto unix_end = tt_.to_unixtime(tp_seg->get_day_idx(), time_arr_end);
     // the location index of the end of the segment
     auto location_idx_end =
         timetable::stop{tt_.route_location_seq_[route_idx][stop_idx_end]}
@@ -367,20 +369,21 @@ void tb_query::reconstruct_journey(
         // iterate transfers for this stop
         for (auto tr_idx = ts_pair->first; tr_idx < ts_pair->second; ++tr_idx) {
           auto& tr_cur = tbp_.ts_[tr_idx];
-          if (tr_cur.transport_idx_to_ ==
+          if (tr_cur.get_transport_idx_to() ==
                   get<journey::transport_enter_exit>(j.legs_.back().uses_)
                       .t_.t_idx_ &&
               tr_cur.stop_idx_to_ ==
                   get<journey::transport_enter_exit>(j.legs_.back().uses_)
                       .stop_range_.from_ &&
-              tt_.bitfields_[tr_cur.bitfield_idx_].test(tp_seg->day_idx_.v_)) {
+              tt_.bitfields_[tr_cur.get_bitfield_idx()].test(
+                  tp_seg->get_day_idx().v_)) {
             // set end stop index of current segment according to found transfer
             if (stop_idx_end != stop_idx) {
               stop_idx_end = stop_idx;
               // recalculate because end stop idx changed
               time_arr_end = tt_.event_mam(tp_seg->transport_idx_, stop_idx_end,
                                            event_type::kArr);
-              unix_end = tt_.to_unixtime(tp_seg->day_idx_, time_arr_end);
+              unix_end = tt_.to_unixtime(tp_seg->get_day_idx(), time_arr_end);
               location_idx_end =
                   timetable::stop{
                       tt_.route_location_seq_[route_idx][stop_idx_end]}
@@ -393,7 +396,7 @@ void tb_query::reconstruct_journey(
               if (fp.target_ == j.legs_.back().from_) {
                 // unix time: arrival at the end of the footpath
                 auto const unix_fp_end = tt_.to_unixtime(
-                    tp_seg->day_idx_, time_arr_end + fp.duration_);
+                    tp_seg->get_day_idx(), time_arr_end + fp.duration_);
 
                 journey::leg l_fp{direction::kForward,  location_idx_end,
                                   j.legs_.back().from_, unix_end,
@@ -411,7 +414,7 @@ void tb_query::reconstruct_journey(
 
     // add journey leg for this transport segment
     journey::transport_enter_exit tee{
-        transport{tp_seg->transport_idx_, tp_seg->day_idx_},
+        transport{tp_seg->transport_idx_, tp_seg->get_day_idx()},
         tp_seg->stop_idx_start_, stop_idx_end};
     journey::leg l_tp{direction::kForward, location_idx_start, location_idx_end,
                       unix_start,          unix_end,           tee};

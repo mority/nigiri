@@ -7,8 +7,9 @@ void hash_transfer_set::add(transport_idx_t const& transport_idx_from,
                             transport_idx_t const& transport_idx_to,
                             std::uint32_t const stop_idx_to,
                             bitfield_idx_t const& bitfield_idx,
-                            std::uint32_t passes_midnight) {
+                            day_idx_t passes_midnight) {
   assert(!finalized_);
+  assert(passes_midnight < 2U);
 
   if (!initialized_) {
     cur_transport_idx_from_ = transport_idx_from;
@@ -19,12 +20,8 @@ void hash_transfer_set::add(transport_idx_t const& transport_idx_from,
   if (stop_idx_from != cur_stop_idx_from_ ||
       transport_idx_from != cur_transport_idx_from_) {
     // finish current stop
-    key key{};
-    key.first = cur_transport_idx_from_;
-    key.second = cur_stop_idx_from_;
-    entry entry{};
-    entry.first = cur_start_;
-    entry.second = cur_start_ + cur_length_;
+    key key{cur_transport_idx_from_, cur_stop_idx_from_};
+    entry entry{cur_start_, cur_start_ + cur_length_};
     index_.emplace(key, entry);
 
     // reset cursors
