@@ -14,6 +14,7 @@ bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   });
 }
 
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
 bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
                                               duration_t time_new,
                                               bitfield const& bf) {
@@ -76,64 +77,56 @@ bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
     return false;
   }
 }
+#endif
 
-void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
+void tb_preprocessing::build_transfer_set() {
 
   // iterate over all trips of the timetable
-  // tpi: transport idx from
   for (transport_idx_t tpi_from{0U};
        tpi_from != tt_.transport_traffic_days_.size(); ++tpi_from) {
 
-    if (reduction) {
-      // clear earliest times
-      ets_arr_.clear();
-      ets_ch_.clear();
-    }
-
-    // ri from: route index from
+    // route index of the current transport
     auto const ri_from = tt_.transport_route_[tpi_from];
 
-    // iterate over stops of transport (skip first stop)
+    // the stops of the current transport
     auto const stops_from = tt_.route_location_seq_[ri_from];
 
-    // si_from: stop index from
-    auto si_from = reduction ? stops_from.size() - 1 : 1U;
-    // reversed iteration direction for transfer reduction
-    auto const si_limit = reduction ? 0U : stops_from.size();
-    auto const si_step = [&si_from, reduction]() {
-      if (reduction) {
-        --si_from;
-      } else {
-        ++si_from;
-      }
-    };
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+    // clear earliest times
+    ets_arr_.clear();
+    ets_ch_.clear();
+    // reverse iteration
+    for (unsigned si_from = stops_from.size() - 1; si_from != 0U; --si_from) {
+#else
+    for (unsigned si_from = 1U; si_from != stops_from.size(); ++si_from) {
+#endif
 
-    for (; si_from != si_limit; si_step()) {
-
-      // li_from: location index from
+      // the location index from which we are transferring
       auto const li_from = timetable::stop{stops_from[si_from]}.location_idx();
 
+      // the arrival time of the transport we are tranferring from
       auto const t_arr_from =
           tt_.event_mam(tpi_from, si_from, event_type::kArr);
 
-      // sa_tp_from: shift amount transport from
+      // shift amount due to travel time of the transport we are transferring
+      // from
       auto const sa_tp_from = num_midnights(t_arr_from);
 
+      // the bitfield of the transport we are transferring from
       auto const& bf_tp_from =
           tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
 
-      if (reduction) {
-        // init the earliest times data structure
-        ets_arr_.update(li_from, t_arr_from, bf_tp_from);
-        for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
-          ets_arr_.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
-          ets_ch_.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
-        }
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+      // init the earliest times data structure
+      ets_arr_.update(li_from, t_arr_from, bf_tp_from);
+      for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
+        ets_arr_.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
+        ets_ch_.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
       }
+#endif
 
       auto handle_fp = [&t_arr_from, &sa_tp_from, this, &bf_tp_from, &tpi_from,
-                        &si_from, &ri_from, &uturn_removal,
-                        &reduction](footpath const& fp) {
+                        &si_from, &ri_from](footpath const fp) {
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
 
@@ -152,8 +145,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
         // ri_to: route index to
         for (auto const ri_to : routes_at_stop_to) {
 
-          // ri_to might visit stop multiple times, skip if stop_to is the last
-          // stop in the stop sequence of ri_to si_to: stop index to
+          // ri_to might visit stop multiple times, skip if stop_to is the
+          // last stop in the stop sequence of ri_to si_to: stop index to
           for (unsigned si_to = 0U;
                si_to < tt_.route_location_seq_[ri_to].size() - 1; ++si_to) {
 
@@ -189,8 +182,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
               // omega: days of transport_from that still require connection
               bitfield omega = bf_tp_from;
 
-              // check if any bit in omega is set to 1 and maximum waiting time
-              // not exceeded
+              // check if any bit in omega is set to 1 and maximum waiting
+              // time not exceeded
               while (omega.any() && sa_w <= sa_w_max_) {
 
                 // departure time of current transport in relation to time a
@@ -249,6 +242,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                     // omega
                     omega &= ~bf_tf_from;
 
+#ifdef TB_PREPRO_UTURN_REMOVAL
                     auto const check_uturn = [&si_to, this, &ri_to, &si_from,
                                               &ri_from, &dep_cur, &tpi_to, &a,
                                               &fp, &tpi_from]() {
@@ -256,8 +250,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                       // tpi_from exists
                       if (si_to + 1 < tt_.route_location_seq_[ri_to].size() &&
                           si_from - 1 > 0) {
-                        // check if next stop of tpi_to is the previous stop of
-                        // tpi_from
+                        // check if next stop of tpi_to is the previous stop
+                        // of tpi_from
                         auto const stop_to_next = timetable::stop{
                             tt_.route_location_seq_[ri_to][si_to + 1]};
                         auto const stop_from_prev = timetable::stop{
@@ -286,12 +280,9 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                       }
                       return false;
                     };
-
-                    // perform uturn_check if uturn_removal flag is set
-                    auto const is_uturn = uturn_removal ? check_uturn() : false;
-
-                    if (!is_uturn) {
-
+                    if (!check_uturn()) {
+#endif
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
                       auto const check_impr = [&ta, &dep_cur, &a, &si_to, this,
                                                &ri_to, &tpi_to, &dep_it,
                                                &bf_tf_from]() {
@@ -325,16 +316,18 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                         }
                         return impr;
                       };
-
-                      auto const is_impr = reduction ? check_impr() : true;
-
-                      if (is_impr) {
+                      if (check_impr()) {
+#endif
                         // construct and add transfer to transfer set
                         auto const bfi_from = get_or_create_bfi(bf_tf_from);
                         ts_.add(tpi_from, si_from, tpi_to, si_to, bfi_from,
                                 sa_fp + sa_w);
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
                       }
+#endif
+#ifdef TB_PREPRO_UTURN_REMOVAL
                     }
+#endif
                   }
                 }
 

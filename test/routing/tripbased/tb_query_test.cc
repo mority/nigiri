@@ -138,7 +138,7 @@ TEST(reconstruct_journey, no_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true, true);
+  tbp.build_transfer_set();
 
   // init query
   tb_query tbq{tbp};
@@ -174,7 +174,7 @@ TEST(reconstruct_journey, same_day_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true, true);
+  tbp.build_transfer_set();
 
   // init query
   tb_query tbq{tbp};
@@ -226,7 +226,7 @@ TEST(reconstruct_journey, transfer_with_footpath) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true, true);
+  tbp.build_transfer_set();
 
   ASSERT_EQ(1, tbp.ts_.transfers_.size());
 
@@ -303,7 +303,7 @@ TEST(earliest_arrival_query, same_day_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true, true);
+  tbp.build_transfer_set();
 
   // init tb_query
   tb_query tbq(tbp);
@@ -369,7 +369,7 @@ TEST(earliest_arrival_query, long_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true, true);
+  tbp.build_transfer_set();
 
   // init tb_query
   tb_query tbq(tbp);
@@ -435,7 +435,7 @@ TEST(earliest_arrival_query, earlier_stop_transfer) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true, true);
+  tbp.build_transfer_set();
 
   // init tb_query
   tb_query tbq(tbp);
@@ -484,7 +484,7 @@ TEST(earliest_arrival_query, no_journey_possible) {
   tb_preprocessing tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set(true, true);
+  tbp.build_transfer_set();
 
   // init tb_query
   tb_query tbq(tbp);
@@ -578,7 +578,7 @@ TEST(earliest_arrival_query, files_abc) {
   }
 
   tb_preprocessing tbp{tt};
-  tbp.build_transfer_set(true, true);
+  tbp.build_transfer_set();
 
   tb_query tbq{tbp};
 

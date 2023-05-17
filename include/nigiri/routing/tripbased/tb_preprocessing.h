@@ -84,7 +84,7 @@ struct tb_preprocessing {
     ts_.transfers_.reserve(num_exp_transfers);
   }
 
-  void build_transfer_set(bool uturn_removal = true, bool reduction = true);
+  void build_transfer_set();
 
   // load precomputed transfer set from file
   // also needs to load the corresponding timetable from file since bitfields
