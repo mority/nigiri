@@ -42,147 +42,117 @@ TEST(earliest_times, basic) {
   tb_preprocessing::earliest_times ets{tbp};
 
   // update empty
-  location_idx_t const li_exp0{23U};
-  duration_t const time_exp0{42U};
+  location_idx_t const li_23{23U};
+  duration_t const time_42{42U};
   bitfield const bf_111{"111"};
-  ets.update(li_exp0, time_exp0, bf_111);
+  ets.update(li_23, time_42, bf_111);
 
-  ASSERT_EQ(1, ets.size());
+  ASSERT_EQ(24, ets.size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
 
-  EXPECT_EQ(li_exp0, ets[0].location_idx_);
-  EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
 
   // update end
-  location_idx_t const li_exp1{66U};
-  duration_t const time_exp1{77U};
+  location_idx_t const li_66{66U};
+  duration_t const time_77{77U};
   bitfield const bf_101{"101"};
-  ets.update(li_exp1, time_exp1, bf_101);
+  ets.update(li_66, time_77, bf_101);
 
-  ASSERT_EQ(2, ets.size());
-
-  EXPECT_EQ(li_exp0, ets[0].location_idx_);
-  EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
-
-  EXPECT_EQ(li_exp1, ets[1].location_idx_);
-  EXPECT_EQ(time_exp1, ets[1].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets[1].bf_idx_]);
+  ASSERT_EQ(67, ets.size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
 
   // update inner
-  location_idx_t const li_exp2{55U};
-  duration_t const time_exp2{88U};
+  location_idx_t const li_55{55U};
+  duration_t const time_88{88U};
   bitfield const bf_110{"110"};
-  ets.update(li_exp2, time_exp2, bf_110);
+  ets.update(li_55, time_88, bf_110);
 
-  ASSERT_EQ(3, ets.size());
+  ASSERT_EQ(67, ets.size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_55].size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+  EXPECT_EQ(bf_110, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
 
-  EXPECT_EQ(li_exp0, ets[0].location_idx_);
-  EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
-
-  EXPECT_EQ(li_exp2, ets[1].location_idx_);
-  EXPECT_EQ(time_exp2, ets[1].time_);
-  EXPECT_EQ(bf_110, tt.bitfields_[ets[1].bf_idx_]);
-
-  EXPECT_EQ(li_exp1, ets[2].location_idx_);
-  EXPECT_EQ(time_exp1, ets[2].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets[2].bf_idx_]);
-
-  // update existing inner, no remove
-  location_idx_t const li_exp3{55U};
-  duration_t const time_exp3{87U};
+  // update existing, addition, no overwrite
+  duration_t const time_87{87U};
   bitfield const bf_010{"010"};
-  ets.update(li_exp3, time_exp3, bf_010);
+  ets.update(li_55, time_87, bf_010);
   bitfield const bf_100{"100"};
 
-  ASSERT_EQ(4, ets.size());
+  ASSERT_EQ(67, ets.size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+  ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+  EXPECT_EQ(bf_100, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(time_87, ets.location_idx_times_[li_55][1].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li_55][1].bf_idx_]);
+  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
 
-  EXPECT_EQ(li_exp0, ets[0].location_idx_);
-  EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+  // update existing, overwrite
+  duration_t const time_86{86U};
+  ets.update(li_55, time_86, bf_010);
 
-  EXPECT_EQ(li_exp2, ets[1].location_idx_);
-  EXPECT_EQ(time_exp2, ets[1].time_);
-  EXPECT_EQ(bf_100, tt.bitfields_[ets[1].bf_idx_]);
+  ASSERT_EQ(67, ets.size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+  ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+  EXPECT_EQ(bf_100, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li_55][1].bf_idx_]);
+  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
 
-  EXPECT_EQ(li_exp3, ets[2].location_idx_);
-  EXPECT_EQ(time_exp3, ets[2].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets[2].bf_idx_]);
+  // update existing, overwrite
+  duration_t const time_41{41U};
+  ets.update(li_23, time_41, bf_111);
 
-  EXPECT_EQ(li_exp1, ets[3].location_idx_);
-  EXPECT_EQ(time_exp1, ets[3].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets[3].bf_idx_]);
+  ASSERT_EQ(67, ets.size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+  ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+  EXPECT_EQ(time_41, ets.location_idx_times_[li_23][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+  EXPECT_EQ(bf_100, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li_55][1].bf_idx_]);
+  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
 
-  // update existing inner, remove
-  location_idx_t const li_exp4{55U};
-  duration_t const time_exp4{86U};
+  // update existing, overwrite
+  duration_t const time_76{76U};
+  ets.update(li_66, time_76, bf_111);
 
-  ets.update(li_exp4, time_exp4, bf_010);
-
-  ASSERT_EQ(4, ets.size());
-
-  EXPECT_EQ(li_exp0, ets[0].location_idx_);
-  EXPECT_EQ(time_exp0, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
-
-  EXPECT_EQ(li_exp2, ets[1].location_idx_);
-  EXPECT_EQ(time_exp2, ets[1].time_);
-  EXPECT_EQ(bf_100, tt.bitfields_[ets[1].bf_idx_]);
-
-  EXPECT_EQ(li_exp4, ets[2].location_idx_);
-  EXPECT_EQ(time_exp4, ets[2].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets[2].bf_idx_]);
-
-  EXPECT_EQ(li_exp1, ets[3].location_idx_);
-  EXPECT_EQ(time_exp1, ets[3].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets[3].bf_idx_]);
-
-  // update existing begin, remove
-  duration_t const time_exp5{41U};
-
-  ets.update(li_exp0, time_exp5, bf_111);
-
-  ASSERT_EQ(4, ets.size());
-
-  EXPECT_EQ(li_exp0, ets[0].location_idx_);
-  EXPECT_EQ(time_exp5, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
-
-  EXPECT_EQ(li_exp2, ets[1].location_idx_);
-  EXPECT_EQ(time_exp2, ets[1].time_);
-  EXPECT_EQ(bf_100, tt.bitfields_[ets[1].bf_idx_]);
-
-  EXPECT_EQ(li_exp4, ets[2].location_idx_);
-  EXPECT_EQ(time_exp4, ets[2].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets[2].bf_idx_]);
-
-  EXPECT_EQ(li_exp1, ets[3].location_idx_);
-  EXPECT_EQ(time_exp1, ets[3].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets[3].bf_idx_]);
-
-  // update existing end, remove
-  duration_t const time_exp6{76U};
-
-  ets.update(li_exp1, time_exp6, bf_111);
-
-  ASSERT_EQ(4, ets.size());
-
-  EXPECT_EQ(li_exp0, ets[0].location_idx_);
-  EXPECT_EQ(time_exp5, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
-
-  EXPECT_EQ(li_exp2, ets[1].location_idx_);
-  EXPECT_EQ(time_exp2, ets[1].time_);
-  EXPECT_EQ(bf_100, tt.bitfields_[ets[1].bf_idx_]);
-
-  EXPECT_EQ(li_exp4, ets[2].location_idx_);
-  EXPECT_EQ(time_exp4, ets[2].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets[2].bf_idx_]);
-
-  EXPECT_EQ(li_exp1, ets[3].location_idx_);
-  EXPECT_EQ(time_exp6, ets[3].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[3].bf_idx_]);
+  ASSERT_EQ(67, ets.size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+  ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
+  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+  EXPECT_EQ(time_41, ets.location_idx_times_[li_23][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+  EXPECT_EQ(bf_100, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li_55][1].bf_idx_]);
+  EXPECT_EQ(time_76, ets.location_idx_times_[li_66][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
 }
 
 TEST(earliest_times, same_time_more_bits) {
@@ -197,16 +167,14 @@ TEST(earliest_times, same_time_more_bits) {
   bitfield const bf_111{"111"};
 
   ets.update(li, time, bf_010);
-  ASSERT_EQ(1, ets.size());
-  EXPECT_EQ(li, ets[0].location_idx_);
-  EXPECT_EQ(time, ets[0].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets[0].bf_idx_]);
+  ASSERT_EQ(1, ets.location_idx_times_[li].size());
+  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
 
   ets.update(li, time, bf_111);
-  ASSERT_EQ(1, ets.size());
-  EXPECT_EQ(li, ets[0].location_idx_);
-  EXPECT_EQ(time, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+  ASSERT_EQ(1, ets.location_idx_times_[li].size());
+  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
 }
 
 TEST(earliest_times, same_time_less_bits) {
@@ -221,16 +189,14 @@ TEST(earliest_times, same_time_less_bits) {
   bitfield const bf_101{"101"};
 
   ets.update(li, time, bf_111);
-  ASSERT_EQ(1, ets.size());
-  EXPECT_EQ(li, ets[0].location_idx_);
-  EXPECT_EQ(time, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+  ASSERT_EQ(1, ets.location_idx_times_[li].size());
+  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
 
   ets.update(li, time, bf_101);
-  ASSERT_EQ(1, ets.size());
-  EXPECT_EQ(li, ets[0].location_idx_);
-  EXPECT_EQ(time, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+  ASSERT_EQ(1, ets.location_idx_times_[li].size());
+  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
 }
 
 TEST(earliest_times, same_time_other_bits) {
@@ -246,16 +212,14 @@ TEST(earliest_times, same_time_other_bits) {
   bitfield const bf_111{"111"};
 
   ets.update(li, time, bf_010);
-  ASSERT_EQ(1, ets.size());
-  EXPECT_EQ(li, ets[0].location_idx_);
-  EXPECT_EQ(time, ets[0].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets[0].bf_idx_]);
+  ASSERT_EQ(1, ets.location_idx_times_[li].size());
+  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
 
   ets.update(li, time, bf_101);
-  ASSERT_EQ(1, ets.size());
-  EXPECT_EQ(li, ets[0].location_idx_);
-  EXPECT_EQ(time, ets[0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets[0].bf_idx_]);
+  ASSERT_EQ(1, ets.location_idx_times_[li].size());
+  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
 }
 
 TEST(earliest_times, random) {
@@ -285,36 +249,31 @@ TEST(earliest_times, random) {
     ets.update(location_idx_t{li_dist(gen)}, duration_t{time_dist(gen)}, bf);
   }
 
-  // check sorted by location
-  for (auto it = ets.data_.begin(); it + 1 != ets.data_.end(); ++it) {
-    EXPECT_TRUE(it->location_idx_ <= (it + 1)->location_idx_);
-  }
-
   // check each time is unique per location
+  // and bitsets are disjoint per location
   ASSERT_TRUE(0 < ets.size());
-  location_idx_t li_cur = ets[0].location_idx_;
+  unsigned num_entries{0U};
   std::set<duration_t> time_set;
-  for (auto it = ets.data_.begin(); it != ets.data_.end(); ++it) {
-    if (it->location_idx_ != li_cur) {
-      li_cur = it->location_idx_;
-      time_set.clear();
+  bitfield bf_or;
+  for (auto const times : ets.location_idx_times_) {
+    time_set.clear();
+    bf_or = bitfield{"0"};
+    for (auto const& et : times) {
+      // if it has at least one active day it must be the only entry for this
+      // time
+      if (tt.bitfields_[et.bf_idx_].any()) {
+        EXPECT_EQ(time_set.end(), time_set.find(et.time_));
+        time_set.emplace(et.time_);
+      }
+      EXPECT_TRUE((bf_or & tt.bitfields_[et.bf_idx_]).none());
+      bf_or |= tt.bitfields_[et.bf_idx_];
+      ++num_entries;
     }
-    EXPECT_EQ(time_set.end(), time_set.find(it->time_));
-    time_set.emplace(it->time_);
   }
 
-  // check bitsets are disjoint per location
-  li_cur = ets[0].location_idx_;
-  auto bf_or = tt.bitfields_[ets[0].bf_idx_];
-  for (auto it = ets.data_.begin() + 1; it != ets.data_.end(); ++it) {
-    if (it->location_idx_ != li_cur) {
-      li_cur = it->location_idx_;
-      bf_or = tt.bitfields_[it->bf_idx_];
-    } else {
-      EXPECT_TRUE((bf_or & tt.bitfields_[it->bf_idx_]).none());
-      bf_or |= tt.bitfields_[it->bf_idx_];
-    }
-  }
+  std::cout << "After performing " << num_updates
+            << " random updates, the earliest times data structure has "
+            << num_entries << " entries.\n";
 }
 
 using namespace nigiri::loader;

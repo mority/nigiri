@@ -8,12 +8,6 @@ namespace nigiri::routing::tripbased {
 struct tb_preprocessing {
 
   struct earliest_time {
-    constexpr earliest_time(location_idx_t const location,
-                            duration_t const time,
-                            bitfield_idx_t const bf_idx)
-        : location_idx_(location), time_(time), bf_idx_(bf_idx) {}
-
-    location_idx_t location_idx_{};
     duration_t time_{};
     bitfield_idx_t bf_idx_{};
   };
@@ -24,21 +18,17 @@ struct tb_preprocessing {
 
     bool update(location_idx_t li_new, duration_t time_new, bitfield const& bf);
 
-    constexpr unsigned long size() const noexcept { return data_.size(); }
+    constexpr auto size() const noexcept { return location_idx_times_.size(); }
 
-    constexpr earliest_time& operator[](unsigned long pos) {
-      return data_[pos];
-    }
-
-    constexpr void clear() noexcept { data_.clear(); }
+    constexpr void clear() noexcept { location_idx_times_.clear(); }
 
     tb_preprocessing& tbp_;
-    std::vector<earliest_time> data_{};
+    mutable_fws_multimap<location_idx_t, earliest_time> location_idx_times_{};
   };
 
   tb_preprocessing() = delete;
   explicit tb_preprocessing(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
-      : tt_(tt), sa_w_max_(sa_w_max) {
+      : tt_(tt), sa_w_max_(sa_w_max), ets_arr_(*this), ets_ch_(*this) {
 
     // check system limits
     assert(tt.bitfields_.size() <= kBitfieldIdxMax);
@@ -67,9 +57,15 @@ struct tb_preprocessing {
                      tt_.route_transport_ranges_[route_idx].size().v_;
     }
 
+    // init bitfields hashmap with bitfields that are already used by the
+    // timetable
+    for (bitfield_idx_t bfi{0U}; bfi < tt_.bitfields_.size();
+         ++bfi) {  // bfi: bitfield index
+      bitfield_to_bitfield_idx_.emplace(tt_.bitfields_[bfi], bfi);
+    }
+
     // number of expected transfers
     auto const num_exp_transfers = num_el_con_;
-
     // reserve space for transfer set
     std::cout << "Reserving " << num_exp_transfers * sizeof(transfer)
               << " bytes for " << num_exp_transfers << " expected transfers\n";
@@ -89,10 +85,14 @@ struct tb_preprocessing {
 
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
+  // the timetable than is being processed
   timetable& tt_;
   // the number of elementary connections in the timetable
   unsigned num_el_con_;
-  day_idx_t const sa_w_max_{};  // look-ahead
+  // max. look-ahead
+  day_idx_t const sa_w_max_{};
+  earliest_times ets_arr_;
+  earliest_times ets_ch_;
   hash_transfer_set ts_{};
 };
 

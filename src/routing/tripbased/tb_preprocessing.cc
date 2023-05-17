@@ -6,15 +6,6 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-constexpr std::string first_n(bitfield const& bf, std::size_t n = 16) {
-  std::string s;
-  n = n > bf.size() ? bf.size() : n;
-  for (std::size_t i = n; i + 1 != 0; --i) {
-    s += bf[i] ? "1" : "0";
-  }
-  return s;
-}
-
 bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&bf, this]() {
     auto const bfi = tt_.register_bitfield(bf);
@@ -23,82 +14,62 @@ bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   });
 }
 
-bool tb_preprocessing::earliest_times::update(location_idx_t li_new,
+bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
                                               duration_t time_new,
                                               bitfield const& bf) {
-
+  // bitfield of the update
   bitfield bf_new = bf;
 
-  // find first tuple of this li_new
-  auto et_cur = std::lower_bound(
-      data_.begin(), data_.end(), li_new,
-      [](earliest_time const& et, location_idx_t const& l) constexpr {
-        return et.location_idx_ < l;
-      });
-
-  // no entry for this li_new
-  if (et_cur == data_.end()) {
-    data_.emplace_back(li_new, time_new, tbp_.get_or_create_bfi(bf_new));
-    return true;
-  } else if (li_new < et_cur->location_idx_) {
-    data_.emplace(et_cur, li_new, time_new, tbp_.get_or_create_bfi(bf_new));
-    return true;
-  }
-
-  // iterator to first entry that would be erased, overwrite with new entry
+  // iterator to first entry that has no active days, overwrite with new entry
   // instead
-  auto overwrite_spot = data_.end();
+  unsigned overwrite_spot =
+      static_cast<unsigned>(location_idx_times_[location_idx].size());
 
-  // iterate entries for this li_new
-  while (et_cur != data_.end() && et_cur->location_idx_ == li_new) {
+  // iterate entries for this location
+  for (auto i{0U}; i < location_idx_times_[location_idx].size(); ++i) {
+    // the earliest time entry we are currently examining
+    auto& et_cur = location_idx_times_[location_idx][i];
     if (bf_new.none()) {
       // all bits of new entry were set to zero, new entry does not improve
       // upon any times
       return false;
-    } else if (time_new < et_cur->time_) {
-      // new time is better than current time, update bit set of current
-      // time
-      bitfield bf_cur = tbp_.tt_.bitfields_[et_cur->bf_idx_] & ~bf_new;
-      if (bf_cur.none()) {
-        // if current time is no longer needed, we remove it from the vector
-        if (overwrite_spot == data_.end()) {
-          overwrite_spot = et_cur;
-          ++et_cur;
+    } else if (tbp_.tt_.bitfields_[et_cur.bf_idx_].any()) {
+      if (time_new < et_cur.time_) {
+        // new time is better than current time, update bit set of current
+        // time
+        et_cur.bf_idx_ = tbp_.get_or_create_bfi(
+            tbp_.tt_.bitfields_[et_cur.bf_idx_] & ~bf_new);
+      } else if (time_new == et_cur.time_) {
+        // entry for this time already exists
+        if ((bf_new & ~tbp_.tt_.bitfields_[et_cur.bf_idx_]).none()) {
+          // all bits of bf_new already covered
+          return false;
         } else {
-          data_.erase(et_cur);
+          // new entry absorbs old entry
+          bf_new |= tbp_.tt_.bitfields_[et_cur.bf_idx_];
+          et_cur.bf_idx_ = tbp_.get_or_create_bfi(bitfield{"0"});
         }
       } else {
-        // save updated bitset index of current time
-        et_cur->bf_idx_ = tbp_.get_or_create_bfi(bf_cur);
-        ++et_cur;
+        // new time is worse than current time, update bit set of new time
+        bf_new &= ~tbp_.tt_.bitfields_[et_cur.bf_idx_];
       }
-    } else if (time_new == et_cur->time_) {
-      // entry for this time already exists
-      if ((bf_new & ~tbp_.tt_.bitfields_[et_cur->bf_idx_]).none()) {
-        // all bits of bf_new already covered
-        return false;
-      } else {
-        bf_new |= tbp_.tt_.bitfields_[et_cur->bf_idx_];
-        if (overwrite_spot == data_.end()) {
-          overwrite_spot = et_cur;
-          ++et_cur;
-        } else {
-          data_.erase(et_cur);
-        }
-      }
-    } else {
-      // new time is worse than current time, update bit set of new time
-      bf_new &= ~tbp_.tt_.bitfields_[et_cur->bf_idx_];
-      ++et_cur;
+    }
+    // we remember the first invalid entry as an overwrite spot for the new
+    // entry
+    if (overwrite_spot == location_idx_times_[location_idx].size() &&
+        tbp_.tt_.bitfields_[et_cur.bf_idx_].none()) {
+      overwrite_spot = i;
     }
   }
 
   if (bf_new.any()) {
-    if (overwrite_spot == data_.end()) {
-      data_.emplace(et_cur, li_new, time_new, tbp_.get_or_create_bfi(bf_new));
+    if (overwrite_spot == location_idx_times_[location_idx].size()) {
+      location_idx_times_[location_idx].emplace_back(
+          time_new, tbp_.get_or_create_bfi(bf_new));
     } else {
-      overwrite_spot->time_ = time_new;
-      overwrite_spot->bf_idx_ = tbp_.get_or_create_bfi(bf_new);
+      location_idx_times_[location_idx][overwrite_spot].time_ = time_new;
+      location_idx_times_[location_idx][overwrite_spot].bf_idx_ =
+          tbp_.get_or_create_bfi(bf_new);
     }
     return true;
   } else {
@@ -108,19 +79,6 @@ bool tb_preprocessing::earliest_times::update(location_idx_t li_new,
 
 void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
 
-  // init bitfields hashmap with bitfields that are already used by the
-  // timetable
-  for (bitfield_idx_t bfi{0U}; bfi < tt_.bitfields_.size();
-       ++bfi) {  // bfi: bitfield index
-    bitfield_to_bitfield_idx_.emplace(tt_.bitfields_[bfi], bfi);
-  }
-
-  // earliest arrival time per stop
-  earliest_times ets_arr{*this};
-
-  // earliest time a connecting trip may depart per stop
-  earliest_times ets_ch{*this};
-
   // iterate over all trips of the timetable
   // tpi: transport idx from
   for (transport_idx_t tpi_from{0U};
@@ -128,8 +86,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
 
     if (reduction) {
       // clear earliest times
-      ets_arr.clear();
-      ets_ch.clear();
+      ets_arr_.clear();
+      ets_ch_.clear();
     }
 
     // ri from: route index from
@@ -165,16 +123,16 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
           tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
 
       if (reduction) {
-        // init earliest times
-        ets_arr.update(li_from, t_arr_from, bf_tp_from);
+        // init the earliest times data structure
+        ets_arr_.update(li_from, t_arr_from, bf_tp_from);
         for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
-          ets_arr.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
-          ets_ch.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
+          ets_arr_.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
+          ets_ch_.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
         }
       }
 
       auto handle_fp = [&t_arr_from, &sa_tp_from, this, &bf_tp_from, &tpi_from,
-                        &si_from, &ri_from, &uturn_removal, &ets_arr, &ets_ch,
+                        &si_from, &ri_from, &uturn_removal,
                         &reduction](footpath const& fp) {
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
@@ -336,8 +294,7 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
 
                       auto const check_impr = [&ta, &dep_cur, &a, &si_to, this,
                                                &ri_to, &tpi_to, &dep_it,
-                                               &ets_arr, &bf_tf_from,
-                                               &ets_ch]() {
+                                               &bf_tf_from]() {
                         bool impr = false;
                         auto const t_dep_to = ta + (dep_cur - a);
                         for (auto si_to_later = si_to + 1;
@@ -352,16 +309,16 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
                               timetable::stop{
                                   tt_.route_location_seq_[ri_to][si_to_later]}
                                   .location_idx();
-                          auto const ets_arr_res = ets_arr.update(
+                          auto const ets_arr_res = ets_arr_.update(
                               li_to_later, t_arr_to_later, bf_tf_from);
                           impr = impr || ets_arr_res;
                           for (auto const& fp_later :
                                tt_.locations_.footpaths_out_[li_to_later]) {
                             auto const eta =
                                 t_arr_to_later + fp_later.duration_;
-                            auto const ets_arr_fp_res = ets_arr.update(
+                            auto const ets_arr_fp_res = ets_arr_.update(
                                 fp_later.target_, eta, bf_tf_from);
-                            auto const ets_ch_fp_res = ets_ch.update(
+                            auto const ets_ch_fp_res = ets_ch_.update(
                                 fp_later.target_, eta, bf_tf_from);
                             impr = impr || ets_arr_fp_res || ets_ch_fp_res;
                           }
@@ -400,7 +357,8 @@ void tb_preprocessing::build_transfer_set(bool uturn_removal, bool reduction) {
       };
 
       // virtual reflexive footpath
-      footpath reflexive_fp{li_from, tt_.locations_.transfer_time_[li_from]};
+      footpath const reflexive_fp{li_from,
+                                  tt_.locations_.transfer_time_[li_from]};
       handle_fp(reflexive_fp);
 
       // outgoing footpaths of location
