@@ -3,16 +3,20 @@
 #include "nigiri/timetable.h"
 #include "tb.h"
 
+#define TB_PREPRO_UTURN_REMOVAL
+#define TB_PREPRO_TRANSFER_REDUCTION
+
 namespace nigiri::routing::tripbased {
 
 struct tb_preprocessing {
 
-  struct earliest_time {
-    duration_t time_{};
-    bitfield_idx_t bf_idx_{};
-  };
-
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
   struct earliest_times {
+    struct earliest_time {
+      duration_t time_{};
+      bitfield_idx_t bf_idx_{};
+    };
+
     earliest_times() = delete;
     explicit earliest_times(tb_preprocessing& tbp) : tbp_(tbp) {}
 
@@ -25,10 +29,18 @@ struct tb_preprocessing {
     tb_preprocessing& tbp_;
     mutable_fws_multimap<location_idx_t, earliest_time> location_idx_times_{};
   };
+#endif
 
   tb_preprocessing() = delete;
   explicit tb_preprocessing(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
-      : tt_(tt), sa_w_max_(sa_w_max), ets_arr_(*this), ets_ch_(*this) {
+      : tt_(tt),
+        sa_w_max_(sa_w_max)
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+        ,
+        ets_arr_(*this),
+        ets_ch_(*this)
+#endif
+  {
 
     // check system limits
     assert(tt.bitfields_.size() <= kBitfieldIdxMax);
@@ -91,9 +103,12 @@ struct tb_preprocessing {
   unsigned num_el_con_;
   // max. look-ahead
   day_idx_t const sa_w_max_{};
+  hash_transfer_set ts_{};
+
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
   earliest_times ets_arr_;
   earliest_times ets_ch_;
-  hash_transfer_set ts_{};
+#endif
 };
 
 }  // namespace nigiri::routing::tripbased
