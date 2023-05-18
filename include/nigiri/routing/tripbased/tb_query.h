@@ -8,6 +8,8 @@
 #include "nigiri/routing/routing_time.h"
 #include "tb_preprocessing.h"
 
+#define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()
+
 namespace nigiri {
 struct timetable;
 }
@@ -85,8 +87,6 @@ struct tb_query {
     // from which segment we transferred to this segment
     std::uint32_t const transferred_from_;
   };
-
-#define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()
 
   void enqueue(transport_idx_t const transport_idx,
                std::uint16_t const stop_idx,
