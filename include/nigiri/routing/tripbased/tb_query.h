@@ -19,6 +19,16 @@ namespace nigiri::routing::tripbased {
 struct tb_query {
   tb_query() = delete;
   explicit tb_query(tb_preprocessing& tbp) : tbp_(tbp), tt_(tbp.tt_) {
+    // reserve space
+    std::cout << "Reserving "
+              << tt_.transport_route_.size() * 4 * sizeof(r_entry)
+              << " bytes for r_\n";
+    r_.reserve(tt_.transport_route_.size(), 4);
+    l_.reserve(128);
+    q_cur_.reserve(16);
+    q_start_.reserve(16);
+    q_end_.reserve(16);
+
     // queue size is boundend by number of elementary connections in the time
     // table
     std::cout << "Number of elementary connections is " << tbp_.num_el_con_
@@ -95,11 +105,11 @@ struct tb_query {
                std::uint32_t const transferred_from);
 
   // q_cur_[n] = cursor of Q_n
-  std::vector<std::uint32_t> q_cur_ = {0U};
+  std::vector<std::uint32_t> q_cur_;
   // q_start_[n] = start of Q_n
-  std::vector<std::uint32_t> q_start_ = {0U};
+  std::vector<std::uint32_t> q_start_;
   // q_end_[n] = end of Q_n (exclusive)
-  std::vector<std::uint32_t> q_end_ = {0U};
+  std::vector<std::uint32_t> q_end_;
   // all Q_n back to back
   std::vector<transport_segment> q_;
   // Q_n data structure - END
@@ -128,7 +138,7 @@ struct tb_query {
   // least recently processed query
   query query_;
 
-  void reset();
+  void reset_q();
 
   void earliest_arrival_query(query);
 

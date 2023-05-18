@@ -98,20 +98,23 @@ void tb_query::enqueue(transport_idx_t const transport_idx,
   }
 }
 
-void tb_query::reset() {
-  r_.clear();
+void tb_query::reset_q() {
+  q_.clear();
   q_cur_.clear();
   q_cur_.emplace_back(0U);
   q_start_.clear();
   q_start_.emplace_back(0U);
   q_end_.clear();
   q_end_.emplace_back(0U);
-  l_.clear();
-  j_.clear();
+
+  // we probably want to reuse these in the profile query
+  // l_.clear();
+  // j_.clear();
+  // r_.clear();
 }
 
 void tb_query::earliest_arrival_query(nigiri::routing::query query) {
-  reset();
+  reset_q();
 
   query_ = query;
 
@@ -329,6 +332,9 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
       }
     }
   }
+
+  std::cout << "Query processing complete, final q_ size is "
+            << q_.size() * sizeof(transport_segment) << " bytes\n";
 }
 
 void tb_query::reconstruct_journey(
