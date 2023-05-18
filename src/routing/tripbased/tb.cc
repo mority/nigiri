@@ -2,12 +2,18 @@
 
 namespace nigiri::routing::tripbased {
 
+void nvec_transfer_set::add(std::vector<std::vector<transfer>>) {
+  transfers_.at(transport_idx_from.v_, stop_idx_from)
+      .emplace(transfer{bitfield_idx, transport_idx_to, stop_idx_to,
+                        passes_midnight})
+}
+
 void hash_transfer_set::add(transport_idx_t const& transport_idx_from,
                             std::uint32_t const stop_idx_from,
                             transport_idx_t const& transport_idx_to,
                             std::uint32_t const stop_idx_to,
                             bitfield_idx_t const& bitfield_idx,
-                            day_idx_t passes_midnight) {
+                            day_idx_t const passes_midnight) {
   assert(!finalized_);
   assert(passes_midnight < 2U);
 

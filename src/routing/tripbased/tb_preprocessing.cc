@@ -80,6 +80,15 @@ bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
 #endif
 
 void tb_preprocessing::build_transfer_set() {
+  // the number of transfers found
+  unsigned num_transfers = 0U;
+
+  // the transfers per stop of the transport currently examined
+  std::vector<std::vector<transfer>> transfers;
+  transfers.resize(route_max_length);
+  for (auto& inner_vec : transfers) {
+    inner_vec.reserve(64);
+  }
 
   // iterate over all trips of the timetable
   for (transport_idx_t tpi_from{0U};
@@ -90,6 +99,12 @@ void tb_preprocessing::build_transfer_set() {
 
     // the stops of the current transport
     auto const stops_from = tt_.route_location_seq_[ri_from];
+
+    // only clear the inner vector of transfers to prevent reallocation
+    // only clear what we will be using during this iteration
+    for (auto i = 1U; i < stops_from.size(); ++i) {
+      transfers[i].clear();
+    }
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
     // clear earliest times
@@ -125,7 +140,8 @@ void tb_preprocessing::build_transfer_set() {
 #endif
 
       auto handle_fp = [&t_arr_from, &sa_tp_from, this, &tpi_from, &si_from,
-                        &ri_from](footpath const& fp) {
+                        &ri_from, &transfers,
+                        &num_transfers](footpath const& fp) {
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
 
@@ -318,10 +334,11 @@ void tb_preprocessing::build_transfer_set() {
                       };
                       if (check_impr()) {
 #endif
-                        // construct and add transfer to transfer set
+                        // add transfer to transfers of this transport
                         auto const bfi_from = get_or_create_bfi(bf_tf_from);
-                        ts_.add(tpi_from, si_from, tpi_to, si_to, bfi_from,
-                                sa_fp + sa_w);
+                        transfers[si_from].emplace_back(bfi_from, tpi_to, si_to,
+                                                        sa_fp + sa_w);
+                        ++num_transfers;
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                       }
 #endif
@@ -357,12 +374,12 @@ void tb_preprocessing::build_transfer_set() {
         handle_fp(fp);
       }
     }
+
+    // add transfers of this transport to the transfer set
+    ts_.emplace_back(
+        it_range{transfers.cbegin(), transfers.cbegin() + stops_from.size()});
   }
 
-  // finalize transfer set
-  ts_.finalize();
-
-  std::cout << "Found " << ts_.size()
-            << " transfers, the size of the transfer set is "
-            << ts_.size() * sizeof(transfer) << " bytes" << std::endl;
+  std::cout << "Found " << num_transfers << " transfers, occupying "
+            << num_transfers * sizeof(transfer) << " bytes" << std::endl;
 }

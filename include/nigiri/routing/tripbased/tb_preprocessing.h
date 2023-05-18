@@ -3,8 +3,8 @@
 #include "nigiri/timetable.h"
 #include "tb.h"
 
-#define TB_PREPRO_UTURN_REMOVAL
-#define TB_PREPRO_TRANSFER_REDUCTION
+// #define TB_PREPRO_UTURN_REMOVAL
+// #define TB_PREPRO_TRANSFER_REDUCTION
 
 namespace nigiri::routing::tripbased {
 
@@ -62,11 +62,14 @@ struct tb_preprocessing {
     }
     static_assert(kMaxDays <= kDayIdxMax);
 
-    // count elementary connections
+    // count elementary connections and longest route
     for (route_idx_t route_idx{0U}; route_idx < tt_.route_location_seq_.size();
          ++route_idx) {
       num_el_con_ += (tt_.route_location_seq_[route_idx].size() - 1) *
                      tt_.route_transport_ranges_[route_idx].size().v_;
+      if (route_max_length < tt_.route_location_seq_[route_idx].size()) {
+        route_max_length = tt_.route_location_seq_[route_idx].size();
+      }
     }
 
     // init bitfields hashmap with bitfields that are already used by the
@@ -77,11 +80,11 @@ struct tb_preprocessing {
     }
 
     // number of expected transfers
-    auto const num_exp_transfers = num_el_con_;
+    //    auto const num_exp_transfers = num_el_con_;
     // reserve space for transfer set
-    std::cout << "Reserving " << num_exp_transfers * sizeof(transfer)
-              << " bytes for " << num_exp_transfers << " expected transfers\n";
-    ts_.transfers_.reserve(num_exp_transfers);
+    //    std::cout << "Reserving " << num_exp_transfers * sizeof(transfer)
+    //              << " bytes for " << num_exp_transfers << " expected
+    //              transfers\n";
   }
 
   void build_transfer_set();
@@ -101,10 +104,12 @@ struct tb_preprocessing {
   timetable& tt_;
   // the number of elementary connections in the timetable
   unsigned num_el_con_ = 0U;
+  // length of the longest route
+  unsigned route_max_length = 0U;
   // max. look-ahead
   day_idx_t const sa_w_max_{};
   // the transfer set, result of the preprocessing step
-  hash_transfer_set ts_{};
+  nvec<std::uint32_t, transfer, 2> ts_;
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   earliest_times ets_arr_;

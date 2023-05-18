@@ -47,16 +47,32 @@ struct transfer {
   day_idx_t get_passes_midnight() const { return day_idx_t{passes_midnight_}; }
 
   // the days on which the transfer can take place
-  std::uint64_t const bitfield_idx_ : BITFIELD_IDX_BITS;
+  std::uint64_t bitfield_idx_ : BITFIELD_IDX_BITS;
 
   // the transport that is the target of the transfer
-  std::uint64_t const transport_idx_to_ : TRANSPORT_IDX_BITS;
+  std::uint64_t transport_idx_to_ : TRANSPORT_IDX_BITS;
 
   // the stop index of the target transport
-  std::uint64_t const stop_idx_to_ : STOP_IDX_BITS;
+  std::uint64_t stop_idx_to_ : STOP_IDX_BITS;
 
   // bit: 1 -> the transfer passes midnight
-  std::uint64_t const passes_midnight_ : 1;
+  std::uint64_t passes_midnight_ : 1;
+};
+
+struct nvec_transfer_set {
+  void add(transport_idx_t const transport_idx_from,
+           std::uint16_t const stop_idx_from,
+           transport_idx_t const transport_idx_to,
+           std::uint16_t const stop_idx_to,
+           bitfield_idx_t const bitfield_idx,
+           day_idx_t const passes_midnight);
+
+  auto get_transfers(transport_idx_t const transport_idx,
+                     std::uint32_t const stop_idx) {
+    return transfers_.at(transport_idx.v_, stop_idx);
+  }
+
+  nvec<std::uint32_t, transfer, 2> transfers_;
 };
 
 struct hash_transfer_set {
@@ -68,7 +84,7 @@ struct hash_transfer_set {
            transport_idx_t const& transport_idx_to,
            std::uint32_t const stop_idx_to,
            bitfield_idx_t const& bitfield_idx,
-           day_idx_t passes_midnight);
+           day_idx_t const passes_midnight);
 
   void finalize();
 
