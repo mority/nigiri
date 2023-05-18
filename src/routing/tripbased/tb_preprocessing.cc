@@ -112,11 +112,10 @@ void tb_preprocessing::build_transfer_set() {
       // from
       auto const sa_tp_from = num_midnights(t_arr_from);
 
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
       // the bitfield of the transport we are transferring from
       auto const& bf_tp_from =
           tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
-
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
       // init the earliest times data structure
       ets_arr_.update(li_from, t_arr_from, bf_tp_from);
       for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
@@ -125,8 +124,8 @@ void tb_preprocessing::build_transfer_set() {
       }
 #endif
 
-      auto handle_fp = [&t_arr_from, &sa_tp_from, this, &bf_tp_from, &tpi_from,
-                        &si_from, &ri_from](footpath const fp) {
+      auto handle_fp = [&t_arr_from, &sa_tp_from, this, &tpi_from, &si_from,
+                        &ri_from](footpath const& fp) {
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
 
@@ -180,7 +179,8 @@ void tb_preprocessing::build_transfer_set() {
               }
 
               // omega: days of transport_from that still require connection
-              bitfield omega = bf_tp_from;
+              bitfield omega =
+                  tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
 
               // check if any bit in omega is set to 1 and maximum waiting
               // time not exceeded
@@ -350,9 +350,7 @@ void tb_preprocessing::build_transfer_set() {
       };
 
       // virtual reflexive footpath
-      footpath const reflexive_fp{li_from,
-                                  tt_.locations_.transfer_time_[li_from]};
-      handle_fp(reflexive_fp);
+      handle_fp(footpath{li_from, tt_.locations_.transfer_time_[li_from]});
 
       // outgoing footpaths of location
       for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {

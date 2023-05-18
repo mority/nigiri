@@ -100,7 +100,7 @@ struct tb_preprocessing {
   // the timetable than is being processed
   timetable& tt_;
   // the number of elementary connections in the timetable
-  unsigned num_el_con_;
+  unsigned num_el_con_ = 0U;
   // max. look-ahead
   day_idx_t const sa_w_max_{};
   // the transfer set, result of the preprocessing step
