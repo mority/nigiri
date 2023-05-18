@@ -103,6 +103,7 @@ struct tb_preprocessing {
   unsigned num_el_con_;
   // max. look-ahead
   day_idx_t const sa_w_max_{};
+  // the transfer set, result of the preprocessing step
   hash_transfer_set ts_{};
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
