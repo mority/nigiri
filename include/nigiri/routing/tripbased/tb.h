@@ -59,22 +59,6 @@ struct transfer {
   std::uint64_t passes_midnight_ : 1;
 };
 
-struct nvec_transfer_set {
-  void add(transport_idx_t const transport_idx_from,
-           std::uint16_t const stop_idx_from,
-           transport_idx_t const transport_idx_to,
-           std::uint16_t const stop_idx_to,
-           bitfield_idx_t const bitfield_idx,
-           day_idx_t const passes_midnight);
-
-  auto get_transfers(transport_idx_t const transport_idx,
-                     std::uint32_t const stop_idx) {
-    return transfers_.at(transport_idx.v_, stop_idx);
-  }
-
-  nvec<std::uint32_t, transfer, 2> transfers_;
-};
-
 struct hash_transfer_set {
   using key = pair<transport_idx_t, unsigned>;
   using entry = pair<std::uint32_t, std::uint32_t>;

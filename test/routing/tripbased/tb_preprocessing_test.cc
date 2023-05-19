@@ -295,7 +295,7 @@ TEST(build_transfer_set, no_transfer) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  EXPECT_EQ(0U, tbp.ts_.size());
+  EXPECT_EQ(0, tbp.n_transfers_);
 }
 
 TEST(build_transfer_set, same_day_transfer) {
@@ -312,7 +312,7 @@ TEST(build_transfer_set, same_day_transfer) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  EXPECT_EQ(1U, tbp.ts_.size());
+  EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers = tbp.ts_.at(0U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
@@ -338,7 +338,7 @@ TEST(build_transfer_set, from_long_transfer) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  EXPECT_EQ(1U, tbp.ts_.size());
+  EXPECT_EQ(1, tbp.n_transfers_);
   auto const transfers = tbp.ts_.at(0U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
@@ -364,7 +364,7 @@ TEST(build_transfer_set, weekday_transfer) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  EXPECT_EQ(1, tbp.ts_.size());
+  EXPECT_EQ(1, tbp.n_transfers_);
   auto const transfers = tbp.ts_.at(0U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
@@ -390,7 +390,7 @@ TEST(build_transfer_set, daily_transfer) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  EXPECT_EQ(1, tbp.ts_.size());
+  EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers = tbp.ts_.at(0U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
@@ -416,7 +416,7 @@ TEST(build_transfer_set, earlier_stop_transfer) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  EXPECT_EQ(1U, tbp.ts_.size());
+  EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers = tbp.ts_.at(0U, 4U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
@@ -442,7 +442,7 @@ TEST(build_transfer_set, earlier_transport_transfer) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  EXPECT_EQ(1, tbp.ts_.size());
+  EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers = tbp.ts_.at(1U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
@@ -468,20 +468,35 @@ TEST(build_transfer_set, uturn_transfer) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  EXPECT_EQ(1, tbp.ts_.size());
+  // transfer reduction removes a transfer of the test case on its own
+#if defined(TB_PREPRO_UTURN_REMOVAL) || defined(TB_PREPRO_TRANSFER_REDUCTION)
+  EXPECT_EQ(1, tbp.n_transfers_);
+#else
+  EXPECT_EQ(2, tbp.n_transfers_);
+#endif
+
+  bitfield const bf_exp{"100000"};
+
+  // the earlier transfer
   auto const& transfers0 = tbp.ts_.at(0U, 1U);
+  // transfer reduction on its own removes the earlier transfer instead of the
+  // U-turn transfer
+#if defined(TB_PREPRO_TRANSFER_REDUCTION) && !defined(TB_PREPRO_UTURN_REMOVAL)
+  EXPECT_EQ(0, transfers0.size());
+#else
   ASSERT_EQ(1, transfers0.size());
   auto const& t = transfers0[0];
-  bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
   EXPECT_EQ(1U, t.stop_idx_to_);
   EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
   EXPECT_EQ(0, t.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t.get_bitfield_idx()]);
+#endif
 
+  // the U-turn transfer
   auto const& transfers1 = tbp.ts_.at(0U, 2U);
 #ifdef TB_PREPRO_UTURN_REMOVAL
-  ASSERT_EQ(0, transfers1.size());
+  EXPECT_EQ(0, transfers1.size());
 #else
   ASSERT_EQ(1, transfers1.size());
   auto const& uturn_transfer = transfers1[0];
@@ -508,9 +523,9 @@ TEST(build_transfer_set, unnecessary_transfer0) {
   tbp.build_transfer_set();
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  EXPECT_EQ(0, tbp.ts_.size());
+  EXPECT_EQ(0, tbp.n_transfers_);
 #else
-  EXPECT_EQ(1, tbp.ts_.size());
+  EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers0 = tbp.ts_.at(0U, 1U);
   ASSERT_EQ(1, transfers0.size());
   auto const& t = transfers0[0];
@@ -538,7 +553,8 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   tbp.build_transfer_set();
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  EXPECT_EQ(1, tbp.ts_.size());
+  EXPECT_EQ(1, tbp.n_transfers_);
+
   auto const& transfers0 = tbp.ts_.at(0U, 2U);
   ASSERT_EQ(1, transfers0.size());
   auto const& t = transfers0[0];
@@ -549,14 +565,11 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   EXPECT_EQ(0, t.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t.get_bitfield_idx()]);
 #else
-  EXPECT_EQ(2, tbp.ts_.transfers_.size());
+  EXPECT_EQ(2, tbp.n_transfers_);
 
-  auto const transfers0 = tbp.ts_.get_transfers(transport_idx_t{0U}, 1U);
-  ASSERT_TRUE(transfers0.has_value());
-  ASSERT_EQ(0, transfers0->first);
-  ASSERT_EQ(1, transfers0->second);
-
-  auto const t0 = tbp.ts_.transfers_[transfers0->first];
+  auto const& transfers0 = tbp.ts_.at(0U, 1U);
+  ASSERT_EQ(1, transfers0.size());
+  auto const& t0 = transfers0[0];
   bitfield const bf_exp{"100000"};
   EXPECT_EQ(transport_idx_t{1U}, t0.transport_idx_to_);
   EXPECT_EQ(1U, t0.stop_idx_to_);
@@ -564,12 +577,9 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   EXPECT_EQ(0, t0.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t0.get_bitfield_idx()]);
 
-  auto const transfers1 = tbp.ts_.get_transfers(transport_idx_t{0U}, 2U);
-  ASSERT_TRUE(transfers1.has_value());
-  ASSERT_EQ(1, transfers1->first);
-  ASSERT_EQ(2, transfers1->second);
-
-  auto const t1 = tbp.ts_.transfers_[transfers1->first];
+  auto const& transfers1 = tbp.ts_.at(0U, 2U);
+  ASSERT_EQ(1, transfers1.size());
+  auto const& t1 = transfers1[0];
   EXPECT_EQ(transport_idx_t{1U}, t1.transport_idx_to_);
   EXPECT_EQ(2U, t1.stop_idx_to_);
   EXPECT_EQ(bitfield_idx_t{0U}, t1.bitfield_idx_);

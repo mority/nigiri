@@ -293,39 +293,31 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
         // iterate stops of the current transport segment
         for (auto stop_idx{tp_seg.stop_idx_start_ + 1U};
              stop_idx <= tp_seg.stop_idx_end_; ++stop_idx) {
-          auto const ts_pair =
-              tbp_.ts_.get_transfers(tp_seg.transport_idx_, stop_idx);
-          // check if there are transfers from this stop
-          if (ts_pair.has_value()) {
-            auto const transfers_start = ts_pair->first;
-            auto const transfers_end = ts_pair->second;
-            // iterate transfers from this stop
-            for (auto transfer_idx = transfers_start;
-                 transfer_idx != transfers_end; ++transfer_idx) {
-              // the current transfer
-              auto const& transfer_cur = tbp_.ts_[transfer_idx];
-              // bitset specifying the days on which the transfer is possible
-              // from the current transport segment
-              auto const& bf_transfer =
-                  tt_.bitfields_[transfer_cur.get_bitfield_idx()];
-              // enqueue if transfer is possible
-              if (bf_transfer.test(tp_seg.day_idx_)) {
-                // arrival time at start location of transfer
-                auto const time_arr = tt_.event_mam(tp_seg.transport_idx_,
-                                                    stop_idx, event_type::kArr);
-                // departure time at end location of transfer
-                auto const time_dep =
-                    tt_.event_mam(transfer_cur.get_transport_idx_to(),
-                                  transfer_cur.stop_idx_to_, event_type::kDep);
+          // get transfers for this transport/stop
+          auto const& transfers =
+              tbp_.ts_.at(tp_seg.transport_idx_.v_, stop_idx);
+          // iterate transfers from this stop
+          for (auto const& transfer_cur : transfers) {
+            // bitset specifying the days on which the transfer is possible
+            // from the current transport segment
+            auto const& bf_transfer =
+                tt_.bitfields_[transfer_cur.get_bitfield_idx()];
+            // enqueue if transfer is possible
+            if (bf_transfer.test(tp_seg.day_idx_)) {
+              // arrival time at start location of transfer
+              auto const time_arr = tt_.event_mam(tp_seg.transport_idx_,
+                                                  stop_idx, event_type::kArr);
+              // departure time at end location of transfer
+              auto const time_dep =
+                  tt_.event_mam(transfer_cur.get_transport_idx_to(),
+                                transfer_cur.stop_idx_to_, event_type::kDep);
 
-                auto const day_index_transfer =
-                    tp_seg.get_day_idx() + num_midnights(time_arr) -
-                    num_midnights(time_dep) +
-                    transfer_cur.get_passes_midnight();
-                enqueue(transfer_cur.get_transport_idx_to(),
-                        static_cast<std::uint16_t>(transfer_cur.stop_idx_to_),
-                        day_index_transfer, n + 1U, q_cur_[n]);
-              }
+              auto const day_index_transfer =
+                  tp_seg.get_day_idx() + num_midnights(time_arr) -
+                  num_midnights(time_dep) + transfer_cur.get_passes_midnight();
+              enqueue(transfer_cur.get_transport_idx_to(),
+                      static_cast<std::uint16_t>(transfer_cur.stop_idx_to_),
+                      day_index_transfer, n + 1U, q_cur_[n]);
             }
           }
         }
@@ -377,19 +369,18 @@ void tb_query::reconstruct_journey(
       // rescan for transfer to next leg
       for (std::uint16_t stop_idx = tp_seg->stop_idx_start_ + 1U;
            stop_idx <= tp_seg->stop_idx_end_; ++stop_idx) {
-        // get transfer indices for this stop
-        auto const ts_pair =
-            tbp_.ts_.get_transfers(tp_seg->transport_idx_, stop_idx);
+        // get transfers for this transport/stop
+        auto const& transfers =
+            tbp_.ts_.at(tp_seg->transport_idx_.v_, stop_idx);
         // iterate transfers for this stop
-        for (auto tr_idx = ts_pair->first; tr_idx < ts_pair->second; ++tr_idx) {
-          auto& tr_cur = tbp_.ts_[tr_idx];
-          if (tr_cur.get_transport_idx_to() ==
+        for (auto const& transfer_cur : transfers) {
+          if (transfer_cur.get_transport_idx_to() ==
                   get<journey::transport_enter_exit>(j.legs_.back().uses_)
                       .t_.t_idx_ &&
-              tr_cur.stop_idx_to_ ==
+              transfer_cur.stop_idx_to_ ==
                   get<journey::transport_enter_exit>(j.legs_.back().uses_)
                       .stop_range_.from_ &&
-              tt_.bitfields_[tr_cur.get_bitfield_idx()].test(
+              tt_.bitfields_[transfer_cur.get_bitfield_idx()].test(
                   tp_seg->get_day_idx().v_)) {
             // set end stop index of current segment according to found transfer
             if (stop_idx_end != stop_idx) {

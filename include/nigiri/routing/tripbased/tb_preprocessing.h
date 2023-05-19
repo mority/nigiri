@@ -3,8 +3,8 @@
 #include "nigiri/timetable.h"
 #include "tb.h"
 
-// #define TB_PREPRO_UTURN_REMOVAL
-// #define TB_PREPRO_TRANSFER_REDUCTION
+#define TB_PREPRO_UTURN_REMOVAL
+#define TB_PREPRO_TRANSFER_REDUCTION
 
 namespace nigiri::routing::tripbased {
 
@@ -94,11 +94,12 @@ struct tb_preprocessing {
   // of the transfers are stored in the timetable
   void load_transfer_set(/* file name */);
 
+  // wrapper for utl::get_or_create
+  bitfield_idx_t get_or_create_bfi(bitfield const& bf);
+
   // map a bitfield to its bitfield_idx
   // init with bitfields of timetable
   hash_map<bitfield, bitfield_idx_t> bitfield_to_bitfield_idx_{};
-
-  bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
   // the timetable than is being processed
   timetable& tt_;
@@ -108,7 +109,9 @@ struct tb_preprocessing {
   unsigned route_max_length = 0U;
   // max. look-ahead
   day_idx_t const sa_w_max_{};
-  // the transfer set, result of the preprocessing step
+  // the number of transfers found
+  unsigned n_transfers_ = 0U;
+  // the transfer set
   nvec<std::uint32_t, transfer, 2> ts_;
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION

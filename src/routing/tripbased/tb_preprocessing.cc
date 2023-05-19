@@ -80,8 +80,6 @@ bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
 #endif
 
 void tb_preprocessing::build_transfer_set() {
-  // the number of transfers found
-  unsigned num_transfers = 0U;
 
   // the transfers per stop of the transport currently examined
   std::vector<std::vector<transfer>> transfers;
@@ -140,8 +138,7 @@ void tb_preprocessing::build_transfer_set() {
 #endif
 
       auto handle_fp = [&t_arr_from, &sa_tp_from, this, &tpi_from, &si_from,
-                        &ri_from, &transfers,
-                        &num_transfers](footpath const& fp) {
+                        &ri_from, &transfers](footpath const& fp) {
         // li_to: location index of destination of footpath
         auto const li_to = fp.target_;
 
@@ -338,7 +335,7 @@ void tb_preprocessing::build_transfer_set() {
                         auto const bfi_from = get_or_create_bfi(bf_tf_from);
                         transfers[si_from].emplace_back(bfi_from, tpi_to, si_to,
                                                         sa_fp + sa_w);
-                        ++num_transfers;
+                        ++n_transfers_;
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                       }
 #endif
@@ -380,6 +377,6 @@ void tb_preprocessing::build_transfer_set() {
         it_range{transfers.cbegin(), transfers.cbegin() + stops_from.size()});
   }
 
-  std::cout << "Found " << num_transfers << " transfers, occupying "
-            << num_transfers * sizeof(transfer) << " bytes" << std::endl;
+  std::cout << "Found " << n_transfers_ << " transfers, occupying "
+            << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
 }

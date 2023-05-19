@@ -228,7 +228,7 @@ TEST(reconstruct_journey, transfer_with_footpath) {
   // run preprocessing
   tbp.build_transfer_set();
 
-  ASSERT_EQ(1, tbp.ts_.transfers_.size());
+  ASSERT_EQ(1, tbp.n_transfers_);
 
   // init query
   tb_query tbq{tbp};
