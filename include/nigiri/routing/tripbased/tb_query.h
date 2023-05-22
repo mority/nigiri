@@ -5,7 +5,6 @@
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
-#include "nigiri/routing/routing_time.h"
 #include "tb_preprocessing.h"
 
 #define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()
@@ -22,15 +21,15 @@ struct tb_query {
     // reserve space
     std::cout << "Reserving "
               << tt_.transport_route_.size() * 4 * sizeof(r_entry)
-              << " bytes for r_\n";
+              << " bytes for data_\n";
     r_.reserve(tt_.transport_route_.size(), 4);
     l_.reserve(128);
     q_cur_.reserve(16);
     q_start_.reserve(16);
     q_end_.reserve(16);
 
-    // queue size is boundend by number of elementary connections in the time
-    // table
+    // queue size is bounded by number of elementary connections in the
+    // timetable
     std::cout << "Number of elementary connections is " << tbp_.num_el_con_
               << ", reserving " << tbp_.num_el_con_ * sizeof(transport_segment)
               << " bytes of memory for q_" << std::endl;
@@ -115,11 +114,6 @@ struct tb_query {
   // Q_n data structure - END
 
   struct l_entry {
-    l_entry(route_idx_t const route_idx,
-            std::uint16_t const stop_idx,
-            duration_t const time)
-        : route_idx_(route_idx), stop_idx_(stop_idx), time_(time) {}
-
     // the route index of the route that reaches the target location
     route_idx_t const route_idx_{};
     // the stop index at which the route reaches the target location

@@ -101,7 +101,7 @@ struct tb_preprocessing {
   // init with bitfields of timetable
   hash_map<bitfield, bitfield_idx_t> bitfield_to_bitfield_idx_{};
 
-  // the timetable than is being processed
+  // the timetable that is being processed
   timetable& tt_;
   // the number of elementary connections in the timetable
   unsigned num_el_con_ = 0U;

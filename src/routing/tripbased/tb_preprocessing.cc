@@ -1,6 +1,7 @@
 #include "utl/get_or_create.h"
 
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
+#include "nigiri/stop.h"
 #include "nigiri/types.h"
 
 using namespace nigiri;
@@ -115,7 +116,7 @@ void tb_preprocessing::build_transfer_set() {
 #endif
 
       // the location index from which we are transferring
-      auto const li_from = timetable::stop{stops_from[si_from]}.location_idx();
+      auto const li_from = stop{stops_from[si_from]}.location_idx();
 
       // the arrival time of the transport we are tranferring from
       auto const t_arr_from =
@@ -163,7 +164,7 @@ void tb_preprocessing::build_transfer_set() {
                si_to < tt_.route_location_seq_[ri_to].size() - 1; ++si_to) {
 
             auto const stop_to_cur =
-                timetable::stop{tt_.route_location_seq_[ri_to][si_to]};
+                stop{tt_.route_location_seq_[ri_to][si_to]};
 
             // li_from: location index from
             auto const li_to_cur = stop_to_cur.location_idx();
@@ -265,10 +266,10 @@ void tb_preprocessing::build_transfer_set() {
                           si_from - 1 > 0) {
                         // check if next stop of tpi_to is the previous stop
                         // of tpi_from
-                        auto const stop_to_next = timetable::stop{
-                            tt_.route_location_seq_[ri_to][si_to + 1]};
-                        auto const stop_from_prev = timetable::stop{
-                            tt_.route_location_seq_[ri_from][si_from - 1]};
+                        auto const stop_to_next =
+                            stop{tt_.route_location_seq_[ri_to][si_to + 1]};
+                        auto const stop_from_prev =
+                            stop{tt_.route_location_seq_[ri_from][si_from - 1]};
                         if (stop_to_next.location_idx() ==
                             stop_from_prev.location_idx()) {
                           // check if tpi_to is already reachable at the
@@ -310,8 +311,7 @@ void tb_preprocessing::build_transfer_set() {
                                                         event_type::kArr) -
                                           *dep_it);
                           auto const li_to_later =
-                              timetable::stop{
-                                  tt_.route_location_seq_[ri_to][si_to_later]}
+                              stop{tt_.route_location_seq_[ri_to][si_to_later]}
                                   .location_idx();
                           auto const ets_arr_res = ets_arr_.update(
                               li_to_later, t_arr_to_later, bf_tf_from);

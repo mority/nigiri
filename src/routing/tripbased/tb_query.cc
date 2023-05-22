@@ -110,7 +110,7 @@ void tb_query::reset_q() {
   // we probably want to reuse these in the profile query
   // l_.clear();
   // j_.clear();
-  // r_.clear();
+  // data_.clear();
 }
 
 void tb_query::earliest_arrival_query(nigiri::routing::query query) {
@@ -143,9 +143,9 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
       // iterate stop sequence of route
       for (auto stop_idx{0U};
            stop_idx < tt_.route_location_seq_[route_idx].size(); ++stop_idx) {
-        auto const stop =
-            timetable::stop{tt_.route_location_seq_[route_idx][stop_idx]};
-        if (stop.location_idx() == fp.target_) {
+        auto const location_idx =
+            stop{tt_.route_location_seq_[route_idx][stop_idx]}.location_idx();
+        if (location_idx == fp.target_) {
           l_.emplace_back(route_idx, stop_idx, fp.duration_);
         }
       }
@@ -172,15 +172,16 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
       for (std::uint16_t stop_idx = 0U;
            stop_idx < tt_.route_location_seq_[route_idx].size() - 1;
            ++stop_idx) {
-        auto const stop =
-            timetable::stop{tt_.route_location_seq_[route_idx][stop_idx]};
-        if (stop.location_idx() == fp.target_) {
+        auto const location_idx =
+            stop{tt_.route_location_seq_[route_idx][stop_idx]}.location_idx();
+        if (location_idx == fp.target_) {
           // shift amount due to waiting for connection
           day_idx_t sa_w{0U};
-          // departure times of this route at this stop
+          // departure times of this route at this location_idx
           auto const event_times =
               tt_.event_times_at_stop(route_idx, stop_idx, event_type::kDep);
-          // iterator to departure time of connecting transport at this stop
+          // iterator to departure time of connecting transport at this
+          // location_idx
           auto dep_it =
               std::lower_bound(event_times.begin(), event_times.end(), a,
                                [&](auto&& x, auto&& y) {
@@ -342,8 +343,7 @@ void tb_query::reconstruct_journey(
     auto const& route_idx = tt_.transport_route_[tp_seg->transport_idx_];
     // the location index of the start of the segment
     auto const location_idx_start =
-        timetable::stop{
-            tt_.route_location_seq_[route_idx][tp_seg->stop_idx_start_]}
+        stop{tt_.route_location_seq_[route_idx][tp_seg->stop_idx_start_]}
             .location_idx();
     // unix time: departure time at the start of the segment
     auto const unix_start = tt_.to_unixtime(
@@ -359,8 +359,7 @@ void tb_query::reconstruct_journey(
     auto unix_end = tt_.to_unixtime(tp_seg->get_day_idx(), time_arr_end);
     // the location index of the end of the segment
     auto location_idx_end =
-        timetable::stop{tt_.route_location_seq_[route_idx][stop_idx_end]}
-            .location_idx();
+        stop{tt_.route_location_seq_[route_idx][stop_idx_end]}.location_idx();
 
     // reconstruct transfer to following segment, i.e., the back of j.legs_
     if (!j.legs_.empty()) {
@@ -390,8 +389,7 @@ void tb_query::reconstruct_journey(
                                            event_type::kArr);
               unix_end = tt_.to_unixtime(tp_seg->get_day_idx(), time_arr_end);
               location_idx_end =
-                  timetable::stop{
-                      tt_.route_location_seq_[route_idx][stop_idx_end]}
+                  stop{tt_.route_location_seq_[route_idx][stop_idx_end]}
                       .location_idx();
             }
 
