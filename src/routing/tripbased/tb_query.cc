@@ -12,23 +12,23 @@ void tb_query::r_update(transport_idx_t const transport_idx,
   auto day_idx_end = std::numeric_limits<day_idx_t>::max();
 
   for (auto& re : r_[transport_idx]) {
-    if (re.day_idx_start_ == re.day_idx_end_) {
+    if (re.day_idx_ == re.day_idx_end_) {
       continue;
     }
     if (stop_idx < re.stop_idx_) {
-      if (day_idx <= re.day_idx_start_) {
-        re.day_idx_start_ = re.day_idx_end_;
+      if (day_idx <= re.day_idx_) {
+        re.day_idx_ = re.day_idx_end_;
       } else if (day_idx < re.day_idx_end_) {
         re.day_idx_end_ = day_idx.v_;
       }
     } else if (stop_idx == re.stop_idx_) {
-      if (day_idx < re.day_idx_start_) {
-        re.day_idx_start_ = re.day_idx_end_;
+      if (day_idx < re.day_idx_) {
+        re.day_idx_ = re.day_idx_end_;
       } else {
         // new entry already covered by current entry
         return;
       }
-    } else if (day_idx < re.day_idx_start_) {
+    } else if (day_idx < re.day_idx_) {
       day_idx_end = re.get_day_idx_start();
     } else {
       // new entry already covered by current entry

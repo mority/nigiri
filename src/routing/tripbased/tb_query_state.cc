@@ -5,6 +5,6 @@ using namespace nigiri::routing::tripbased;
 
 void tb_query_state::reset() {
   l_.clear();
-  // TODO reset r_
+  r_.reset();
   q_.reset();
 }
