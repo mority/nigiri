@@ -68,8 +68,7 @@ void tb_query::enqueue(transport_idx_t const transport_idx,
   if (stop_idx < r_query_res) {
 
     // new n?
-    if (n == q_cur_.size()) {
-      q_cur_.emplace_back(q_.size());
+    if (n == q_start_.size()) {
       q_start_.emplace_back(q_.size());
       q_end_.emplace_back(q_.size());
     }
@@ -99,13 +98,11 @@ void tb_query::enqueue(transport_idx_t const transport_idx,
 }
 
 void tb_query::reset_q() {
-  q_.clear();
-  q_cur_.clear();
-  q_cur_.emplace_back(0U);
-  q_start_.clear();
-  q_start_.emplace_back(0U);
-  q_end_.clear();
-  q_end_.emplace_back(0U);
+  //  segments_.clear();
+  //  start_.clear();
+  //  start_.emplace_back(0U);
+  //  end_.clear();
+  //  end_.emplace_back(0U);
 
   // we probably want to reuse these in the profile query
   // l_.clear();
@@ -243,9 +240,9 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
   // n transfers
   for (auto n{0U}; n != q_start_.size(); ++n) {
     // iterate trip segments in Q_n
-    for (; q_cur_[n] < q_end_[n]; ++q_cur_[n]) {
+    for (auto q_cur = q_start_[n]; q_cur < q_end_[n]; ++q_cur) {
       // the current transport segment
-      auto tp_seg = q_[q_cur_[n]];
+      auto tp_seg = q_[q_cur];
       // departure time at the start of the transport segment
       auto const tp_seg_dep = tt_.event_mam(
           tp_seg.transport_idx_, tp_seg.stop_idx_start_, event_type::kDep);
@@ -318,7 +315,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
                   num_midnights(time_dep) + transfer_cur.get_passes_midnight();
               enqueue(transfer_cur.get_transport_idx_to(),
                       static_cast<std::uint16_t>(transfer_cur.stop_idx_to_),
-                      day_index_transfer, n + 1U, q_cur_[n]);
+                      day_index_transfer, n + 1U, q_cur);
             }
           }
         }
@@ -326,7 +323,7 @@ void tb_query::earliest_arrival_query(nigiri::routing::query query) {
     }
   }
 
-  std::cout << "Query processing complete, final q_ size is "
+  std::cout << "Query processing complete, final segments_ size is "
             << q_.size() * sizeof(transport_segment) << " bytes\n";
 }
 

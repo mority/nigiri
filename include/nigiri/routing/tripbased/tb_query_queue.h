@@ -42,22 +42,20 @@ struct queue {
   queue() = delete;
   explicit queue(reached& r) : r_(r) {}
 
+  void reset();
+
   void enqueue(transport_idx_t const transport_idx,
                std::uint16_t const stop_idx,
                day_idx_t const day_idx,
                std::uint32_t const n,
                std::uint32_t const transferred_from);
 
-  reached& r_;
+  auto& operator[](unsigned pos) { return segments_[pos]; }
 
-  // q_cur_[n] = cursor of Q_n
-  std::vector<std::uint32_t> q_cur_;
-  // q_start_[n] = start of Q_n
-  std::vector<std::uint32_t> q_start_;
-  // q_end_[n] = end of Q_n (exclusive)
-  std::vector<std::uint32_t> q_end_;
-  // all Q_n back to back
-  std::vector<transport_segment> q_;
+  reached& r_;
+  std::vector<std::uint32_t> start_;
+  std::vector<std::uint32_t> end_;
+  std::vector<transport_segment> segments_;
 };
 
 }  // namespace nigiri::routing::tripbased

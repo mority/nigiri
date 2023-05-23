@@ -25,7 +25,15 @@ struct l_entry {
 
 struct tb_query_state {
   tb_query_state() = delete;
-  tb_query_state(tb_preprocessing& tbp) : tbp_(tbp) {}
+  tb_query_state(tb_preprocessing& tbp) : tbp_(tbp) {
+    l_.reserve(128);
+    // TODO reserve space for r_
+    q_.start_.reserve(16);
+    q_.end_.reserve(16);
+    q_.segments_.reserve(10000);
+  }
+
+  void reset();
 
   // should contain a built transfer set
   tb_preprocessing& tbp_;
@@ -37,7 +45,6 @@ struct tb_query_state {
   reached r_{tbp_};
 
   // queues of transport segments
-  // built by queries, persist to reconstruct journey
   queue q_{r_};
 };
 
