@@ -25,7 +25,8 @@ struct l_entry {
 
 struct tb_query_state {
   tb_query_state() = delete;
-  tb_query_state(tb_preprocessing& tbp) : tbp_(tbp) {
+  tb_query_state(tb_preprocessing& tbp, day_idx_t const base)
+      : tbp_(tbp), base_(base) {
     l_.reserve(128);
     // TODO reserve space for r_
     q_.start_.reserve(16);
@@ -38,11 +39,14 @@ struct tb_query_state {
   // should contain a built transfer set
   tb_preprocessing& tbp_;
 
+  // base day of the query
+  day_idx_t const base_;
+
   // routes that reach the target stop
   std::vector<l_entry> l_;
 
   // reached stops per transport
-  reached r_{tbp_};
+  reached r_{tbp_, base_};
 
   // queues of transport segments
   queue q_{r_};

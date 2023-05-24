@@ -11,6 +11,10 @@
 #define STOP_IDX_BITS 10U
 #define DAY_IDX_BITS 9U
 #define NUM_TRANSFERS_BITS 5U
+#define DAY_OFFSET_BITS 3U
+
+// the position of the query day in the day offset
+#define QUERY_DAY_SHIFT 5
 
 namespace nigiri::routing::tripbased {
 
@@ -19,6 +23,7 @@ constexpr unsigned const kTransportIdxMax = 1U << TRANSPORT_IDX_BITS;
 constexpr unsigned const kStopIdxMax = 1U << STOP_IDX_BITS;
 constexpr unsigned const kDayIdxMax = 1U << DAY_IDX_BITS;
 constexpr unsigned const kNumTransfersMax = 1U << NUM_TRANSFERS_BITS;
+constexpr unsigned const kDayOffsetMax = 1U << DAY_OFFSET_BITS;
 
 struct transfer {
   transfer(bitfield_idx_t const bitfield_idx,
@@ -59,6 +64,58 @@ struct transfer {
 
   // bit: 1 -> the transfer passes midnight
   std::uint64_t passes_midnight_ : 1;
+};
+
+struct transport_segment {
+  static constexpr std::uint32_t day_offset_mask{
+      0b1110'0000'0000'0000'0000'0000'0000'0000};
+
+  static constexpr std::uint32_t transport_idx_mask{
+      0b0001'1111'1111'1111'1111'1111'1111'1111};
+
+  static std::uint32_t embed_day_offset(day_idx_t const query_day,
+                                        day_idx_t const transport_day,
+                                        transport_idx_t const transport_idx) {
+    return (((static_cast<std::uint32_t>(transport_day.v_) + QUERY_DAY_SHIFT) -
+             static_cast<std::uint32_t>(query_day.v_))
+            << (32U - DAY_OFFSET_BITS)) |
+           transport_idx.v_;
+  }
+
+  transport_segment(day_idx_t const query_day,
+                    day_idx_t const transport_day,
+                    transport_idx_t const transport_idx,
+                    std::uint16_t const stop_idx_start,
+                    std::uint16_t const stop_idx_end,
+                    std::uint32_t const transferred_from)
+      : transport_segment_idx_(
+            embed_day_offset(query_day, transport_day, transport_idx)),
+        stop_idx_start_(stop_idx_start),
+        stop_idx_end_(stop_idx_end),
+        transferred_from_(transferred_from) {}
+
+  std::uint32_t get_day_offset() const {
+    return (transport_segment_idx_ & day_offset_mask) >>
+           (32U - DAY_OFFSET_BITS);
+  }
+
+  day_idx_t get_day_idx(day_idx_t const query_day_idx) const {
+    return day_idx_t{query_day_idx.v_ + static_cast<int>(get_day_offset()) -
+                     QUERY_DAY_SHIFT};
+  }
+
+  transport_idx_t get_transport_idx() const {
+    return transport_idx_t{transport_segment_idx_ & transport_idx_mask};
+  }
+
+  // store day offset of the instance in upper bits of transport idx
+  std::uint32_t const transport_segment_idx_;
+
+  std::uint32_t const stop_idx_start_ : STOP_IDX_BITS;
+  std::uint32_t const stop_idx_end_ : STOP_IDX_BITS;
+
+  // from which segment we transferred to this segment
+  std::uint32_t const transferred_from_;
 };
 
 struct hash_transfer_set {

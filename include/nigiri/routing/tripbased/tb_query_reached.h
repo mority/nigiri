@@ -7,40 +7,35 @@
 namespace nigiri::routing::tripbased {
 
 struct reached_entry {
-  std::uint16_t get_stop_idx() const {
-    return static_cast<uint16_t>(stop_idx_);
+  bool dominates(reached_entry const& o) const {
+    return transport_segment_idx_ <= o.transport_segment_idx_ &&
+           stop_idx_ <= o.stop_idx_ && n_transfers_ <= o.n_transfers_;
   }
-
-  day_idx_t get_day_idx_start() const { return day_idx_t{day_idx_}; }
-
-  bool dominates(reached_entry const& re) const {
-    return stop_idx_ <= re.stop_idx_ && day_idx_ <= re.day_idx_ &&
-           num_transfers_ <= re.num_transfers_;
-  }
-
-  std::uint32_t stop_idx_ : STOP_IDX_BITS;
-  std::uint32_t day_idx_ : DAY_IDX_BITS;
-  std::uint32_t num_transfers_ : NUM_TRANSFERS_BITS;
+  std::uint32_t transport_segment_idx_;
+  std::uint16_t stop_idx_;
+  std::uint16_t n_transfers_;
 };
 
 struct reached {
   reached() = delete;
-  explicit reached(tb_preprocessing& tbp, unsigned n_transports) : tbp_(tbp) {
-    data_.resize(n_transports);
+  explicit reached(tb_preprocessing& tbp, day_idx_t const query_day)
+      : tbp_(tbp), query_day_(query_day) {
+    data_.resize(tbp_.tt_.n_routes());
   }
 
-  void update(transport_idx_t const,
-              std::uint32_t const stop_idx,
-              day_idx_t const,
-              std::uint32_t const num_transfers);
+  void update(day_idx_t const transport_day,
+              transport_idx_t const transport_idx,
+              std::uint16_t const stop_idx,
+              std::uint16_t const n_transfers);
 
   std::uint16_t query(transport_idx_t const,
                       day_idx_t const,
-                      std::uint32_t const num_transfers);
+                      std::uint32_t const n_transfers);
 
   tb_preprocessing& tbp_;
+  day_idx_t const query_day_;
 
-  // reached stops per transport
+  // reached stops per route
   std::vector<pareto_set<reached_entry>> data_;
   // mutable_fws_multimap<transport_idx_t, reached_entry> data_{};
 };

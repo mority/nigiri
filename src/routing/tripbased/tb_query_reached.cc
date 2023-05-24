@@ -3,17 +3,19 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-void reached::update(transport_idx_t const transport_idx,
-                     std::uint32_t const stop_idx,
-                     day_idx_t const day_idx,
-                     std::uint32_t const num_transfers) {
-  data_[transport_idx.v_].add(
-      reached_entry{stop_idx, day_idx.v_, num_transfers});
+void reached::update(day_idx_t const transport_day,
+                     transport_idx_t const transport_idx,
+                     std::uint16_t const stop_idx,
+                     std::uint16_t const n_transfers) {
+  auto const transport_segment_idx = transport_segment::embed_day_offset(
+      query_day_, transport_day, transport_idx);
+  data_[tbp_.tt_.transport_route_[transport_idx]].add(
+      reached_entry{transport_segment_idx, stop_idx, n_transfers});
 }
 
-std::uint16_t reached::query(transport_idx_t const transport_idx,
-                             day_idx_t const day_idx,
-                             std::uint32_t const num_transfers) {
+std::uint16_t reached::query(day_idx_t const transport_day,
+                             transport_idx_t const transport_idx,
+                             std::uint16_t const n_transfers) {
   // no entry for this transport_idx/day_idx combination
   // return stop index of final stop of the transport
   auto stop_idx = static_cast<uint16_t>(
@@ -22,7 +24,7 @@ std::uint16_t reached::query(transport_idx_t const transport_idx,
       1);
 
   day_idx_t day_distance{kDayIdxMax};
-  for (auto const& re : data_[transport_idx]) {
+  for (auto const& re : data_[tbp_.tt_.transport_route_[transport_idx]]) {
   }
 
   return stop_idx;

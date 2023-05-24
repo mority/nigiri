@@ -13,8 +13,8 @@ void queue::reset() {
 
 void queue::enqueue(transport_idx_t const transport_idx,
                     std::uint16_t const stop_idx,
-                    day_idx_t const day_idx,
-                    std::uint32_t const n,
+                    day_idx_t const transport_day,
+                    std::uint32_t const n_transfers,
                     std::uint32_t const transferred_from) {
   // look-up the earliest stop index reached
   auto const r_query_res = r_.query(transport_idx, day_idx);
