@@ -11,25 +11,29 @@ void queue::reset() {
   segments_.clear();
 }
 
-void queue::enqueue(transport_idx_t const transport_idx,
+void queue::enqueue(day_idx_t const transport_day,
+                    transport_idx_t const transport_idx,
                     std::uint16_t const stop_idx,
-                    day_idx_t const transport_day,
-                    std::uint32_t const n_transfers,
+                    std::uint16_t const n_transfers,
                     std::uint32_t const transferred_from) {
+  // compute transport segment index
+  auto const transport_segment_idx =
+      transport_segment::embed_day_offset(base_, transport_day, transport_idx);
+
   // look-up the earliest stop index reached
-  auto const r_query_res = r_.query(transport_idx, day_idx);
+  auto const r_query_res = r_.query(transport_segment_idx, n_transfers);
   if (stop_idx < r_query_res) {
 
     // new n?
-    if (n == start_.size()) {
+    if (n_transfers == start_.size()) {
       start_.emplace_back(segments_.size());
       end_.emplace_back(segments_.size());
     }
 
     // add transport segment
-    segments_.emplace_back(transport_idx, stop_idx, r_query_res, day_idx,
+    segments_.emplace_back(transport_idx, stop_idx, r_query_res, transport_day,
                            transferred_from);
-    ++end_[n];
+    ++end_[n_transfers];
 
     // update all transports of this route
     auto const route_idx = r_.tbp_.tt_.transport_route_[transport_idx];

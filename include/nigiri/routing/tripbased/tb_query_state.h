@@ -28,13 +28,17 @@ struct tb_query_state {
   tb_query_state(tb_preprocessing& tbp, day_idx_t const base)
       : tbp_(tbp), base_(base) {
     l_.reserve(128);
-    // TODO reserve space for r_
-    q_.start_.reserve(16);
-    q_.end_.reserve(16);
+    t_min_.resize(kNumTransfersMax, duration_t::max());
+    q_.start_.reserve(kNumTransfersMax);
+    q_.end_.reserve(kNumTransfersMax);
     q_.segments_.reserve(10000);
   }
 
+  // after each earliest arrival query
   void reset();
+
+  // if queried interval is extended into the future
+  void reset_arrivals();
 
   // should contain a built transfer set
   tb_preprocessing& tbp_;
@@ -48,8 +52,11 @@ struct tb_query_state {
   // reached stops per transport
   reached r_{tbp_, base_};
 
+  // minimum arrival times per number of transfers
+  std::vector<duration_t> t_min_;
+
   // queues of transport segments
-  queue q_{r_};
+  queue q_{r_, base_};
 };
 
 }  // namespace nigiri::routing::tripbased

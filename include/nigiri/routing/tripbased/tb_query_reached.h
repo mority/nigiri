@@ -11,9 +11,9 @@ struct reached_entry {
     return transport_segment_idx_ <= o.transport_segment_idx_ &&
            stop_idx_ <= o.stop_idx_ && n_transfers_ <= o.n_transfers_;
   }
-  std::uint32_t transport_segment_idx_;
-  std::uint16_t stop_idx_;
-  std::uint16_t n_transfers_;
+  transport_segment_idx_t const transport_segment_idx_;
+  std::uint16_t const stop_idx_;
+  std::uint16_t const n_transfers_;
 };
 
 struct reached {
@@ -23,14 +23,14 @@ struct reached {
     data_.resize(tbp_.tt_.n_routes());
   }
 
-  void update(day_idx_t const transport_day,
-              transport_idx_t const transport_idx,
+  void reset();
+
+  void update(transport_segment_idx_t const,
               std::uint16_t const stop_idx,
               std::uint16_t const n_transfers);
 
-  std::uint16_t query(transport_idx_t const,
-                      day_idx_t const,
-                      std::uint32_t const n_transfers);
+  std::uint16_t query(transport_segment_idx_t const,
+                      std::uint16_t const n_transfers);
 
   tb_preprocessing& tbp_;
   day_idx_t const query_day_;

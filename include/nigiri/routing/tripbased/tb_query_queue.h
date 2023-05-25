@@ -12,10 +12,10 @@ struct queue {
 
   void reset();
 
-  void enqueue(transport_idx_t const transport_idx,
+  void enqueue(day_idx_t const transport_day,
+               transport_idx_t const,
                std::uint16_t const stop_idx,
-               day_idx_t const transport_day,
-               std::uint32_t const n_transfers,
+               std::uint16_t const n_transfers,
                std::uint32_t const transferred_from);
 
   auto& operator[](unsigned pos) { return segments_[pos]; }

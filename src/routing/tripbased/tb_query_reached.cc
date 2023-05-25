@@ -3,29 +3,62 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-void reached::update(day_idx_t const transport_day,
-                     transport_idx_t const transport_idx,
-                     std::uint16_t const stop_idx,
-                     std::uint16_t const n_transfers) {
-  auto const transport_segment_idx = transport_segment::embed_day_offset(
-      query_day_, transport_day, transport_idx);
-  data_[tbp_.tt_.transport_route_[transport_idx]].add(
-      reached_entry{transport_segment_idx, stop_idx, n_transfers});
+void reached::reset() {
+  for (auto& ps : data_) {
+    ps.clear();
+  }
 }
 
-std::uint16_t reached::query(day_idx_t const transport_day,
-                             transport_idx_t const transport_idx,
-                             std::uint16_t const n_transfers) {
+void reached::update(transport_segment_idx_t const transport_segment_idx,
+                     std::uint16_t const stop_idx,
+                     std::uint16_t const n_transfers) {
+  data_[tbp_.tt_.transport_route_[transport_segment::transport_idx(
+            transport_segment_idx)]]
+      .add(reached_entry{transport_segment_idx, stop_idx, n_transfers});
+}
+
+std::uint16_t reached::query(
+    transport_segment_idx_t const transport_segment_idx,
+    std::uint16_t const n_transfers) {
+  auto const route_idx =
+      tbp_.tt_.transport_route_[transport_segment::transport_idx(
+          transport_segment_idx)];
+
+  auto stop_idx = std::numeric_limits<std::uint16_t>::max();
+  // closest number of transfers so far
+  auto n_transfers_closest = std::numeric_limits<std::int32_t>::min();
+  // closest transport segment index so far
+  auto transport_segment_idx_closest = std::numeric_limits<std::int64_t>::min();
+  for (auto const& re : data_[route_idx]) {
+    // only entries with less or equal n_transfers and less or equal
+    // transport_segment_idx are relevant
+    if (re.n_transfers_ <= n_transfers &&
+        re.transport_segment_idx_ <= transport_segment_idx) {
+      // only entries number of transfers or transport segment index is closer
+      // than the closest observed so far are relevant
+      bool const closer_n_transfers = re.n_transfers_ > n_transfers_closest;
+      bool const closer_idx =
+          re.transport_segment_idx_ > transport_segment_idx_closest;
+      if (closer_n_transfers || closer_idx) {
+        stop_idx = re.stop_idx_;
+        if (closer_n_transfers) {
+          n_transfers_closest = re.n_transfers;
+        }
+        if (closer_idx) {
+          transport_segment_idx_closest = re.transport_segment_idx_;
+        }
+      }
+    }
+    if (n_transfers_closest == n_transfers &&
+        transport_segment_idx_closest == transport_segment_idx) {
+      break;
+    }
+  }
+
   // no entry for this transport_idx/day_idx combination
   // return stop index of final stop of the transport
-  auto stop_idx = static_cast<uint16_t>(
-      tbp_.tt_.route_location_seq_[tbp_.tt_.transport_route_[transport_idx]]
-          .size() -
-      1);
-
-  day_idx_t day_distance{kDayIdxMax};
-  for (auto const& re : data_[tbp_.tt_.transport_route_[transport_idx]]) {
-  }
+  auto stop_idx =
+      static_cast<uint16_t>(tbp_.tt_.route_location_seq_[route_idx].size() - 1);
 
   return stop_idx;
 }
