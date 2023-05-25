@@ -18,7 +18,7 @@ void queue::enqueue(day_idx_t const transport_day,
                     std::uint32_t const transferred_from) {
   // compute transport segment index
   auto const transport_segment_idx =
-      transport_segment::embed_day_offset(base_, transport_day, transport_idx);
+      embed_day_offset(base_, transport_day, transport_idx);
 
   // look-up the earliest stop index reached
   auto const r_query_res = r_.query(transport_segment_idx, n_transfers);
@@ -31,28 +31,13 @@ void queue::enqueue(day_idx_t const transport_day,
     }
 
     // add transport segment
-    segments_.emplace_back(transport_idx, stop_idx, r_query_res, transport_day,
+    segments_.emplace_back(transport_segment_idx, stop_idx, r_query_res,
                            transferred_from);
+
+    // increment index
     ++end_[n_transfers];
 
-    // update all transports of this route
-    auto const route_idx = r_.tbp_.tt_.transport_route_[transport_idx];
-    for (auto const transport_idx_it :
-         r_.tbp_.tt_.route_transport_ranges_[route_idx]) {
-      // construct d_new
-      auto day_idx_new = day_idx;
-
-      // set the bit of the day of the instance to false if the current
-      // transport is earlier than the newly enqueued
-      auto const mam_u =
-          r_.tbp_.tt_.event_mam(transport_idx_it, 0U, event_type::kDep);
-      auto const mam_t =
-          r_.tbp_.tt_.event_mam(transport_idx, 0U, event_type::kDep);
-      if (mam_u < mam_t) {
-        ++day_idx_new;
-      }
-
-      r_.update(transport_idx_it, stop_idx, day_idx_new);
-    }
+    // update reached
+    r_.update(transport_segment_idx, stop_idx, n_transfers);
   }
 }

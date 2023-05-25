@@ -12,112 +12,33 @@ void reached::reset() {
 void reached::update(transport_segment_idx_t const transport_segment_idx,
                      std::uint16_t const stop_idx,
                      std::uint16_t const n_transfers) {
-  data_[tbp_.tt_.transport_route_[transport_segment::transport_idx(
-            transport_segment_idx)]]
-      .add(reached_entry{transport_segment_idx, stop_idx, n_transfers});
+  data_[tbp_.tt_.transport_route_[transport_idx(transport_segment_idx)]].add(
+      reached_entry{transport_segment_idx, stop_idx, n_transfers});
 }
 
 std::uint16_t reached::query(
     transport_segment_idx_t const transport_segment_idx,
     std::uint16_t const n_transfers) {
   auto const route_idx =
-      tbp_.tt_.transport_route_[transport_segment::transport_idx(
-          transport_segment_idx)];
+      tbp_.tt_.transport_route_[transport_idx(transport_segment_idx)];
 
   auto stop_idx = std::numeric_limits<std::uint16_t>::max();
-  // closest number of transfers so far
-  auto n_transfers_closest = std::numeric_limits<std::int32_t>::min();
-  // closest transport segment index so far
-  auto transport_segment_idx_closest = std::numeric_limits<std::int64_t>::min();
+  // find minimal stop index among relevant entries
   for (auto const& re : data_[route_idx]) {
     // only entries with less or equal n_transfers and less or equal
     // transport_segment_idx are relevant
     if (re.n_transfers_ <= n_transfers &&
-        re.transport_segment_idx_ <= transport_segment_idx) {
-      // only entries number of transfers or transport segment index is closer
-      // than the closest observed so far are relevant
-      bool const closer_n_transfers = re.n_transfers_ > n_transfers_closest;
-      bool const closer_idx =
-          re.transport_segment_idx_ > transport_segment_idx_closest;
-      if (closer_n_transfers || closer_idx) {
-        stop_idx = re.stop_idx_;
-        if (closer_n_transfers) {
-          n_transfers_closest = re.n_transfers;
-        }
-        if (closer_idx) {
-          transport_segment_idx_closest = re.transport_segment_idx_;
-        }
-      }
-    }
-    if (n_transfers_closest == n_transfers &&
-        transport_segment_idx_closest == transport_segment_idx) {
-      break;
+        re.transport_segment_idx_ <= transport_segment_idx &&
+        re.stop_idx_ < stop_idx) {
+      stop_idx = re.stop_idx_;
     }
   }
-
-  // no entry for this transport_idx/day_idx combination
-  // return stop index of final stop of the transport
-  auto stop_idx =
-      static_cast<uint16_t>(tbp_.tt_.route_location_seq_[route_idx].size() - 1);
+  // no relevant entry found
+  if (stop_idx == std::numeric_limits<std::uint16_t>::max()) {
+    // return stop index of final stop of the route
+    stop_idx = static_cast<uint16_t>(
+        tbp_.tt_.route_location_seq_[route_idx].size() - 1);
+  }
 
   return stop_idx;
 }
-
-// earliest arrival query initial implementation
-// void reached::update(transport_idx_t const transport_idx,
-//                      std::uint16_t const stop_idx,
-//                      day_idx_t const day_idx) {
-//
-//   auto day_idx_end = std::numeric_limits<day_idx_t>::max();
-//
-//   for (auto& re : data_[transport_idx]) {
-//     if (re.day_idx_ == re.day_idx_end_) {
-//       continue;
-//     }
-//     if (stop_idx < re.stop_idx_) {
-//       if (day_idx <= re.day_idx_) {
-//         re.day_idx_ = re.day_idx_end_;
-//       } else if (day_idx < re.day_idx_end_) {
-//         re.day_idx_end_ = day_idx.v_;
-//       }
-//     } else if (stop_idx == re.stop_idx_) {
-//       if (day_idx < re.day_idx_) {
-//         re.day_idx_ = re.day_idx_end_;
-//       } else {
-//         // new entry already covered by current entry
-//         return;
-//       }
-//     } else if (day_idx < re.day_idx_) {
-//       day_idx_end = re.get_day_idx_start();
-//     } else {
-//       // new entry already covered by current entry
-//       return;
-//     }
-//   }
-//
-//   data_[transport_idx].emplace_back(stop_idx, day_idx.v_, day_idx_end.v_);
-// }
-//
-// std::uint16_t reached::query(transport_idx_t const transport_idx,
-//                              day_idx_t const day_idx) {
-//
-//   // look up stop index for the provided day index
-//   // reverse iteration because newest entry is more likely to be valid
-//   // newest entry is in the back
-//   for (std::uint32_t i =
-//            static_cast<std::uint32_t>(data_[transport_idx].size());
-//        i-- > 0;) {
-//     auto const& re = &data_[transport_idx][i];
-//     if (re->get_day_idx_start() <= day_idx && day_idx <
-//     re->get_day_idx_end()) {
-//       return re->stop_idx_;
-//     }
-//   }
-//
-//   // no entry for this transport_idx/day_idx combination
-//   // return stop index of final stop of the transport
-//   return static_cast<uint16_t>(
-//       tbp_.tt_.route_location_seq_[tbp_.tt_.transport_route_[transport_idx]]
-//           .size() -
-//       1);
-// }

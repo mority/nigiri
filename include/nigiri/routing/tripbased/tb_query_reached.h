@@ -18,8 +18,7 @@ struct reached_entry {
 
 struct reached {
   reached() = delete;
-  explicit reached(tb_preprocessing& tbp, day_idx_t const query_day)
-      : tbp_(tbp), query_day_(query_day) {
+  explicit reached(tb_preprocessing& tbp) : tbp_(tbp) {
     data_.resize(tbp_.tt_.n_routes());
   }
 
@@ -33,7 +32,6 @@ struct reached {
                       std::uint16_t const n_transfers);
 
   tb_preprocessing& tbp_;
-  day_idx_t const query_day_;
 
   // reached stops per route
   std::vector<pareto_set<reached_entry>> data_;
