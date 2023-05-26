@@ -15,9 +15,9 @@ namespace nigiri::routing::tripbased {
 // a route that reaches the destination
 struct l_entry {
   // the route index of the route that reaches the target location
-  route_idx_t const route_idx_{};
+  route_idx_t route_idx_{};
   // the stop index at which the route reaches the target location
-  std::uint16_t const stop_idx_{};
+  std::uint16_t stop_idx_{};
   // the time it takes after exiting the route until the target location is
   // reached
   duration_t time_{};
@@ -28,7 +28,7 @@ struct tb_query_state {
   tb_query_state(tb_preprocessing& tbp, day_idx_t const base)
       : tbp_{tbp}, base_{base}, r_{tbp}, q_{r_, base} {
     l_.reserve(128);
-    t_min_.resize(kNumTransfersMax, duration_t::max());
+    t_min_.resize(kNumTransfersMax, unixtime_t::max());
     q_.start_.reserve(kNumTransfersMax);
     q_.end_.reserve(kNumTransfersMax);
     q_.segments_.reserve(10000);

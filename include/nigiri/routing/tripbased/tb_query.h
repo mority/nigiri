@@ -71,7 +71,7 @@ struct tb_query {
 
   void reset_arrivals() {
     state_.r_.reset();
-    std::fill(state_.t_min_.begin(), state_.t_min_.end(), duration_t::max());
+    std::fill(state_.t_min_.begin(), state_.t_min_.end(), unixtime_t::max());
   }
 
   void next_start_time() { state_.q_.reset(); }
@@ -87,7 +87,7 @@ struct tb_query {
                pareto_set<journey>& results);
 
   // reconstructs the journey that ends with the given transport segment
-  void reconstruct_journey(transport_segment const& last_tp_seg, journey& j);
+  void reconstruct(query const& q, journey& j);
 
 private:
   timetable const& tt_;
