@@ -22,23 +22,23 @@ std::uint16_t reached::query(
   auto const route_idx =
       tbp_.tt_.transport_route_[transport_idx(transport_segment_idx)];
 
-  auto stop_idx = std::numeric_limits<std::uint16_t>::max();
+  auto stop_idx_min = std::numeric_limits<std::uint16_t>::max();
   // find minimal stop index among relevant entries
   for (auto const& re : data_[route_idx]) {
     // only entries with less or equal n_transfers and less or equal
     // transport_segment_idx are relevant
     if (re.n_transfers_ <= n_transfers &&
         re.transport_segment_idx_ <= transport_segment_idx &&
-        re.stop_idx_ < stop_idx) {
-      stop_idx = re.stop_idx_;
+        re.stop_idx_ < stop_idx_min) {
+      stop_idx_min = re.stop_idx_;
     }
   }
   // no relevant entry found
-  if (stop_idx == std::numeric_limits<std::uint16_t>::max()) {
+  if (stop_idx_min == std::numeric_limits<std::uint16_t>::max()) {
     // return stop index of final stop of the route
-    stop_idx = static_cast<uint16_t>(
+    stop_idx_min = static_cast<uint16_t>(
         tbp_.tt_.route_location_seq_[route_idx].size() - 1);
   }
 
-  return stop_idx;
+  return stop_idx_min;
 }

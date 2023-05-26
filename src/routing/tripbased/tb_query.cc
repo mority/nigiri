@@ -107,7 +107,7 @@ void tb_query::execute(unixtime_t const start_time,
       auto const tp_seg_dep = tt_.event_mam(
           tp_seg.get_transport_idx(), tp_seg.stop_idx_start_, event_type::kDep);
       // departure time at start of current transport segment in minutes after
-      // midnight on the day of the query
+      // midnight on the day of this earliest arrival query
       auto const dep_query =
           duration_t{(tp_seg.get_transport_day(base_).v_ +
                       num_midnights(tp_seg_dep).v_ - day_idx.v_) *
@@ -125,7 +125,8 @@ void tb_query::execute(unixtime_t const start_time,
               tp_seg_dep;
           // the time at which the target location is reached by using the
           // current transport segment
-          auto const t_cur = dep_query + travel_time_seg + le.time_;
+          auto const t_cur =
+              tt_.to_unixtime(day_idx, dep_query + travel_time_seg + le.time_);
           if (t_cur < state_.t_min_[n]) {
             state_.t_min_[n] = t_cur;
             // change end stop index of the current transport segment to match
@@ -134,7 +135,7 @@ void tb_query::execute(unixtime_t const start_time,
             // add journey without reconstructing yet
             journey j{};
             j.start_time_ = start_time;
-            j.dest_time_ = tt_.to_unixtime(base_, t_cur);
+            j.dest_time_ = t_cur;
             j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
                           .location_idx();
             j.transfers_ = n;
@@ -150,8 +151,13 @@ void tb_query::execute(unixtime_t const start_time,
                         event_type::kArr) -
           tp_seg_dep;
 
+      // the unix time at the next stop of the transport segment
+      auto const unix_time_next =
+          tt_.to_unixtime(day_idx, dep_query + travel_time_next);
+
       // transfer out of current transport segment?
-      if (dep_query + travel_time_next < state_.t_min_[n]) {
+      if (unix_time_next < state_.t_min_[n] &&
+          unix_time_next < worst_time_at_dest) {
         // iterate stops of the current transport segment
         for (auto stop_idx{tp_seg.stop_idx_start_ + 1U};
              stop_idx <= tp_seg.stop_idx_end_; ++stop_idx) {
@@ -270,7 +276,7 @@ void tb_query::reconstruct_journey(transport_segment const& last_tp_seg,
 
             // handle reflexive footpath
             if (location_idx_end == j.legs_.back().from_) {
-              footpath reflexive_fp{
+              footpath const reflexive_fp{
                   location_idx_end,
                   tt_.locations_.transfer_time_[location_idx_end]};
               create_fp_leg(reflexive_fp);

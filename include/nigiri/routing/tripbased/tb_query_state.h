@@ -47,7 +47,7 @@ struct tb_query_state {
   reached r_;
 
   // minimum arrival times per number of transfers
-  std::vector<duration_t> t_min_;
+  std::vector<unixtime_t> t_min_;
 
   // queues of transport segments
   queue q_;
