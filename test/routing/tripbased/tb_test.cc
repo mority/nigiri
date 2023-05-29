@@ -7,16 +7,16 @@ using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
 TEST(tripbased, num_midnights) {
-  duration_t zero{0U};
+  duration_t const zero{0U};
   EXPECT_EQ(day_idx_t{0}, num_midnights(zero));
 
-  duration_t half_day{720U};
+  duration_t const half_day{720U};
   EXPECT_EQ(day_idx_t{0}, num_midnights(half_day));
 
-  duration_t one_day{1440U};
+  duration_t const one_day{1440U};
   EXPECT_EQ(day_idx_t{1}, num_midnights(one_day));
 
-  duration_t one_half_day{1440U + 720U};
+  duration_t const one_half_day{1440U + 720U};
   EXPECT_EQ(day_idx_t{1}, num_midnights(one_half_day));
 }
 
@@ -26,8 +26,8 @@ TEST(transport_segment, basic) {
 
   for (day_idx_t transport_day{0U}; transport_day != day_idx_t{8U};
        ++transport_day) {
-    transport_segment tps0{embed_day_offset(base, transport_day, transport_idx),
-                           2U, 3U, 4U};
+    transport_segment const tps0{
+        embed_day_offset(base, transport_day, transport_idx), 2U, 3U, 4U};
     EXPECT_EQ(transport_day, tps0.get_transport_day(base));
     EXPECT_EQ(transport_idx, tps0.get_transport_idx());
   }

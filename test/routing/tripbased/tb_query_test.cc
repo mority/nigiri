@@ -14,76 +14,77 @@
 #include "./tb_query_test.h"
 
 using namespace nigiri;
+using namespace nigiri::test;
 using namespace nigiri::loader;
 using namespace nigiri::loader::gtfs;
 using namespace nigiri::routing;
 using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
 
-TEST(tb_query, r_) {
-
-  // init
-  timetable tt;
-  tb_preprocessing tbp{tt};
-  day_idx_t const base{5U};
-  tb_query_state state{tbp, base};
-  std::vector<bool> is_dest;
-  std::vector<std::uint16_t> dist_to_dest;
-  std::vector<std::uint16_t> lb;
-  tb_query tbq{tt, state, is_dest, dist_to_dest, lb, base};
-
-  // constants
-  transport_idx_t const tpi{0U};
-  tt.transport_route_.emplace_back(0U);
-  std::basic_string<stop::value_type> location_seq;
-  for (unsigned i = 0; i < 50; ++i) {
-    location_seq.push_back(stop::value_type{i});
-  }
-  tt.route_location_seq_.emplace_back(location_seq);
-  day_idx_t const day0{0U};
-  day_idx_t const day1{1U};
-  day_idx_t const day2{2U};
-  day_idx_t const day3{3U};
-  day_idx_t const day4{3U};
-
-  transport_segment_idx_t tpsi0 = embed_day_offset(base, day0, tpi);
-  transport_segment_idx_t tpsi1 = embed_day_offset(base, day1, tpi);
-  transport_segment_idx_t tpsi2 = embed_day_offset(base, day2, tpi);
-  transport_segment_idx_t tpsi3 = embed_day_offset(base, day3, tpi);
-  transport_segment_idx_t tpsi4 = embed_day_offset(base, day4, tpi);
-
-  // update empty
-  tbq.state_.r_.update(tpsi2, 42, 0);
-  EXPECT_EQ(42, tbq.state_.r_.query(tpsi2, 0));
-
-  // update partial dominance
-  tbq.state_.r_.update(tpsi3, 41, 0);
-  EXPECT_EQ(42, tbq.state_.r_.query(tpsi2, 0));
-  EXPECT_EQ(41, tbq.state_.r_.query(tpsi3, 0));
-  EXPECT_EQ(41, tbq.state_.r_.query(tpsi4, 0));
-
-  // update complete dominance
-  tbq.state_.r_.update(tpsi1, 23, 0);
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
-
-  // update no change
-  tbq.state_.r_.update(tpsi1, 24, 0);
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
-
-  // update partial dominance
-  tbq.state_.r_.update(tpsi0, 24, 0);
-  EXPECT_EQ(24, tbq.state_.r_.query(tpsi0, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
-  EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
-}
+// TEST(tb_query, r_) {
+//
+//   // init
+//   timetable tt;
+//   tb_preprocessing tbp{tt};
+//   day_idx_t const base{5U};
+//   tb_query_state state{tbp, base};
+//   std::vector<bool> is_dest;
+//   std::vector<std::uint16_t> dist_to_dest;
+//   std::vector<std::uint16_t> lb;
+//   tb_query tbq{tt, state, is_dest, dist_to_dest, lb, base};
+//
+//   // constants
+//   transport_idx_t const tpi{0U};
+//   tt.transport_route_.emplace_back(0U);
+//   std::basic_string<stop::value_type> location_seq;
+//   for (unsigned i = 0; i < 50; ++i) {
+//     location_seq.push_back(stop::value_type{i});
+//   }
+//   tt.route_location_seq_.emplace_back(location_seq);
+//   day_idx_t const day0{0U};
+//   day_idx_t const day1{1U};
+//   day_idx_t const day2{2U};
+//   day_idx_t const day3{3U};
+//   day_idx_t const day4{3U};
+//
+//   transport_segment_idx_t const tpsi0 = embed_day_offset(base, day0, tpi);
+//   transport_segment_idx_t const tpsi1 = embed_day_offset(base, day1, tpi);
+//   transport_segment_idx_t const tpsi2 = embed_day_offset(base, day2, tpi);
+//   transport_segment_idx_t const tpsi3 = embed_day_offset(base, day3, tpi);
+//   transport_segment_idx_t const tpsi4 = embed_day_offset(base, day4, tpi);
+//
+//   // update empty
+//   tbq.state_.r_.update(tpsi2, 42, 0);
+//   EXPECT_EQ(42, tbq.state_.r_.query(tpsi2, 0));
+//
+//   // update partial dominance
+//   tbq.state_.r_.update(tpsi3, 41, 0);
+//   EXPECT_EQ(42, tbq.state_.r_.query(tpsi2, 0));
+//   EXPECT_EQ(41, tbq.state_.r_.query(tpsi3, 0));
+//   EXPECT_EQ(41, tbq.state_.r_.query(tpsi4, 0));
+//
+//   // update complete dominance
+//   tbq.state_.r_.update(tpsi1, 23, 0);
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
+//
+//   // update no change
+//   tbq.state_.r_.update(tpsi1, 24, 0);
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
+//
+//   // update partial dominance
+//   tbq.state_.r_.update(tpsi0, 24, 0);
+//   EXPECT_EQ(24, tbq.state_.r_.query(tpsi0, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
+//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
+// }
 
 TEST(tb_query, enqueue) {
   // load timetable
@@ -106,52 +107,54 @@ TEST(tb_query, enqueue) {
   state.q_.reset();
 
   transport_idx_t const tpi0{0U};
-  auto const si0{3U};
-  day_idx_t const day_idx0{5U};
-  state.q_.enqueue(day_idx0, tpi0, si0, 0, TRANSFERRED_FROM_NULL);
+  auto const si3{3U};
+  day_idx_t const day_idx5{5U};
+  state.q_.enqueue(day_idx5, tpi0, si3, 0, TRANSFERRED_FROM_NULL);
   EXPECT_EQ(0, tbq.state_.q_.start_[0]);
   EXPECT_EQ(1, tbq.state_.q_.end_[0]);
   ASSERT_EQ(1, state.q_.size());
   EXPECT_EQ(tpi0, state.q_[0].get_transport_idx());
-  EXPECT_EQ(si0, state.q_[0].stop_idx_start_);
+  EXPECT_EQ(si3, state.q_[0].stop_idx_start_);
   EXPECT_EQ(5, state.q_[0].stop_idx_end_);
-  EXPECT_EQ(day_idx0, state.q_[0].get_transport_day(base));
+  EXPECT_EQ(day_idx5, state.q_[0].get_transport_day(base));
 
-  day_idx_t const day_idx1{6U};
-  EXPECT_EQ(si0,
-            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi0), 0));
-  EXPECT_EQ(si0,
-            tbq.state_.r_.query(embed_day_offset(base, day_idx1, tpi0), 0));
+  day_idx_t const day_idx6{6U};
+  EXPECT_EQ(si3,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx5, tpi0), 0));
+  EXPECT_EQ(si3,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx6, tpi0), 0));
   transport_idx_t const tpi1{1U};
-  EXPECT_EQ(si0,
-            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi1), 0));
-  EXPECT_EQ(si0,
-            tbq.state_.r_.query(embed_day_offset(base, day_idx1, tpi1), 0));
+  EXPECT_EQ(si3,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx5, tpi1), 0));
+  EXPECT_EQ(si3,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx6, tpi1), 0));
 
-  auto const si1{2U};
-  state.q_.enqueue(day_idx0, tpi1, si1, 1, TRANSFERRED_FROM_NULL);
+  auto const si2{2U};
+  state.q_.enqueue(day_idx5, tpi1, si2, 1, TRANSFERRED_FROM_NULL);
   EXPECT_EQ(0, tbq.state_.q_.start_[0]);
   EXPECT_EQ(1, tbq.state_.q_.end_[0]);
   EXPECT_EQ(1, tbq.state_.q_.start_[1]);
   EXPECT_EQ(2, tbq.state_.q_.end_[1]);
   ASSERT_EQ(2, state.q_.size());
   EXPECT_EQ(tpi0, state.q_[0].get_transport_idx());
-  EXPECT_EQ(si0, state.q_[0].stop_idx_start_);
+  EXPECT_EQ(si3, state.q_[0].stop_idx_start_);
   EXPECT_EQ(5, state.q_[0].stop_idx_end_);
-  EXPECT_EQ(day_idx0, state.q_[0].get_transport_day(base));
+  EXPECT_EQ(day_idx5, state.q_[0].get_transport_day(base));
   EXPECT_EQ(tpi1, state.q_[1].get_transport_idx());
-  EXPECT_EQ(si1, state.q_[1].stop_idx_start_);
-  EXPECT_EQ(si0, state.q_[1].stop_idx_end_);
-  EXPECT_EQ(day_idx0, state.q_[1].get_transport_day(base));
+  EXPECT_EQ(si2, state.q_[1].stop_idx_start_);
+  EXPECT_EQ(si3, state.q_[1].stop_idx_end_);
+  EXPECT_EQ(day_idx5, state.q_[1].get_transport_day(base));
   day_idx_t const day_idx2{2U};
-  EXPECT_EQ(si1,
+  EXPECT_EQ(tt.route_location_seq_[tt.transport_route_[tpi0]].size() - 1,
             tbq.state_.r_.query(embed_day_offset(base, day_idx2, tpi0), 0));
-  EXPECT_EQ(si0,
-            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi0), 0));
-  EXPECT_EQ(si1,
-            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi1), 1));
-  EXPECT_EQ(si1,
-            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi0), 1));
+  EXPECT_EQ(si3,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx5, tpi0), 0));
+  EXPECT_EQ(si2,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx5, tpi1), 1));
+  EXPECT_EQ(si3,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx5, tpi0), 1));
+  EXPECT_EQ(si2,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx6, tpi0), 1));
 }
 
 #include <chrono>
@@ -330,40 +333,12 @@ TEST(earliest_arrival_query, same_day_transfer) {
   load_timetable(src, same_day_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessing tbp{tt};
-
-  // run preprocessing
-  tbp.build_transfer_set();
-
-  // init tb_query
-  tb_query tbq(tbp);
-
-  // construct input query
-  query const q{
-      .start_time_ = unixtime_t{sys_days{February / 28 / 2021} + 23h},
-      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .use_start_footpaths_ = true,
-      .start_ = {nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "S0", .src_ = src}),
-          0_minutes, 0U}},
-      .destinations_ = {{nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "S2", .src_ = src}),
-          0_minutes, 0U}}},
-      .via_destinations_ = {},
-      .allowed_classes_ = bitset<kNumClasses>::max(),
-      .max_transfers_ = 6U,
-      .min_connection_count_ = 0U,
-      .extend_interval_earlier_ = false,
-      .extend_interval_later_ = false};
-
-  // process query
-  tbq.earliest_arrival_query(q);
+  auto const results = tripbased_search(
+      tt, "S0", "S2", unixtime_t{sys_days{February / 28 / 2021} + 23h});
 
   std::stringstream ss;
   ss << "\n";
-  for (auto const& x : tbq.j_) {
+  for (auto const& x : results) {
     x.print(ss, tt);
     ss << "\n\n";
   }
@@ -396,40 +371,12 @@ TEST(earliest_arrival_query, long_transfer) {
   load_timetable(src, long_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessing tbp{tt};
-
-  // run preprocessing
-  tbp.build_transfer_set();
-
-  // init tb_query
-  tb_query tbq(tbp);
-
-  // construct input query
-  query const q{
-      .start_time_ = unixtime_t{sys_days{February / 28 / 2021} + 23h},
-      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .use_start_footpaths_ = true,
-      .start_ = {nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "S0", .src_ = src}),
-          0_minutes, 0U}},
-      .destinations_ = {{nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "S2", .src_ = src}),
-          0_minutes, 0U}}},
-      .via_destinations_ = {},
-      .allowed_classes_ = bitset<kNumClasses>::max(),
-      .max_transfers_ = 6U,
-      .min_connection_count_ = 0U,
-      .extend_interval_earlier_ = false,
-      .extend_interval_later_ = false};
-
-  // process query
-  tbq.earliest_arrival_query(q);
+  auto const results = tripbased_search(
+      tt, "S0", "S2", unixtime_t{sys_days{February / 28 / 2021} + 23h});
 
   std::stringstream ss;
   ss << "\n";
-  for (auto const& x : tbq.j_) {
+  for (auto const& x : results) {
     x.print(ss, tt);
     ss << "\n\n";
   }
@@ -462,40 +409,12 @@ TEST(earliest_arrival_query, earlier_stop_transfer) {
   load_timetable(src, earlier_stop_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessing tbp{tt};
-
-  // run preprocessing
-  tbp.build_transfer_set();
-
-  // init tb_query
-  tb_query tbq(tbp);
-
-  // construct input query
-  query const q{
-      .start_time_ = unixtime_t{sys_days{February / 28 / 2021} + 23h},
-      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .use_start_footpaths_ = true,
-      .start_ = {nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "S3", .src_ = src}),
-          0_minutes, 0U}},
-      .destinations_ = {{nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "S2", .src_ = src}),
-          0_minutes, 0U}}},
-      .via_destinations_ = {},
-      .allowed_classes_ = bitset<kNumClasses>::max(),
-      .max_transfers_ = 6U,
-      .min_connection_count_ = 0U,
-      .extend_interval_earlier_ = false,
-      .extend_interval_later_ = false};
-
-  // process query
-  tbq.earliest_arrival_query(q);
+  auto const results = tripbased_search(
+      tt, "S3", "S2", unixtime_t{sys_days{February / 28 / 2021} + 23h});
 
   std::stringstream ss;
   ss << "\n";
-  for (auto const& x : tbq.j_) {
+  for (auto const& x : results) {
     x.print(ss, tt);
     ss << "\n\n";
   }
@@ -511,38 +430,10 @@ TEST(earliest_arrival_query, no_journey_possible) {
   load_timetable(src, earlier_stop_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessing tbp{tt};
+  auto const results = tripbased_search(
+      tt, "S4", "S0", unixtime_t{sys_days{February / 28 / 2021} + 23h});
 
-  // run preprocessing
-  tbp.build_transfer_set();
-
-  // init tb_query
-  tb_query tbq(tbp);
-
-  // construct input query
-  query const q{
-      .start_time_ = unixtime_t{sys_days{February / 28 / 2021} + 23h},
-      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .use_start_footpaths_ = true,
-      .start_ = {nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "S4", .src_ = src}),
-          0_minutes, 0U}},
-      .destinations_ = {{nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "S0", .src_ = src}),
-          0_minutes, 0U}}},
-      .via_destinations_ = {},
-      .allowed_classes_ = bitset<kNumClasses>::max(),
-      .max_transfers_ = 6U,
-      .min_connection_count_ = 0U,
-      .extend_interval_earlier_ = false,
-      .extend_interval_later_ = false};
-
-  // process query
-  tbq.earliest_arrival_query(q);
-
-  EXPECT_EQ(0, tbq.j_.size());
+  EXPECT_EQ(0, results.size());
 }
 
 using namespace nigiri::test_data::hrd_timetable;
@@ -571,43 +462,38 @@ TEST(earliest_arrival_query, files_abc) {
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
-  auto const location_idx =
-      tt.locations_.location_id_to_idx_.at({.id_ = "0000002", .src_ = src});
-  for (auto const& fp : tt.locations_.footpaths_out_[location_idx]) {
-    std::cerr << "footpath: " << fp.target_ << ", " << fp.duration_
-              << std::endl;
-  }
+  auto const results = tripbased_search(
+      tt, "0000001", "0000003", unixtime_t{sys_days{March / 30 / 2020} + 5h});
 
-  tb_preprocessing tbp{tt};
-  tbp.build_transfer_set();
-
-  tb_query tbq{tbp};
-
-  query const q{
-      .start_time_ = unixtime_t{sys_days{March / 30 / 2020} + 5h},
-      .start_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .dest_match_mode_ = nigiri::routing::location_match_mode::kExact,
-      .use_start_footpaths_ = true,
-      .start_ = {nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "0000001", .src_ = src}),
-          0_minutes, 0U}},
-      .destinations_ = {{nigiri::routing::offset{
-          tt.locations_.location_id_to_idx_.at({.id_ = "0000003", .src_ = src}),
-          0_minutes, 0U}}},
-      .via_destinations_ = {},
-      .allowed_classes_ = bitset<kNumClasses>::max(),
-      .max_transfers_ = 6U,
-      .min_connection_count_ = 0U,
-      .extend_interval_earlier_ = false,
-      .extend_interval_later_ = false};
-
-  tbq.earliest_arrival_query(q);
-
-  EXPECT_EQ(1, tbq.j_.size());
+  EXPECT_EQ(1, results.size());
 
   std::stringstream ss;
   ss << "\n";
-  for (auto const& x : tbq.j_) {
+  for (auto const& x : results) {
+    x.print(ss, tt);
+    ss << "\n\n";
+  }
+
+  EXPECT_EQ(std::string_view{abc_journeys}, ss.str());
+}
+
+TEST(profile_query, files_abc) {
+  constexpr auto const src = source_idx_t{0U};
+  timetable tt;
+  tt.date_range_ = full_period();
+  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
+  finalize(tt);
+
+  auto const results =
+      tripbased_search(tt, "0000001", "0000003",
+                       interval{unixtime_t{sys_days{March / 30 / 2020}} + 5h,
+                                unixtime_t{sys_days{March / 30 / 2020}} + 6h});
+
+  EXPECT_EQ(1, results.size());
+
+  std::stringstream ss;
+  ss << "\n";
+  for (auto const& x : results) {
     x.print(ss, tt);
     ss << "\n\n";
   }

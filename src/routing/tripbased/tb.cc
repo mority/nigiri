@@ -52,4 +52,26 @@ std::optional<hash_transfer_set::entry> hash_transfer_set::get_transfers(
              : std::nullopt;
 }
 
+transport_segment_idx_t embed_day_offset(const day_idx_t base,
+                                         const day_idx_t transport_day,
+                                         const transport_idx_t transport_idx) {
+  return (((static_cast<transport_segment_idx_t>(transport_day.v_) +
+            QUERY_DAY_SHIFT) -
+           static_cast<transport_segment_idx_t>(base.v_))
+          << (32U - DAY_OFFSET_BITS)) |
+         transport_idx.v_;
+}
+std::uint32_t day_offset(const transport_segment_idx_t transport_segment_idx) {
+  return (transport_segment_idx & day_offset_mask) >> (32U - DAY_OFFSET_BITS);
+}
+day_idx_t transport_day(const day_idx_t base,
+                        const transport_segment_idx_t transport_segment_idx) {
+  return day_idx_t{base.v_ +
+                   static_cast<int>(day_offset(transport_segment_idx)) -
+                   QUERY_DAY_SHIFT};
+}
+transport_idx_t transport_idx(
+    const transport_segment_idx_t transport_segment_idx) {
+  return transport_idx_t{transport_segment_idx & transport_idx_mask};
+}
 }  // namespace nigiri::routing::tripbased

@@ -45,7 +45,7 @@ struct tb_query {
           // iterate routes serving source of footpath
           for (auto const route_idx : tt_.location_routes_[fp.target_]) {
             // iterate stop sequence of route
-            for (auto stop_idx{0U};
+            for (std::uint16_t stop_idx{0U};
                  stop_idx < tt_.route_location_seq_[route_idx].size();
                  ++stop_idx) {
               auto const location_idx =

@@ -4,6 +4,7 @@
 
 #include "nigiri/common/delta_t.h"
 #include "nigiri/common/linear_lower_bound.h"
+#include "nigiri/routing/debug.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/pareto_set.h"
@@ -11,7 +12,6 @@
 #include "nigiri/routing/raptor/reconstruct.h"
 #include "nigiri/special_stations.h"
 #include "nigiri/timetable.h"
-#include "debug.h"
 
 namespace nigiri::routing {
 

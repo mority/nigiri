@@ -1,6 +1,6 @@
 #pragma once
 
-#include "nigiri/routing/raptor/debug.h"
+#include "nigiri/routing/debug.h"
 #include "nigiri/types.h"
 
 namespace nigiri {
