@@ -12,7 +12,7 @@ void reached::reset() {
 void reached::update(transport_segment_idx_t const transport_segment_idx,
                      std::uint16_t const stop_idx,
                      std::uint16_t const n_transfers) {
-  data_[tbp_.tt_.transport_route_[transport_idx(transport_segment_idx)]].add(
+  data_[tbp_.tt_.transport_route_[transport_idx(transport_segment_idx)].v_].add(
       reached_entry{transport_segment_idx, stop_idx, n_transfers});
 }
 
@@ -24,7 +24,7 @@ std::uint16_t reached::query(
 
   auto stop_idx_min = std::numeric_limits<std::uint16_t>::max();
   // find minimal stop index among relevant entries
-  for (auto const& re : data_[route_idx]) {
+  for (auto const& re : data_[route_idx.v_]) {
     // only entries with less or equal n_transfers and less or equal
     // transport_segment_idx are relevant
     if (re.n_transfers_ <= n_transfers &&

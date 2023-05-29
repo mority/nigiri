@@ -103,10 +103,6 @@ static transport_idx_t transport_idx(
 }
 
 struct transport_segment {
-  std::uint32_t get_day_offset() const {
-    return day_offset(transport_segment_idx_);
-  }
-
   day_idx_t get_transport_day(day_idx_t const base) const {
     return transport_day(base, transport_segment_idx_);
   }

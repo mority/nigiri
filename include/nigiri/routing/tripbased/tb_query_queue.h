@@ -20,6 +20,8 @@ struct queue {
 
   auto& operator[](unsigned pos) { return segments_[pos]; }
 
+  auto size() const { return segments_.size(); }
+
   reached& r_;
   day_idx_t const base_;
   std::vector<std::uint32_t> start_;

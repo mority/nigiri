@@ -19,49 +19,68 @@ using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
 
 TEST(tb_query, r_) {
+
   // init
   timetable tt;
   tb_preprocessing tbp{tt};
-  tb_query tbq{tbp};
+  day_idx_t const base{5U};
+  tb_query_state state{tbp, base};
+  std::vector<bool> is_dest;
+  std::vector<std::uint16_t> dist_to_dest;
+  std::vector<std::uint16_t> lb;
+  tb_query tbq{tt, state, is_dest, dist_to_dest, lb, base};
 
   // constants
-  transport_idx_t const tpi{22U};
+  transport_idx_t const tpi{0U};
+  tt.transport_route_.emplace_back(0U);
+  std::basic_string<stop::value_type> location_seq;
+  for (unsigned i = 0; i < 50; ++i) {
+    location_seq.push_back(stop::value_type{i});
+  }
+  tt.route_location_seq_.emplace_back(location_seq);
   day_idx_t const day0{0U};
   day_idx_t const day1{1U};
   day_idx_t const day2{2U};
   day_idx_t const day3{3U};
+  day_idx_t const day4{3U};
+
+  transport_segment_idx_t tpsi0 = embed_day_offset(base, day0, tpi);
+  transport_segment_idx_t tpsi1 = embed_day_offset(base, day1, tpi);
+  transport_segment_idx_t tpsi2 = embed_day_offset(base, day2, tpi);
+  transport_segment_idx_t tpsi3 = embed_day_offset(base, day3, tpi);
+  transport_segment_idx_t tpsi4 = embed_day_offset(base, day4, tpi);
 
   // update empty
-  tbq.r_update(tpi, 42, day2);
-  EXPECT_EQ(42, tbq.r_query(tpi, day2));
+  tbq.state_.r_.update(tpsi2, 42, 0);
+  EXPECT_EQ(42, tbq.state_.r_.query(tpsi2, 0));
 
   // update partial dominance
-  tbq.r_update(tpi, 41, day3);
-  EXPECT_EQ(42, tbq.r_query(tpi, day2));
-  EXPECT_EQ(41, tbq.r_query(tpi, day3));
-  EXPECT_EQ(41, tbq.r_query(tpi, day_idx_t{23U}));
+  tbq.state_.r_.update(tpsi3, 41, 0);
+  EXPECT_EQ(42, tbq.state_.r_.query(tpsi2, 0));
+  EXPECT_EQ(41, tbq.state_.r_.query(tpsi3, 0));
+  EXPECT_EQ(41, tbq.state_.r_.query(tpsi4, 0));
 
   // update complete dominance
-  tbq.r_update(tpi, 23, day1);
-  EXPECT_EQ(23, tbq.r_query(tpi, day1));
-  EXPECT_EQ(23, tbq.r_query(tpi, day2));
-  EXPECT_EQ(23, tbq.r_query(tpi, day3));
-  EXPECT_EQ(23, tbq.r_query(tpi, day_idx_t{23U}));
+  tbq.state_.r_.update(tpsi1, 23, 0);
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
 
   // update no change
-  tbq.r_update(tpi, 24, day1);
-  EXPECT_EQ(23, tbq.r_query(tpi, day1));
-  EXPECT_EQ(23, tbq.r_query(tpi, day2));
-  EXPECT_EQ(23, tbq.r_query(tpi, day3));
-  EXPECT_EQ(23, tbq.r_query(tpi, day_idx_t{23U}));
+  tbq.state_.r_.update(tpsi1, 24, 0);
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
 
   // update partial dominance
-  tbq.r_update(tpi, 24, day0);
-  EXPECT_EQ(24, tbq.r_query(tpi, day0));
-  EXPECT_EQ(23, tbq.r_query(tpi, day1));
-  EXPECT_EQ(23, tbq.r_query(tpi, day2));
-  EXPECT_EQ(23, tbq.r_query(tpi, day3));
-  EXPECT_EQ(23, tbq.r_query(tpi, day_idx_t{23U}));
+  tbq.state_.r_.update(tpsi0, 24, 0);
+  EXPECT_EQ(24, tbq.state_.r_.query(tpsi0, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
+  EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
 }
 
 TEST(tb_query, enqueue) {
@@ -76,51 +95,61 @@ TEST(tb_query, enqueue) {
   tb_preprocessing tbp{tt};
 
   // init query
-  tb_query tbq{tbp};
+  day_idx_t const base{5U};
+  tb_query_state state{tbp, base};
+  std::vector<bool> is_dest;
+  std::vector<std::uint16_t> dist_to_dest;
+  std::vector<std::uint16_t> lb;
+  tb_query tbq{tt, state, is_dest, dist_to_dest, lb, base};
+  state.q_.reset();
 
   transport_idx_t const tpi0{0U};
   auto const si0{3U};
   day_idx_t const day_idx0{5U};
-  tbq.enqueue(tpi0, si0, day_idx0, 0, TRANSFERRED_FROM_NULL);
-  EXPECT_EQ(0, tbq.q_start_[0]);
-  EXPECT_EQ(0, tbq.q_cur_[0]);
-  EXPECT_EQ(1, tbq.q_end_[0]);
-  ASSERT_EQ(1, tbq.q_.size());
-  EXPECT_EQ(tpi0, tbq.q_[0].transport_idx_);
-  EXPECT_EQ(si0, tbq.q_[0].stop_idx_start_);
-  EXPECT_EQ(5, tbq.q_[0].stop_idx_end_);
-  EXPECT_EQ(day_idx0, tbq.q_[0].day_idx_);
+  state.q_.enqueue(day_idx0, tpi0, si0, 0, TRANSFERRED_FROM_NULL);
+  EXPECT_EQ(0, tbq.state_.q_.start_[0]);
+  EXPECT_EQ(1, tbq.state_.q_.end_[0]);
+  ASSERT_EQ(1, state.q_.size());
+  EXPECT_EQ(tpi0, state.q_[0].get_transport_idx());
+  EXPECT_EQ(si0, state.q_[0].stop_idx_start_);
+  EXPECT_EQ(5, state.q_[0].stop_idx_end_);
+  EXPECT_EQ(day_idx0, state.q_[0].get_transport_day(base));
 
-  ASSERT_EQ(2, tbq.r_.size());
   day_idx_t const day_idx1{6U};
-  EXPECT_EQ(si0, tbq.r_query(tpi0, day_idx0));
-  EXPECT_EQ(si0, tbq.r_query(tpi0, day_idx1));
+  EXPECT_EQ(si0,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi0), 0));
+  EXPECT_EQ(si0,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx1, tpi0), 0));
   transport_idx_t const tpi1{1U};
-  EXPECT_EQ(si0, tbq.r_query(tpi1, day_idx0));
-  EXPECT_EQ(si0, tbq.r_query(tpi1, day_idx1));
+  EXPECT_EQ(si0,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi1), 0));
+  EXPECT_EQ(si0,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx1, tpi1), 0));
 
   auto const si1{2U};
-  tbq.enqueue(tpi1, si1, day_idx0, 1, TRANSFERRED_FROM_NULL);
-  EXPECT_EQ(0, tbq.q_start_[0]);
-  EXPECT_EQ(0, tbq.q_cur_[0]);
-  EXPECT_EQ(1, tbq.q_end_[0]);
-  EXPECT_EQ(1, tbq.q_start_[1]);
-  EXPECT_EQ(1, tbq.q_cur_[1]);
-  EXPECT_EQ(2, tbq.q_end_[1]);
-  ASSERT_EQ(2, tbq.q_.size());
-  EXPECT_EQ(tpi0, tbq.q_[0].transport_idx_);
-  EXPECT_EQ(si0, tbq.q_[0].stop_idx_start_);
-  EXPECT_EQ(5, tbq.q_[0].stop_idx_end_);
-  EXPECT_EQ(day_idx0, tbq.q_[0].day_idx_);
-  EXPECT_EQ(tpi1, tbq.q_[1].transport_idx_);
-  EXPECT_EQ(si1, tbq.q_[1].stop_idx_start_);
-  EXPECT_EQ(si0, tbq.q_[1].stop_idx_end_);
-  EXPECT_EQ(day_idx0, tbq.q_[1].day_idx_);
-  ASSERT_EQ(2, tbq.r_.size());
-  day_idx_t const day_idx23{23U};
-  EXPECT_EQ(si1, tbq.r_query(tpi0, day_idx23));
-  EXPECT_EQ(si0, tbq.r_query(tpi0, day_idx0));
-  EXPECT_EQ(si1, tbq.r_query(tpi1, day_idx0));
+  state.q_.enqueue(day_idx0, tpi1, si1, 1, TRANSFERRED_FROM_NULL);
+  EXPECT_EQ(0, tbq.state_.q_.start_[0]);
+  EXPECT_EQ(1, tbq.state_.q_.end_[0]);
+  EXPECT_EQ(1, tbq.state_.q_.start_[1]);
+  EXPECT_EQ(2, tbq.state_.q_.end_[1]);
+  ASSERT_EQ(2, state.q_.size());
+  EXPECT_EQ(tpi0, state.q_[0].get_transport_idx());
+  EXPECT_EQ(si0, state.q_[0].stop_idx_start_);
+  EXPECT_EQ(5, state.q_[0].stop_idx_end_);
+  EXPECT_EQ(day_idx0, state.q_[0].get_transport_day(base));
+  EXPECT_EQ(tpi1, state.q_[1].get_transport_idx());
+  EXPECT_EQ(si1, state.q_[1].stop_idx_start_);
+  EXPECT_EQ(si0, state.q_[1].stop_idx_end_);
+  EXPECT_EQ(day_idx0, state.q_[1].get_transport_day(base));
+  day_idx_t const day_idx2{2U};
+  EXPECT_EQ(si1,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx2, tpi0), 0));
+  EXPECT_EQ(si0,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi0), 0));
+  EXPECT_EQ(si1,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi1), 1));
+  EXPECT_EQ(si1,
+            tbq.state_.r_.query(embed_day_offset(base, day_idx0, tpi0), 1));
 }
 
 #include <chrono>

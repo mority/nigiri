@@ -89,7 +89,6 @@ struct tb_query {
   // reconstructs the journey that ends with the given transport segment
   void reconstruct(query const& q, journey& j);
 
-private:
   timetable const& tt_;
   tb_query_state& state_;
   std::vector<bool>& is_dest_;

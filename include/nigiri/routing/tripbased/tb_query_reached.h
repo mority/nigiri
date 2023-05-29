@@ -1,5 +1,6 @@
 #pragma once
 
+#include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/tripbased/tb.h"
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
 #include "nigiri/types.h"
@@ -11,9 +12,9 @@ struct reached_entry {
     return transport_segment_idx_ <= o.transport_segment_idx_ &&
            stop_idx_ <= o.stop_idx_ && n_transfers_ <= o.n_transfers_;
   }
-  transport_segment_idx_t const transport_segment_idx_;
-  std::uint16_t const stop_idx_;
-  std::uint16_t const n_transfers_;
+  transport_segment_idx_t transport_segment_idx_;
+  std::uint16_t stop_idx_;
+  std::uint16_t n_transfers_;
 };
 
 struct reached {

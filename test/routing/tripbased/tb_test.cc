@@ -20,6 +20,19 @@ TEST(tripbased, num_midnights) {
   EXPECT_EQ(day_idx_t{1}, num_midnights(one_half_day));
 }
 
+TEST(transport_segment, basic) {
+  day_idx_t const base{QUERY_DAY_SHIFT};
+  transport_idx_t const transport_idx{0};
+
+  for (day_idx_t transport_day{0U}; transport_day != day_idx_t{8U};
+       ++transport_day) {
+    transport_segment tps0{embed_day_offset(base, transport_day, transport_idx),
+                           2U, 3U, 4U};
+    EXPECT_EQ(transport_day, tps0.get_transport_day(base));
+    EXPECT_EQ(transport_idx, tps0.get_transport_idx());
+  }
+}
+
 TEST(hash_transfer_set, basic) {
 
   // fill
