@@ -519,4 +519,39 @@ loader::mem_dir footpath_files() {
            {path{kStopTimesFile}, std::string{footpath_stop_times_content}}}};
 }
 
+constexpr auto const early_train_routes_file_content = std::string_view{
+    R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R0,DTA,R0,R0,"S0 -> S2 -> S3",2
+R1,DTA,R1,R1,"S1 -> S2",2
+)"};
+
+constexpr auto const early_train_trips_file_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R0,MON,R0_MON,R0_MON,1
+R1,THU,R1_THU,R1_THU,2
+)";
+
+constexpr auto const early_train_stop_times_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R0_MON,00:00:00,00:00:00,S0,0,0,0
+R0_MON,76:00:00,80:00:00,S2,1,0,0
+R0_MON,81:00:00,81:00:00,S3,2,0,0
+R1_THU,06:00:00,06:00:00,S1,0,0,0
+R1_THU,07:00:00,07:00:00,S2,1,0,0
+)";
+
+loader::mem_dir early_train_files() {
+  using std::filesystem::path;
+  return {
+      {{path{kAgencyFile}, std::string{agency_file_content}},
+       {path{kStopFile}, std::string{five_stops_file_content}},
+       {path{kCalenderFile}, std::string{calendar_file_content}},
+       {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+       {path{kTransfersFile}, std::string{transfers_file_content}},
+       {path{kRoutesFile}, std::string{early_train_routes_file_content}},
+       {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+       {path{kTripsFile}, std::string{early_train_trips_file_content}},
+       {path{kStopTimesFile}, std::string{early_train_stop_times_content}}}};
+}
+
 }  // namespace nigiri::routing::tripbased::test

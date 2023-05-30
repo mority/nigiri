@@ -21,71 +21,6 @@ using namespace nigiri::routing;
 using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
 
-// TEST(tb_query, r_) {
-//
-//   // init
-//   timetable tt;
-//   tb_preprocessing tbp{tt};
-//   day_idx_t const base{5U};
-//   tb_query_state state{tbp, base};
-//   std::vector<bool> is_dest;
-//   std::vector<std::uint16_t> dist_to_dest;
-//   std::vector<std::uint16_t> lb;
-//   tb_query tbq{tt, state, is_dest, dist_to_dest, lb, base};
-//
-//   // constants
-//   transport_idx_t const tpi{0U};
-//   tt.transport_route_.emplace_back(0U);
-//   std::basic_string<stop::value_type> location_seq;
-//   for (unsigned i = 0; i < 50; ++i) {
-//     location_seq.push_back(stop::value_type{i});
-//   }
-//   tt.route_location_seq_.emplace_back(location_seq);
-//   day_idx_t const day0{0U};
-//   day_idx_t const day1{1U};
-//   day_idx_t const day2{2U};
-//   day_idx_t const day3{3U};
-//   day_idx_t const day4{3U};
-//
-//   transport_segment_idx_t const tpsi0 = embed_day_offset(base, day0, tpi);
-//   transport_segment_idx_t const tpsi1 = embed_day_offset(base, day1, tpi);
-//   transport_segment_idx_t const tpsi2 = embed_day_offset(base, day2, tpi);
-//   transport_segment_idx_t const tpsi3 = embed_day_offset(base, day3, tpi);
-//   transport_segment_idx_t const tpsi4 = embed_day_offset(base, day4, tpi);
-//
-//   // update empty
-//   tbq.state_.r_.update(tpsi2, 42, 0);
-//   EXPECT_EQ(42, tbq.state_.r_.query(tpsi2, 0));
-//
-//   // update partial dominance
-//   tbq.state_.r_.update(tpsi3, 41, 0);
-//   EXPECT_EQ(42, tbq.state_.r_.query(tpsi2, 0));
-//   EXPECT_EQ(41, tbq.state_.r_.query(tpsi3, 0));
-//   EXPECT_EQ(41, tbq.state_.r_.query(tpsi4, 0));
-//
-//   // update complete dominance
-//   tbq.state_.r_.update(tpsi1, 23, 0);
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
-//
-//   // update no change
-//   tbq.state_.r_.update(tpsi1, 24, 0);
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
-//
-//   // update partial dominance
-//   tbq.state_.r_.update(tpsi0, 24, 0);
-//   EXPECT_EQ(24, tbq.state_.r_.query(tpsi0, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi1, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi2, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi3, 0));
-//   EXPECT_EQ(23, tbq.state_.r_.query(tpsi4, 0));
-// }
-
 TEST(tb_query, enqueue) {
   // load timetable
   timetable tt;
@@ -160,156 +95,8 @@ TEST(tb_query, enqueue) {
 #include <chrono>
 using namespace std::chrono;
 
-// TEST(reconstruct_journey, no_transfer) {
-//   // load timetable
-//   timetable tt;
-//   tt.date_range_ = gtfs_full_period();
-//   constexpr auto const src = source_idx_t{0U};
-//   load_timetable(src, no_transfer_files(), tt);
-//   finalize(tt);
-//
-//   // init preprocessing
-//   tb_preprocessing tbp{tt};
-//
-//   // run preprocessing
-//   tbp.build_transfer_set();
-//
-//   // init query
-//   tb_query tbq{tbp};
-//
-//   // create transport segment
-//   auto const day_idx0 =
-//       tt.day_idx(date::year_month_day{sys_days{March / 1 / 2021}});
-//   tb_query::transport_segment const tp_seg{transport_idx_t{0U}, 0U, 1U,
-//                                            day_idx0, TRANSFERRED_FROM_NULL};
-//
-//   journey j{};
-//   tbq.reconstruct_journey(tp_seg, j);
-//   ASSERT_EQ(1, j.legs_.size());
-//   EXPECT_EQ(0, j.transfers_);
-//   EXPECT_EQ(location_idx_t{1U}, j.dest_);
-//   EXPECT_EQ(location_idx_t{0U}, j.legs_[0].from_);
-//   EXPECT_EQ(location_idx_t{1U}, j.legs_[0].to_);
-//   constexpr unixtime_t start_time_exp = sys_days{March / 1 / 2021};
-//   constexpr unixtime_t dest_time_exp = sys_days{March / 1 / 2021} + 12h;
-//   EXPECT_EQ(start_time_exp, j.start_time_);
-//   EXPECT_EQ(dest_time_exp, j.dest_time_);
-// }
-//
-// TEST(reconstruct_journey, same_day_transfer) {
-//   // load timetable
-//   timetable tt;
-//   tt.date_range_ = gtfs_full_period();
-//   constexpr auto const src = source_idx_t{0U};
-//   load_timetable(src, same_day_transfer_files(), tt);
-//   finalize(tt);
-//
-//   // init preprocessing
-//   tb_preprocessing tbp{tt};
-//
-//   // run preprocessing
-//   tbp.build_transfer_set();
-//
-//   // init query
-//   tb_query tbq{tbp};
-//
-//   // create transport segments
-//   auto const day_idx0 =
-//       tt.day_idx(date::year_month_day{sys_days{March / 1 / 2021}});
-//   tb_query::transport_segment const tp_seg0{transport_idx_t{0U}, 0U, 1U,
-//                                             day_idx0, TRANSFERRED_FROM_NULL};
-//   tb_query::transport_segment const tp_seg1{transport_idx_t{1U}, 0U, 1U,
-//                                             day_idx0, 0U};
-//   tbq.q_.emplace_back(tp_seg0);
-//   tbq.q_.emplace_back(tp_seg1);
-//
-//   journey j{};
-//   tbq.reconstruct_journey(tp_seg1, j);
-//   ASSERT_EQ(3, j.legs_.size());
-//   EXPECT_EQ(1, j.transfers_);
-//   EXPECT_EQ(location_idx_t{2U}, j.dest_);
-//   EXPECT_EQ(location_idx_t{0U}, j.legs_[0].from_);
-//   EXPECT_EQ(location_idx_t{1U}, j.legs_[0].to_);
-//   EXPECT_EQ(location_idx_t{1U}, j.legs_[1].from_);
-//   EXPECT_EQ(location_idx_t{1U}, j.legs_[1].to_);
-//   EXPECT_EQ(location_idx_t{1U}, j.legs_[2].from_);
-//   EXPECT_EQ(location_idx_t{2U}, j.legs_[2].to_);
-//   constexpr unixtime_t start_time_exp = sys_days{March / 1 / 2021};
-//   constexpr unixtime_t dest_time_exp = sys_days{March / 1 / 2021} + 13h;
-//   EXPECT_EQ(start_time_exp, j.start_time_);
-//   EXPECT_EQ(dest_time_exp, j.dest_time_);
-// }
-//
-// TEST(reconstruct_journey, transfer_with_footpath) {
-//   // load timetable
-//   timetable tt;
-//   tt.date_range_ = gtfs_full_period();
-//   constexpr auto const src = source_idx_t{0U};
-//   load_timetable(src, footpath_files(), tt);
-//   finalize(tt);
-//
-//   // hack footpath into timetable, somehow it is not created from test data
-//   location_id const li_s1{"S1", src};
-//   auto const location_idx1 = tt.locations_.location_id_to_idx_.at(li_s1);
-//   location_id const li_s2{"S2", src};
-//   auto const location_idx2 = tt.locations_.location_id_to_idx_.at(li_s2);
-//   tt.locations_.footpaths_out_[location_idx1].emplace_back(
-//       footpath{location_idx2, duration_t{5U}});
-//
-//   // init preprocessing
-//   tb_preprocessing tbp{tt};
-//
-//   // run preprocessing
-//   tbp.build_transfer_set();
-//
-//   ASSERT_EQ(1, tbp.n_transfers_);
-//
-//   // init query
-//   tb_query tbq{tbp};
-//
-//   // create transport segments
-//   auto const day_idx0 =
-//       tt.day_idx(date::year_month_day{sys_days{March / 1 / 2021}});
-//   tb_query::transport_segment const tp_seg0{transport_idx_t{0U}, 0U, 1U,
-//                                             day_idx0, TRANSFERRED_FROM_NULL};
-//   tb_query::transport_segment const tp_seg1{transport_idx_t{1U}, 0U, 1U,
-//                                             day_idx0, 0U};
-//   tbq.q_.emplace_back(tp_seg0);
-//   tbq.q_.emplace_back(tp_seg1);
-//
-//   journey j{};
-//   tbq.reconstruct_journey(tp_seg1, j);
-//
-//   ASSERT_EQ(3, j.legs_.size());
-//   EXPECT_EQ(1, j.transfers_);
-//   EXPECT_EQ(location_idx_t{3U}, j.dest_);
-//   EXPECT_EQ(location_idx_t{0U}, j.legs_[0].from_);
-//   EXPECT_EQ(location_idx_t{1U}, j.legs_[0].to_);
-//   constexpr unixtime_t start_time_leg0_exp = sys_days{March / 1 / 2021};
-//   constexpr unixtime_t dest_time_leg0_exp = sys_days{March / 1 / 2021} + 6h;
-//   EXPECT_EQ(start_time_leg0_exp, j.legs_[0].dep_time_);
-//   EXPECT_EQ(dest_time_leg0_exp, j.legs_[0].arr_time_);
-//   EXPECT_EQ(location_idx_t{1U}, j.legs_[1].from_);
-//   EXPECT_EQ(location_idx_t{2U}, j.legs_[1].to_);
-//   constexpr unixtime_t start_time_leg1_exp = sys_days{March / 1 / 2021} + 6h;
-//   constexpr unixtime_t dest_time_leg1_exp =
-//       sys_days{March / 1 / 2021} + 6h + 5min;
-//   EXPECT_EQ(start_time_leg1_exp, j.legs_[1].dep_time_);
-//   EXPECT_EQ(dest_time_leg1_exp, j.legs_[1].arr_time_);
-//   EXPECT_EQ(location_idx_t{2U}, j.legs_[2].from_);
-//   EXPECT_EQ(location_idx_t{3U}, j.legs_[2].to_);
-//   constexpr unixtime_t start_time_leg2_exp = sys_days{March / 1 / 2021} +
-//   12h; constexpr unixtime_t dest_time_leg2_exp = sys_days{March / 1 / 2021} +
-//   13h; EXPECT_EQ(start_time_leg2_exp, j.legs_[2].dep_time_);
-//   EXPECT_EQ(dest_time_leg2_exp, j.legs_[2].arr_time_);
-//   constexpr unixtime_t start_time_exp = sys_days{March / 1 / 2021};
-//   constexpr unixtime_t dest_time_exp = sys_days{March / 1 / 2021} + 13h;
-//   EXPECT_EQ(start_time_exp, j.start_time_);
-//   EXPECT_EQ(dest_time_exp, j.dest_time_);
-// }
-
 constexpr auto const same_day_transfer_journeys = R"(
-[2021-03-01 00:00, 2021-03-01 13:00]
+[2021-02-28 23:00, 2021-03-01 13:00]
 TRANSFERS: 1
      FROM: (S0, S0) [2021-03-01 00:00]
        TO: (S2, S2) [2021-03-01 13:00]
@@ -321,6 +108,8 @@ leg 1: (S1, S1) [2021-03-01 06:00] -> (S1, S1) [2021-03-01 06:02]
 leg 2: (S1, S1) [2021-03-01 12:00] -> (S2, S2) [2021-03-01 13:00]
    0: S1      S1..............................................                               d: 01.03 12:00 [01.03 12:00]  [{name=R1 , day=2021-03-01, id=0/R1_MON, src=0}]
    1: S2      S2.............................................. a: 01.03 13:00 [01.03 13:00]
+leg 3: (S2, S2) [2021-03-01 13:00] -> (S2, S2) [2021-03-01 13:00]
+  FOOTPATH (duration=0)
 
 
 )";
@@ -343,38 +132,40 @@ TEST(earliest_arrival_query, same_day_transfer) {
     ss << "\n\n";
   }
 
-  std::cout << ss.str();
-
   EXPECT_EQ(std::string_view{same_day_transfer_journeys}, ss.str());
 }
 
-constexpr auto const long_transfer_journeys = R"(
-[2021-03-01 00:00, 2021-03-04 07:00]
+constexpr auto const early_train_journeys = R"(
+[2021-03-04 05:00, 2021-03-04 09:00]
 TRANSFERS: 1
-     FROM: (S0, S0) [2021-03-01 00:00]
-       TO: (S2, S2) [2021-03-04 07:00]
-leg 0: (S0, S0) [2021-03-01 00:00] -> (S1, S1) [2021-03-04 04:00]
-   0: S0      S0..............................................                               d: 01.03 00:00 [01.03 00:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON, src=0}]
-   1: S1      S1.............................................. a: 04.03 04:00 [04.03 04:00]
-leg 1: (S1, S1) [2021-03-04 04:00] -> (S1, S1) [2021-03-04 04:02]
-  FOOTPATH (duration=2)
-leg 2: (S1, S1) [2021-03-04 06:00] -> (S2, S2) [2021-03-04 07:00]
+     FROM: (S1, S1) [2021-03-04 06:00]
+       TO: (S3, S3) [2021-03-04 09:00]
+leg 0: (S1, S1) [2021-03-04 06:00] -> (S2, S2) [2021-03-04 07:00]
    0: S1      S1..............................................                               d: 04.03 06:00 [04.03 06:00]  [{name=R1 , day=2021-03-04, id=0/R1_THU, src=0}]
    1: S2      S2.............................................. a: 04.03 07:00 [04.03 07:00]
+leg 1: (S2, S2) [2021-03-04 07:00] -> (S2, S2) [2021-03-04 07:02]
+  FOOTPATH (duration=2)
+leg 2: (S2, S2) [2021-03-04 08:00] -> (S3, S3) [2021-03-04 09:00]
+   1: S2      S2..............................................                               d: 04.03 08:00 [04.03 08:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON, src=0}]
+   2: S3      S3.............................................. a: 04.03 09:00 [04.03 09:00]
+leg 3: (S3, S3) [2021-03-04 09:00] -> (S3, S3) [2021-03-04 09:00]
+  FOOTPATH (duration=0)
 
 
 )";
 
-TEST(earliest_arrival_query, long_transfer) {
+TEST(earliest_arrival_query, early_train) {
   // load timetable
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, long_transfer_files(), tt);
+  load_timetable(src, early_train_files(), tt);
   finalize(tt);
 
   auto const results = tripbased_search(
-      tt, "S0", "S2", unixtime_t{sys_days{February / 28 / 2021} + 23h});
+      tt, "S1", "S3", unixtime_t{sys_days{March / 04 / 2021} + 5h});
+
+  EXPECT_EQ(1, results.size());
 
   std::stringstream ss;
   ss << "\n";
@@ -383,11 +174,11 @@ TEST(earliest_arrival_query, long_transfer) {
     ss << "\n\n";
   }
 
-  EXPECT_EQ(std::string_view{long_transfer_journeys}, ss.str());
+  EXPECT_EQ(std::string_view{early_train_journeys}, ss.str());
 }
 
 constexpr auto const earlier_stop_transfer_journeys = R"(
-[2021-03-01 03:00, 2021-03-01 06:00]
+[2021-02-28 23:00, 2021-03-01 06:00]
 TRANSFERS: 1
      FROM: (S3, S3) [2021-03-01 03:00]
        TO: (S2, S2) [2021-03-01 06:00]
@@ -399,6 +190,8 @@ leg 1: (S1, S1) [2021-03-01 04:00] -> (S1, S1) [2021-03-01 04:02]
 leg 2: (S1, S1) [2021-03-01 05:00] -> (S2, S2) [2021-03-01 06:00]
    1: S1      S1..............................................                               d: 01.03 05:00 [01.03 05:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON1, src=0}]
    2: S2      S2.............................................. a: 01.03 06:00 [01.03 06:00]
+leg 3: (S2, S2) [2021-03-01 06:00] -> (S2, S2) [2021-03-01 06:00]
+  FOOTPATH (duration=0)
 
 
 )";
@@ -420,6 +213,8 @@ TEST(earliest_arrival_query, earlier_stop_transfer) {
     x.print(ss, tt);
     ss << "\n\n";
   }
+
+  std::cout << ss.str();
 
   EXPECT_EQ(std::string_view{earlier_stop_transfer_journeys}, ss.str());
 }
@@ -453,6 +248,8 @@ leg 1: (B, 0000002) [2020-03-30 06:00] -> (B, 0000002) [2020-03-30 06:02]
 leg 2: (B, 0000002) [2020-03-30 06:15] -> (C, 0000003) [2020-03-30 07:15]
    0: 0000002 B...............................................                               d: 30.03 06:15 [30.03 08:15]  [{name=RE 7331, day=2020-03-30, id=7331/0000002/375/0000003/435/, src=0}]
    1: 0000003 C............................................... a: 30.03 07:15 [30.03 09:15]
+leg 3: (C, 0000003) [2020-03-30 07:15] -> (C, 0000003) [2020-03-30 07:15]
+  FOOTPATH (duration=0)
 
 
 )";
@@ -534,8 +331,6 @@ TEST(profile_query, files_abc) {
     x.print(ss, tt);
     ss << "\n\n";
   }
-
-  std::cout << ss.str();
 
   EXPECT_EQ(std::string_view{profile_abc_journeys}, ss.str());
 }

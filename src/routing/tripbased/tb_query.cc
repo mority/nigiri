@@ -364,9 +364,6 @@ void tb_query::reconstruct(query const& q, journey& j) {
   std::reverse(j.legs_.begin(), j.legs_.end());
 }
 
-// given a journey
-// returns the queue index of the last segment and the relevant l_entry
-// or nullopt if no matching last segment could be found
 std::optional<std::pair<std::uint32_t, l_entry>> tb_query::find_last_seg(
     journey const& j) {
   for (auto q_cur = state_.q_.start_[j.transfers_];

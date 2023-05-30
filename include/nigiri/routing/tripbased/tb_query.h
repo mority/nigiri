@@ -12,7 +12,7 @@
 
 namespace nigiri {
 struct timetable;
-}
+}  // namespace nigiri
 
 namespace nigiri::routing::tripbased {
 
@@ -89,6 +89,9 @@ struct tb_query {
   // reconstructs the journey that ends with the given transport segment
   void reconstruct(query const& q, journey& j);
 
+  // given a journey
+  // returns the queue index of the last segment and the relevant l_entry
+  // or nullopt if no matching last segment could be found
   std::optional<std::pair<std::uint32_t, l_entry>> find_last_seg(
       journey const& j);
 
