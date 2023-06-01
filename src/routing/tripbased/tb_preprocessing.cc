@@ -388,23 +388,25 @@ void tb_preprocessing::build_transfer_set() {
             << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
 }
 
-void tb_preprocessing::store_transfer_set(std::filesystem::path file_name) {
+void tb_preprocessing::store_transfer_set(
+    std::filesystem::path const& file_name) {
   // transfer set
   auto ts_buf = cista::serialize(ts_);
   std::ofstream ts_file(file_name.string() + ".transfer_set", std::ios::binary);
-  ts_file.write(reinterpret_cast<const char*>(&ts_buf[0]),
-                static_cast<long>(ts_buf.size()));
+  ts_file.write(reinterpret_cast<const char*>(ts_buf.data()),
+                static_cast<std::int64_t>(ts_buf.size()));
   ts_file.close();
 
   // bitfields
   auto bf_buf = cista::serialize(tt_.bitfields_);
   std::ofstream bf_file(file_name.string() + ".bitfields", std::ios::binary);
-  bf_file.write(reinterpret_cast<const char*>(&bf_buf[0]),
-                static_cast<long>(bf_buf.size()));
+  bf_file.write(reinterpret_cast<const char*>(bf_buf.data()),
+                static_cast<std::int64_t>(bf_buf.size()));
   bf_file.close();
 }
 
-void load_transfer_set(std::filesystem::path file_name) {
+void tb_preprocessing::load_transfer_set(
+    std::filesystem::path const& file_name) {
   std::uint8_t byte{};
 
   // transfer set

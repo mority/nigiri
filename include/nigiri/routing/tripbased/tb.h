@@ -26,15 +26,6 @@ constexpr unsigned const kNumTransfersMax = 1U << NUM_TRANSFERS_BITS;
 constexpr unsigned const kDayOffsetMax = 1U << DAY_OFFSET_BITS;
 
 struct transfer {
-  transfer(bitfield_idx_t const bitfield_idx,
-           transport_idx_t const transport_idx_to,
-           std::uint16_t const stop_idx_to,
-           day_idx_t const passes_midnight)
-      : bitfield_idx_(bitfield_idx.v_),
-        transport_idx_to_(transport_idx_to.v_),
-        stop_idx_to_(stop_idx_to),
-        passes_midnight_(passes_midnight.v_) {}
-
   // the days on which the transfer can take place
   bitfield_idx_t get_bitfield_idx() const {
     return bitfield_idx_t{bitfield_idx_};

@@ -91,12 +91,12 @@ struct tb_preprocessing {
   void build_transfer_set();
 
   // stores the transfers set and the bitfields in a file
-  void store_transfer_set(std::filesystem::path file_name);
+  void store_transfer_set(std::filesystem::path const& file_name);
 
   // load precomputed transfer set from file
   // also needs to load the corresponding timetable from file since
   // bitfields of the transfers are stored in the timetable
-  void load_transfer_set(std::filesystem::path file_name);
+  void load_transfer_set(std::filesystem::path const& file_name);
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
