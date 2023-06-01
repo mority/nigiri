@@ -90,19 +90,18 @@ void tb_preprocessing::build_transfer_set() {
   }
 
   // iterate over all trips of the timetable
-  for (transport_idx_t tpi_from{0U};
-       tpi_from != tt_.transport_traffic_days_.size(); ++tpi_from) {
+  for (transport_idx_t t{0U}; t != tt_.transport_traffic_days_.size(); ++t) {
 
     // route index of the current transport
-    auto const ri_from = tt_.transport_route_[tpi_from];
+    auto const route_t = tt_.transport_route_[t];
 
     // the stops of the current transport
-    auto const stops_from = tt_.route_location_seq_[ri_from];
+    auto const stop_seq_t = tt_.route_location_seq_[route_t];
 
     // only clear the inner vector of transfers to prevent reallocation
     // only clear what we will be using during this iteration
-    for (auto i = 1U; i < stops_from.size(); ++i) {
-      transfers[i].clear();
+    for (auto pos = 1U; pos < stop_seq_t.size(); ++pos) {
+      transfers[pos].clear();
     }
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
@@ -110,186 +109,189 @@ void tb_preprocessing::build_transfer_set() {
     ets_arr_.clear();
     ets_ch_.clear();
     // reverse iteration
-    for (unsigned si_from = stops_from.size() - 1; si_from != 0U; --si_from) {
+    for (auto i = stop_seq_t.size() - 1; i != 0U; --i) {
 #else
-    for (unsigned si_from = 1U; si_from != stops_from.size(); ++si_from) {
+    for (auto i = 1U; i != stop_seq_t.size(); ++i) {
 #endif
 
       // the location index from which we are transferring
-      auto const li_from = stop{stops_from[si_from]}.location_idx();
+      auto const p_t_i = stop{stop_seq_t[i]}.location_idx();
 
-      // the arrival time of the transport we are tranferring from
-      auto const t_arr_from =
-          tt_.event_mam(tpi_from, si_from, event_type::kArr);
+      // delta at from stop
+      auto const tau_arr_t_i_delta = tt_.event_mam(t, i, event_type::kArr);
+
+      // duration at from stop
+      auto const tau_arr_t_i = tau_arr_t_i_delta.as_duration();
 
       // shift amount due to travel time of the transport we are transferring
       // from
-      auto const sa_tp_from = num_midnights(t_arr_from);
+      auto const sigma_t = day_idx_t{tau_arr_t_i_delta.days()};
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
       // the bitfield of the transport we are transferring from
-      auto const& bf_tp_from =
-          tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
+      auto const& beta_t = tt_.bitfields_[tt_.transport_traffic_days_[t]];
       // init the earliest times data structure
-      ets_arr_.update(li_from, t_arr_from, bf_tp_from);
-      for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
-        ets_arr_.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
-        ets_ch_.update(fp.target_, t_arr_from + fp.duration_, bf_tp_from);
+      ets_arr_.update(p_t_i, tau_arr_t_i, beta_t);
+      for (auto const& fp : tt_.locations_.footpaths_out_[p_t_i]) {
+        ets_arr_.update(fp.target(), tau_arr_t_i + fp.duration(), beta_t);
+        ets_ch_.update(fp.target(), tau_arr_t_i + fp.duration(), beta_t);
       }
 #endif
 
-      auto handle_fp = [&t_arr_from, &sa_tp_from, this, &tpi_from, &si_from,
-                        &ri_from, &transfers](footpath const& fp) {
-        // li_to: location index of destination of footpath
-        auto const li_to = fp.target_;
+      auto handle_fp = [&tau_arr_t_i, &sigma_t, this, &t, &i, &route_t,
+                        &transfers](footpath const& fp) {
+        // q: location index of destination of footpath
+        auto const q = fp.target();
 
-        // ta: arrival time at stop_to in relation to transport_from
-        auto const ta = t_arr_from + fp.duration_;
+        auto const tau_alpha = tau_arr_t_i + fp.duration();
 
-        // sa_fp: shift amount footpath
-        auto const sa_fp = num_midnights(ta) - sa_tp_from;
+        // tau_alpha_delta: arrival time at stop_to in relation to t
+        auto const tau_alpha_delta = delta{tau_alpha};
 
-        // a: time of day when arriving at stop_to
-        auto const a = time_of_day(ta);
+        // time of day when arriving a stop q
+        auto const alpha = duration_t{tau_alpha_delta.mam()};
+
+        // sigma_fp: shift amount footpath
+        auto const sigma_fp = day_idx_t{tau_alpha_delta.days()} - sigma_t;
 
         // iterate over lines serving stop_to
-        auto const routes_at_stop_to = tt_.location_routes_[li_to];
+        auto const routes_at_q = tt_.location_routes_[q];
 
         // ri_to: route index to
-        for (auto const ri_to : routes_at_stop_to) {
+        for (auto const route_u : routes_at_q) {
 
-          // ri_to might visit stop multiple times, skip if stop_to is the
-          // last stop in the stop sequence of ri_to si_to: stop index to
-          for (unsigned si_to = 0U;
-               si_to < tt_.route_location_seq_[ri_to].size() - 1; ++si_to) {
+          // route_u might visit stop multiple times, skip if stop_to is the
+          // last stop in the stop sequence of route_u si_to: stop index to
+          for (unsigned j = 0U; j < tt_.route_location_seq_[route_u].size() - 1;
+               ++j) {
 
-            auto const stop_to_cur =
-                stop{tt_.route_location_seq_[ri_to][si_to]};
+            // location index at current stop index
+            auto const p_u_j =
+                stop{tt_.route_location_seq_[route_u][j]}.location_idx();
 
-            // li_from: location index from
-            auto const li_to_cur = stop_to_cur.location_idx();
+            if (p_u_j == q) {
 
-            if (li_to_cur == li_to) {
+              // sigma_w: shift amount due to waiting for connection
+              day_idx_t sigma_w{0U};
 
-              // sa_w: shift amount due to waiting for connection
-              day_idx_t sa_w{0U};
-
-              // departure times of transports of route ri_to at stop si_to
+              // departure times of transports of route route_u at stop j
               auto const event_times =
-                  tt_.event_times_at_stop(ri_to, si_to, event_type::kDep);
+                  tt_.event_times_at_stop(route_u, j, event_type::kDep);
 
               // find first departure at or after a
               // departure time of current transport_to
-              auto dep_it =
-                  std::lower_bound(event_times.begin(), event_times.end(), a,
-                                   [&](auto&& x, auto&& y) {
-                                     return time_of_day(x) < time_of_day(y);
-                                   });
+              auto tau_dep_u_j_delta = std::lower_bound(
+                  event_times.begin(), event_times.end(), tau_alpha_delta,
+                  [&](auto&& x, auto&& y) { return x.mam() < y.mam(); });
 
               // no departure on this day at or after a
-              if (dep_it == event_times.end()) {
-                ++sa_w;  // start looking on the following day
-                dep_it = event_times.begin();  // with the earliest transport
+              if (tau_dep_u_j_delta == event_times.end()) {
+                ++sigma_w;  // start looking on the following day
+                tau_dep_u_j_delta =
+                    event_times.begin();  // with the earliest transport
               }
 
-              // omega: days of transport_from that still require connection
-              bitfield omega =
-                  tt_.bitfields_[tt_.transport_traffic_days_[tpi_from]];
+              // omega: days of t that still require connection
+              bitfield omega = tt_.bitfields_[tt_.transport_traffic_days_[t]];
 
               // check if any bit in omega is set to 1 and maximum waiting
               // time not exceeded
-              while (omega.any() && sa_w <= sa_w_max_) {
+              while (omega.any() && sigma_w <= sigma_w_max_) {
 
-                // departure time of current transport in relation to time a
-                auto const dep_cur = *dep_it + duration_t{sa_w.v_ * 1440};
+                // departure time of current transport in relation to time
+                // tau_alpha_delta
+                auto const tau_dep_alpha_u_j =
+                    duration_t{tau_dep_u_j_delta->mam()} +
+                    duration_t{sigma_w.v_ * 1440};
 
                 // offset from begin of tp_to interval
-                auto const tp_to_offset =
-                    std::distance(event_times.begin(), dep_it);
+                auto const k =
+                    std::distance(event_times.begin(), tau_dep_u_j_delta);
 
                 // transport index of transport that we transfer to
-                auto const tpi_to =
-                    tt_.route_transport_ranges_[ri_to][static_cast<std::size_t>(
-                        tp_to_offset)];
+                auto const u =
+                    tt_.route_transport_ranges_[route_u]
+                                               [static_cast<std::size_t>(k)];
 
                 // check conditions for required transfer
                 // 1. different route OR
                 // 2. earlier stop    OR
-                // 3. same route but tpi_to is earlier than tpi_from
+                // 3. same route but u is earlier than t
                 auto const req =
-                    ri_from != ri_to || si_to < si_from ||
-                    (tpi_to != tpi_from &&
-                     (dep_cur -
-                          (tt_.event_mam(tpi_to, si_to, event_type::kDep) -
-                           tt_.event_mam(tpi_to, si_from, event_type::kArr)) <=
-                      a - fp.duration_));
+                    route_t != route_u || j < i ||
+                    (u != t &&
+                     (tau_dep_alpha_u_j -
+                          (tt_.event_mam(u, j, event_type::kDep).as_duration() -
+                           tt_.event_mam(u, i, event_type::kArr)
+                               .as_duration()) <=
+                      alpha - fp.duration()));
 
                 if (req) {
                   // shift amount due to number of times transport_to passed
                   // midnight
-                  auto const sa_tp_to = num_midnights(*dep_it);
+                  auto const sigma_u = day_idx_t{tau_dep_u_j_delta->days()};
 
                   // total shift amount
-                  auto const sa_total =
-                      static_cast<int>(sa_tp_to.v_) -
-                      static_cast<int>(sa_tp_from.v_ + sa_fp.v_ + sa_w.v_);
+                  auto const sigma =
+                      static_cast<int>(sigma_u.v_) -
+                      static_cast<int>(sigma_t.v_ + sigma_fp.v_ + sigma_w.v_);
 
                   // bitfield transport to
-                  auto const& bf_tp_to =
-                      tt_.bitfields_[tt_.transport_traffic_days_[tpi_to]];
+                  auto const& beta_u =
+                      tt_.bitfields_[tt_.transport_traffic_days_[u]];
 
                   // bitfield transfer from
-                  auto bf_tf_from = omega;
+                  auto theta = omega;
 
                   // align bitfields and perform AND
-                  if (sa_total < 0) {
-                    bf_tf_from &=
-                        bf_tp_to >> static_cast<unsigned>(-1 * sa_total);
+                  if (sigma < 0) {
+                    theta &= beta_u >> static_cast<unsigned>(-1 * sigma);
                   } else {
-                    bf_tf_from &= bf_tp_to << static_cast<unsigned>(sa_total);
+                    theta &= beta_u << static_cast<unsigned>(sigma);
                   }
 
                   // check for match
-                  if (bf_tf_from.any()) {
+                  if (theta.any()) {
 
                     // remove days that are covered by this transfer from
                     // omega
-                    omega &= ~bf_tf_from;
+                    omega &= ~theta;
 
 #ifdef TB_PREPRO_UTURN_REMOVAL
-                    auto const check_uturn = [&si_to, this, &ri_to, &si_from,
-                                              &ri_from, &dep_cur, &tpi_to, &a,
-                                              &fp, &tpi_from]() {
-                      // check if next stop for tpi_to and previous stop for
-                      // tpi_from exists
-                      if (si_to + 1 < tt_.route_location_seq_[ri_to].size() &&
-                          si_from - 1 > 0) {
-                        // check if next stop of tpi_to is the previous stop
-                        // of tpi_from
-                        auto const stop_to_next =
-                            stop{tt_.route_location_seq_[ri_to][si_to + 1]};
-                        auto const stop_from_prev =
-                            stop{tt_.route_location_seq_[ri_from][si_from - 1]};
-                        if (stop_to_next.location_idx() ==
-                            stop_from_prev.location_idx()) {
-                          // check if tpi_to is already reachable at the
-                          // previous stop of tpi_from
-                          auto const dep_to_next =
-                              dep_cur +
-                              (tt_.event_mam(tpi_to, si_to + 1,
-                                             event_type::kDep) -
-                               tt_.event_mam(tpi_to, si_to, event_type::kDep));
-                          auto const arr_from_prev =
-                              a - fp.duration_ -
-                              (tt_.event_mam(tpi_from, si_from,
-                                             event_type::kArr) -
-                               tt_.event_mam(tpi_from, si_from,
-                                             event_type::kArr));
-                          auto const transfer_time_from_prev =
-                              tt_.locations_.transfer_time_
-                                  [stop_from_prev.location_idx()];
-                          return arr_from_prev + transfer_time_from_prev <=
-                                 dep_to_next;
+                    auto const check_uturn = [&j, this, &route_u, &i, &route_t,
+                                              &tau_dep_alpha_u_j, &u, &alpha,
+                                              &fp, &t]() {
+                      // check if next stop for u and previous stop for
+                      // t exists
+                      if (j + 1 < tt_.route_location_seq_[route_u].size() &&
+                          i - 1 > 0) {
+                        // check if next stop of u is the previous stop
+                        // of t
+                        auto const p_u_next =
+                            stop{tt_.route_location_seq_[route_u][j + 1]};
+                        auto const p_t_prev =
+                            stop{tt_.route_location_seq_[route_t][i - 1]};
+                        if (p_u_next.location_idx() ==
+                            p_t_prev.location_idx()) {
+                          // check if u is already reachable at the
+                          // previous stop of t
+                          auto const tau_dep_alpha_u_next =
+                              tau_dep_alpha_u_j +
+                              (tt_.event_mam(u, j + 1, event_type::kDep)
+                                   .as_duration() -
+                               tt_.event_mam(u, j, event_type::kDep)
+                                   .as_duration());
+                          auto const tau_arr_alpha_t_prev =
+                              alpha - fp.duration() -
+                              (tt_.event_mam(t, i, event_type::kArr)
+                                   .as_duration() -
+                               tt_.event_mam(t, i, event_type::kArr)
+                                   .as_duration());
+                          auto const transfer_time =
+                              tt_.locations_
+                                  .transfer_time_[p_t_prev.location_idx()];
+                          return tau_arr_alpha_t_prev + transfer_time <=
+                                 tau_dep_alpha_u_next;
                         }
                       }
                       return false;
@@ -297,33 +299,35 @@ void tb_preprocessing::build_transfer_set() {
                     if (!check_uturn()) {
 #endif
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-                      auto const check_impr = [&ta, &dep_cur, &a, &si_to, this,
-                                               &ri_to, &tpi_to, &dep_it,
-                                               &bf_tf_from]() {
+                      auto const check_impr = [&tau_alpha_delta, &alpha,
+                                               &tau_dep_alpha_u_j, &j, this,
+                                               &route_u, &u, &tau_dep_u_j_delta,
+                                               &theta]() {
                         bool impr = false;
-                        auto const t_dep_to = ta + (dep_cur - a);
-                        for (auto si_to_later = si_to + 1;
-                             si_to_later !=
-                             tt_.route_location_seq_[ri_to].size();
-                             ++si_to_later) {
-                          auto const t_arr_to_later =
-                              t_dep_to + (tt_.event_mam(tpi_to, si_to_later,
-                                                        event_type::kArr) -
-                                          *dep_it);
-                          auto const li_to_later =
-                              stop{tt_.route_location_seq_[ri_to][si_to_later]}
+                        auto const tau_dep_t_u_j =
+                            tau_alpha_delta.as_duration() +
+                            (tau_dep_alpha_u_j - alpha);
+                        for (auto l = j + 1;
+                             l != tt_.route_location_seq_[route_u].size();
+                             ++l) {
+                          auto const tau_arr_t_u_l =
+                              tau_dep_t_u_j +
+                              (tt_.event_mam(u, l, event_type::kArr)
+                                   .as_duration() -
+                               tau_dep_u_j_delta->as_duration());
+                          auto const p_u_l =
+                              stop{tt_.route_location_seq_[route_u][l]}
                                   .location_idx();
-                          auto const ets_arr_res = ets_arr_.update(
-                              li_to_later, t_arr_to_later, bf_tf_from);
+                          auto const ets_arr_res =
+                              ets_arr_.update(p_u_l, tau_arr_t_u_l, theta);
                           impr = impr || ets_arr_res;
-                          for (auto const& fp_later :
-                               tt_.locations_.footpaths_out_[li_to_later]) {
-                            auto const eta =
-                                t_arr_to_later + fp_later.duration_;
-                            auto const ets_arr_fp_res = ets_arr_.update(
-                                fp_later.target_, eta, bf_tf_from);
-                            auto const ets_ch_fp_res = ets_ch_.update(
-                                fp_later.target_, eta, bf_tf_from);
+                          for (auto const& fp_r :
+                               tt_.locations_.footpaths_out_[p_u_l]) {
+                            auto const eta = tau_arr_t_u_l + fp_r.duration();
+                            auto const ets_arr_fp_res =
+                                ets_arr_.update(fp_r.target(), eta, theta);
+                            auto const ets_ch_fp_res =
+                                ets_ch_.update(fp_r.target(), eta, theta);
                             impr = impr || ets_arr_fp_res || ets_ch_fp_res;
                           }
                         }
@@ -332,9 +336,9 @@ void tb_preprocessing::build_transfer_set() {
                       if (check_impr()) {
 #endif
                         // add transfer to transfers of this transport
-                        auto const bfi_from = get_or_create_bfi(bf_tf_from);
-                        transfers[si_from].emplace_back(bfi_from, tpi_to, si_to,
-                                                        sa_fp + sa_w);
+                        auto const theta_idx = get_or_create_bfi(theta);
+                        transfers[i].emplace_back(theta_idx, u, j,
+                                                  sigma_fp + sigma_w);
                         ++n_transfers_;
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                       }
@@ -347,15 +351,15 @@ void tb_preprocessing::build_transfer_set() {
 
                 // prep next iteration
                 // is this the last transport of the day?
-                if (std::next(dep_it) == event_times.end()) {
+                if (std::next(tau_dep_u_j_delta) == event_times.end()) {
 
                   // passing midnight
-                  ++sa_w;
+                  ++sigma_w;
 
                   // start with the earliest transport on the next day
-                  dep_it = event_times.begin();
+                  tau_dep_u_j_delta = event_times.begin();
                 } else {
-                  ++dep_it;
+                  ++tau_dep_u_j_delta;
                 }
               }
             }
@@ -364,17 +368,18 @@ void tb_preprocessing::build_transfer_set() {
       };
 
       // virtual reflexive footpath
-      handle_fp(footpath{li_from, tt_.locations_.transfer_time_[li_from]});
+      handle_fp(footpath{p_t_i, tt_.locations_.transfer_time_[p_t_i]});
 
       // outgoing footpaths of location
-      for (auto const& fp : tt_.locations_.footpaths_out_[li_from]) {
-        handle_fp(fp);
+      for (auto const& fp_q : tt_.locations_.footpaths_out_[p_t_i]) {
+        handle_fp(fp_q);
       }
     }
 
     // add transfers of this transport to the transfer set
-    ts_.emplace_back(
-        it_range{transfers.cbegin(), transfers.cbegin() + stops_from.size()});
+    ts_.emplace_back(it_range{
+        transfers.cbegin(),
+        transfers.cbegin() + static_cast<std::int64_t>(stop_seq_t.size())});
   }
 
   std::cout << "Found " << n_transfers_ << " transfers, occupying "

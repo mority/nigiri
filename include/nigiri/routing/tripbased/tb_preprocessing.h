@@ -34,7 +34,7 @@ struct tb_preprocessing {
   tb_preprocessing() = delete;
   explicit tb_preprocessing(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
       : tt_(tt),
-        sa_w_max_(sa_w_max)
+        sigma_w_max_(sa_w_max)
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
         ,
         ets_arr_(*this),
@@ -106,9 +106,9 @@ struct tb_preprocessing {
   // the number of elementary connections in the timetable
   unsigned num_el_con_ = 0U;
   // length of the longest route
-  unsigned route_max_length = 0U;
+  std::size_t route_max_length = 0U;
   // max. look-ahead
-  day_idx_t const sa_w_max_{};
+  day_idx_t const sigma_w_max_{};
   // the number of transfers found
   unsigned n_transfers_ = 0U;
   // the transfer set

@@ -52,7 +52,7 @@ void tb_query::execute(unixtime_t const start_time,
             dep_it = event_times.begin();
           }
           // iterate departures until maximum waiting time is reached
-          while (sa_w <= state_.tbp_.sa_w_max_) {
+          while (sa_w <= state_.tbp_.sigma_w_max_) {
             // shift amount due to travel time of transport
             auto const sa_t = num_midnights(*dep_it);
             // total shift amount
