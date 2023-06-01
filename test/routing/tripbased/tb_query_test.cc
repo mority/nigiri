@@ -26,7 +26,7 @@ TEST(tb_query, enqueue) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, enqueue_files(), tt);
+  load_timetable(loader_config{0}, src, enqueue_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -119,7 +119,7 @@ TEST(earliest_arrival_query, same_day_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, same_day_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, same_day_transfer_files(), tt);
   finalize(tt);
 
   auto const results = tripbased_search(
@@ -159,7 +159,7 @@ TEST(earliest_arrival_query, early_train) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, early_train_files(), tt);
+  load_timetable(loader_config{0}, src, early_train_files(), tt);
   finalize(tt);
 
   auto const results = tripbased_search(
@@ -201,7 +201,7 @@ TEST(earliest_arrival_query, earlier_stop_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, earlier_stop_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, earlier_stop_transfer_files(), tt);
   finalize(tt);
 
   auto const results = tripbased_search(
@@ -224,7 +224,7 @@ TEST(earliest_arrival_query, no_journey_possible) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, earlier_stop_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, earlier_stop_transfer_files(), tt);
   finalize(tt);
 
   auto const results = tripbased_search(

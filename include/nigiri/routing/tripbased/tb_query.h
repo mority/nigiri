@@ -43,7 +43,7 @@ struct tb_query {
         // fill l_
         auto create_l_entry = [this](footpath const& fp) {
           // iterate routes serving source of footpath
-          for (auto const route_idx : tt_.location_routes_[fp.target_]) {
+          for (auto const route_idx : tt_.location_routes_[fp.target()]) {
             // iterate stop sequence of route
             for (std::uint16_t stop_idx{0U};
                  stop_idx < tt_.route_location_seq_[route_idx].size();
@@ -52,7 +52,7 @@ struct tb_query {
                   stop{tt_.route_location_seq_[route_idx][stop_idx]}
                       .location_idx();
               if (location_idx == fp.target_) {
-                state_.l_.emplace_back(route_idx, stop_idx, fp.duration_);
+                state_.l_.emplace_back(route_idx, stop_idx, fp.duration());
               }
             }
           }

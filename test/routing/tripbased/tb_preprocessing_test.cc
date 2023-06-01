@@ -233,19 +233,19 @@ TEST(earliest_times, random) {
   auto const num_updates = 100000U;
   auto const li_max = 100U;
   auto const time_max = 1440U;
-  auto const num_bits = 365U;
 
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> li_dist(0, li_max);
   std::uniform_int_distribution<> time_dist(0, time_max);
-  std::uniform_int_distribution<> bit_dist(0, 1);
+  std::uniform_int_distribution<unsigned long> bf_block_dist(
+      0, std::numeric_limits<unsigned long>::max());
 
   // fill
   for (auto i = 0U; i < num_updates; ++i) {
     bitfield bf;
-    for (auto j = 0U; j < num_bits; ++j) {
-      bf.set(j, bit_dist(gen));
+    for (auto j = 0U; j < bf.num_blocks; ++j) {
+      bf.blocks_[j] = bf_block_dist(gen);
     }
     ets.update(location_idx_t{li_dist(gen)}, duration_t{time_dist(gen)}, bf);
   }
@@ -286,7 +286,7 @@ TEST(build_transfer_set, no_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, no_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, no_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -303,7 +303,7 @@ TEST(build_transfer_set, same_day_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, same_day_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, same_day_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -329,7 +329,7 @@ TEST(build_transfer_set, from_long_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, long_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, long_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -355,7 +355,7 @@ TEST(build_transfer_set, weekday_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, weekday_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, weekday_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -381,7 +381,7 @@ TEST(build_transfer_set, daily_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, daily_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, daily_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -407,7 +407,7 @@ TEST(build_transfer_set, earlier_stop_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, earlier_stop_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, earlier_stop_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -433,7 +433,7 @@ TEST(build_transfer_set, earlier_transport_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, earlier_transport_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, earlier_transport_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -459,7 +459,7 @@ TEST(build_transfer_set, uturn_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, uturn_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, uturn_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -513,7 +513,7 @@ TEST(build_transfer_set, unnecessary_transfer0) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, unnecessary0_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, unnecessary0_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -543,7 +543,7 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(src, unnecessary1_transfer_files(), tt);
+  load_timetable(loader_config{0}, src, unnecessary1_transfer_files(), tt);
   finalize(tt);
 
   // init preprocessing
