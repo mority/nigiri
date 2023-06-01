@@ -339,8 +339,8 @@ void tb_preprocessing::build_transfer_set() {
 #endif
                         // add transfer to transfers of this transport
                         auto const theta_idx = get_or_create_bfi(theta);
-                        transfers[i].emplace_back(theta_idx, u, j,
-                                                  sigma_fp + sigma_w);
+                        transfers[i].emplace_back(theta_idx.v_, u.v_, j,
+                                                  (sigma_fp + sigma_w).v_);
                         ++n_transfers_;
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                       }
@@ -389,11 +389,35 @@ void tb_preprocessing::build_transfer_set() {
 }
 
 void tb_preprocessing::store_transfer_set(std::filesystem::path file_name) {
-  auto const ts_buf = cista::serialize(ts_);
+  // transfer set
+  auto ts_buf = cista::serialize(ts_);
+  std::ofstream ts_file(file_name.string() + ".transfer_set", std::ios::binary);
+  ts_file.write(reinterpret_cast<const char*>(&ts_buf[0]),
+                static_cast<long>(ts_buf.size()));
+  ts_file.close();
 
-  std::ofstream ts_file;
-  ts_file.open(file_name.string() + ".transfer_set",
-               std::ios::out | std::ios::binary);
+  // bitfields
+  auto bf_buf = cista::serialize(tt_.bitfields_);
+  std::ofstream bf_file(file_name.string() + ".bitfields", std::ios::binary);
+  bf_file.write(reinterpret_cast<const char*>(&bf_buf[0]),
+                static_cast<long>(bf_buf.size()));
+  bf_file.close();
 }
 
-void load_transfer_set(std::filesystem::path file_name) {}
+void load_transfer_set(std::filesystem::path file_name) {
+  std::uint8_t byte{};
+
+  // transfer set
+  std::ifstream ts_file(file_name.string() + ".transfer_set", std::ios::binary);
+  std::vector<std::uint8_t> ts_buf(1000);
+  while (ts_file.read(reinterpret_cast<char*>(&byte), sizeof byte)) {
+    ts_buf.emplace_back(byte);
+  }
+
+  // bitfields
+  std::ifstream bf_file(file_name.string() + ".bitfields", std::ios::binary);
+  std::vector<std::uint8_t> bf_buf(1000);
+  while (bf_file.read(reinterpret_cast<char*>(&byte), sizeof byte)) {
+    bf_buf.emplace_back(byte);
+  }
+}
