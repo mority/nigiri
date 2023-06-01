@@ -1,3 +1,5 @@
+#include <fstream>
+
 #include "utl/get_or_create.h"
 
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
@@ -385,3 +387,13 @@ void tb_preprocessing::build_transfer_set() {
   std::cout << "Found " << n_transfers_ << " transfers, occupying "
             << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
 }
+
+void tb_preprocessing::store_transfer_set(std::filesystem::path file_name) {
+  auto const ts_buf = cista::serialize(ts_);
+
+  std::ofstream ts_file;
+  ts_file.open(file_name.string() + ".transfer_set",
+               std::ios::out | std::ios::binary);
+}
+
+void load_transfer_set(std::filesystem::path file_name) {}
