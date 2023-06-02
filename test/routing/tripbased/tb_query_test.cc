@@ -20,6 +20,7 @@ using namespace nigiri::loader::gtfs;
 using namespace nigiri::routing;
 using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
+using namespace nigiri::test_data::hrd_timetable;
 
 TEST(tb_query, enqueue) {
   // load timetable
@@ -232,8 +233,6 @@ TEST(earliest_arrival_query, no_journey_possible) {
 
   EXPECT_EQ(0, results.size());
 }
-
-using namespace nigiri::test_data::hrd_timetable;
 
 constexpr auto const abc_journeys = R"(
 [2020-03-30 05:00, 2020-03-30 07:15]

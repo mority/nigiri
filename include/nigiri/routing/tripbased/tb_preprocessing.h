@@ -1,7 +1,7 @@
 #pragma once
 
 #include "nigiri/timetable.h"
-#include <filesystem>
+// #include <filesystem>
 #include "tb.h"
 
 #define TB_PREPRO_UTURN_REMOVAL

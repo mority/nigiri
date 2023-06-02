@@ -3,15 +3,21 @@
 #include "gtest/gtest.h"
 
 #include "nigiri/loader/gtfs/load_timetable.h"
+#include "nigiri/loader/hrd/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
+#include "../../loader/hrd/hrd_timetable.h"
 
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
 
 #include "./test_data.h"
 
 using namespace nigiri;
+using namespace nigiri::loader;
+using namespace nigiri::loader::gtfs;
+using namespace nigiri::routing;
 using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
+using namespace nigiri::test_data::hrd_timetable;
 
 TEST(tripbased, get_or_create_bfi) {
   // init
@@ -587,3 +593,43 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   EXPECT_EQ(bf_exp, tt.bitfields_[t1.get_bitfield_idx()]);
 #endif
 }
+
+// TEST(tb_preprocessing, store_load) {
+//   constexpr auto const src = source_idx_t{0U};
+//   timetable tt;
+//   tt.date_range_ = full_period();
+//   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
+//   finalize(tt);
+//
+//   tb_preprocessing tbp{tt};
+//   tbp.build_transfer_set();
+//   tbp.store_transfer_set(std::filesystem::path("./test"));
+//
+//   timetable tt_loaded;
+//   tt.date_range_ = full_period();
+//   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt_loaded);
+//   finalize(tt_loaded);
+//   tb_preprocessing tbp_loaded{tt_loaded};
+//   tbp_loaded.load_transfer_set(std::filesystem::path("./test"));
+//
+//   auto transfers_equal = [](transfer const& a, transfer const& b) {
+//     return a.bitfield_idx_ == b.bitfield_idx_ &&
+//            a.transport_idx_to_ == b.transport_idx_to_ &&
+//            a.stop_idx_to_ == b.stop_idx_to_ &&
+//            a.passes_midnight_ == b.passes_midnight_;
+//   };
+//
+//   ASSERT_EQ(tbp.ts_.size(), tbp_loaded.ts_.size());
+//   for (auto t = 0U; t != tbp_loaded.ts_.size(); ++t) {
+//     ASSERT_EQ(tbp.ts_.size(t), tbp_loaded.ts_.size(t));
+//     for (auto s = 0U; s != tbp_loaded.ts_.size(t); ++s) {
+//       ASSERT_EQ(tbp.ts_.at(t, s).size(), tbp_loaded.ts_.at(t, s).size());
+//       auto const& transfers_expected = tbp.ts_.at(t, s);
+//       auto const& transfers_actual = tbp_loaded.ts_.at(t, s);
+//       for (auto i = 0U; i != transfers_expected.size(); ++i) {
+//         EXPECT_TRUE(
+//             transfers_equal(transfers_expected[i], transfers_actual[i]));
+//       }
+//     }
+//   }
+// }

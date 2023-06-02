@@ -337,8 +337,9 @@ void tb_preprocessing::build_transfer_set() {
                       };
                       if (check_impr()) {
 #endif
-                        // add transfer to transfers of this transport
+                        // the bitfield index of the bitfield of the transfer
                         auto const theta_idx = get_or_create_bfi(theta);
+                        // add transfer to transfers of this transport
                         transfers[i].emplace_back(theta_idx.v_, u.v_, j,
                                                   (sigma_fp + sigma_w).v_);
                         ++n_transfers_;
@@ -411,15 +412,46 @@ void tb_preprocessing::load_transfer_set(
 
   // transfer set
   std::ifstream ts_file(file_name.string() + ".transfer_set", std::ios::binary);
-  std::vector<std::uint8_t> ts_buf(1000);
+  std::vector<std::uint8_t> ts_buf(10000);
   while (ts_file.read(reinterpret_cast<char*>(&byte), sizeof byte)) {
     ts_buf.emplace_back(byte);
+  }
+  auto const ts_loaded =
+      cista::deserialize<nvec<std::uint32_t, transfer, 2>>(ts_buf);
+  ts_file.close();
+
+  std::vector<std::vector<transfer>> mule;
+  mule.resize(100);
+  for (auto& inner_vec : mule) {
+    inner_vec.reserve(64);
+  }
+
+  for (auto t = 0U; t != ts_loaded->size(); ++t) {
+    auto s = 0U;
+    for (; s != ts_loaded->size(t); ++s) {
+      for (auto const& transfer : ts_loaded->at(t, s)) {
+        mule[s].emplace_back(transfer);
+      }
+    }
+    ts_.emplace_back(
+        it_range{mule.cbegin(), mule.cbegin() + static_cast<std::int64_t>(s)});
+    for (auto pos = 1U; pos != s; ++pos) {
+      mule[pos].clear();
+    }
   }
 
   // bitfields
   std::ifstream bf_file(file_name.string() + ".bitfields", std::ios::binary);
-  std::vector<std::uint8_t> bf_buf(1000);
+  std::vector<std::uint8_t> bf_buf(10000);
   while (bf_file.read(reinterpret_cast<char*>(&byte), sizeof byte)) {
     bf_buf.emplace_back(byte);
+  }
+  auto const bf_loaded =
+      cista::deserialize<vector_map<bitfield_idx_t, bitfield>>(bf_buf);
+  bf_file.close();
+
+  tt_.bitfields_.clear();
+  for (auto const& bf : *bf_loaded) {
+    tt_.bitfields_.emplace_back(bf);
   }
 }

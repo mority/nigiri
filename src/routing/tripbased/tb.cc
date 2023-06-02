@@ -31,8 +31,8 @@ void hash_transfer_set::add(transport_idx_t const& transport_idx_from,
     cur_length_ = 0U;
   }
 
-  transfers_.emplace_back(bitfield_idx, transport_idx_to, stop_idx_to,
-                          passes_midnight);
+  transfers_.emplace_back(bitfield_idx.v_, transport_idx_to.v_, stop_idx_to,
+                          passes_midnight.v_);
   ++cur_length_;
 }
 
