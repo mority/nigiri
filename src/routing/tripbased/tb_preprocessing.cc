@@ -340,8 +340,8 @@ void tb_preprocessing::build_transfer_set() {
                         // the bitfield index of the bitfield of the transfer
                         auto const theta_idx = get_or_create_bfi(theta);
                         // add transfer to transfers of this transport
-                        transfers[i].emplace_back(theta_idx.v_, u.v_, j,
-                                                  (sigma_fp + sigma_w).v_);
+                        transfers[i].emplace_back(transfer{
+                            theta_idx.v_, u.v_, j, (sigma_fp + sigma_w).v_});
                         ++n_transfers_;
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                       }
@@ -389,29 +389,27 @@ void tb_preprocessing::build_transfer_set() {
             << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
 }
 
-void tb_preprocessing::store_transfer_set(
-    std::filesystem::path const& file_name) {
+void tb_preprocessing::store_transfer_set(std::string const& file_name) {
   // transfer set
   auto ts_buf = cista::serialize(ts_);
-  std::ofstream ts_file(file_name.string() + ".transfer_set", std::ios::binary);
+  std::ofstream ts_file(file_name + ".transfer_set", std::ios::binary);
   ts_file.write(reinterpret_cast<const char*>(ts_buf.data()),
                 static_cast<std::int64_t>(ts_buf.size()));
   ts_file.close();
 
   // bitfields
   auto bf_buf = cista::serialize(tt_.bitfields_);
-  std::ofstream bf_file(file_name.string() + ".bitfields", std::ios::binary);
+  std::ofstream bf_file(file_name + ".bitfields", std::ios::binary);
   bf_file.write(reinterpret_cast<const char*>(bf_buf.data()),
                 static_cast<std::int64_t>(bf_buf.size()));
   bf_file.close();
 }
 
-void tb_preprocessing::load_transfer_set(
-    std::filesystem::path const& file_name) {
+void tb_preprocessing::load_transfer_set(std::string const& file_name) {
   std::uint8_t byte{};
 
   // transfer set
-  std::ifstream ts_file(file_name.string() + ".transfer_set", std::ios::binary);
+  std::ifstream ts_file(file_name + ".transfer_set", std::ios::binary);
   std::vector<std::uint8_t> ts_buf(10000);
   while (ts_file.read(reinterpret_cast<char*>(&byte), sizeof byte)) {
     ts_buf.emplace_back(byte);
@@ -441,7 +439,7 @@ void tb_preprocessing::load_transfer_set(
   }
 
   // bitfields
-  std::ifstream bf_file(file_name.string() + ".bitfields", std::ios::binary);
+  std::ifstream bf_file(file_name + ".bitfields", std::ios::binary);
   std::vector<std::uint8_t> bf_buf(10000);
   while (bf_file.read(reinterpret_cast<char*>(&byte), sizeof byte)) {
     bf_buf.emplace_back(byte);
