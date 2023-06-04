@@ -26,6 +26,14 @@ constexpr unsigned const kNumTransfersMax = 1U << NUM_TRANSFERS_BITS;
 constexpr unsigned const kDayOffsetMax = 1U << DAY_OFFSET_BITS;
 
 struct transfer {
+  std::uint64_t value() const {
+    return *reinterpret_cast<std::uint64_t const*>(this);
+  }
+
+  cista::hash_t hash() const {
+    return cista::hash_combine(cista::BASE_HASH, value());
+  }
+
   // the days on which the transfer can take place
   bitfield_idx_t get_bitfield_idx() const {
     return bitfield_idx_t{bitfield_idx_};
@@ -56,6 +64,18 @@ struct transfer {
   // bit: 1 -> the transfer passes midnight
   std::uint64_t passes_midnight_ : 1;
 };
+
+template <std::size_t NMaxTypes>
+constexpr auto static_type_hash(transfer const*,
+                                cista::hash_data<NMaxTypes> h) noexcept {
+  return h.combine(cista::hash("nigiri::routing::tripbased::transfer"));
+}
+
+template <typename Ctx>
+inline void serialize(Ctx&, transfer const*, cista::offset_t const) {}
+
+template <typename Ctx>
+inline void deserialize(Ctx const&, transfer*) {}
 
 using transport_segment_idx_t = std::uint32_t;
 

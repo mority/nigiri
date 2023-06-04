@@ -1,7 +1,9 @@
 #pragma once
 
+#include <stdio.h>
 #include "nigiri/timetable.h"
 #include <filesystem>
+#include <fstream>
 #include "tb.h"
 
 #define TB_PREPRO_UTURN_REMOVAL
@@ -97,6 +99,38 @@ struct tb_preprocessing {
   // also needs to load the corresponding timetable from file since
   // bitfields of the transfers are stored in the timetable
   void load_transfer_set(std::string const& file_name);
+
+  // writes the content of the vector to the specified file
+  static void write_file(std::string const& file_name,
+                         std::vector<std::uint8_t> const& vec) {
+    std::ofstream ofs(file_name,
+                      std::ios::out | std::ios::binary | std::ios::trunc);
+    if (ofs.is_open()) {
+      ofs.write(reinterpret_cast<const char*>(vec.data()),
+                vec.empty()
+                    ? 0
+                    : static_cast<std::int64_t>(sizeof(vec[0]) * vec.size()));
+      ofs.close();
+    } else {
+      std::cout << "Could not ope file: " << file_name << std::endl;
+    }
+  }
+
+  // reads the specified file and stores its content in the vector given
+  static void read_file(std::string const& file_name,
+                        std::vector<std::uint8_t>& vec) {
+    std::ifstream ifs(file_name,
+                      std::ios::in | std::ios::binary | std::ios::ate);
+    if (ifs.is_open()) {
+      auto length = ifs.tellg();
+      ifs.seekg(0, std::ios::beg);
+      vec.resize(static_cast<std::uint64_t>(length));
+      ifs.read(reinterpret_cast<char*>(vec.data()), length);
+      ifs.close();
+    } else {
+      std::cout << "Could not ope file: " << file_name << std::endl;
+    }
+  }
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);

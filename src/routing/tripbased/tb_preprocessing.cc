@@ -1,4 +1,4 @@
-#include <fstream>
+
 
 #include "utl/get_or_create.h"
 
@@ -392,38 +392,28 @@ void tb_preprocessing::build_transfer_set() {
 void tb_preprocessing::store_transfer_set(std::string const& file_name) {
   // transfer set
   auto ts_buf = cista::serialize(ts_);
-  std::ofstream ts_file(file_name + ".transfer_set", std::ios::binary);
-  ts_file.write(reinterpret_cast<const char*>(ts_buf.data()),
-                static_cast<std::int64_t>(ts_buf.size()));
-  ts_file.close();
+  write_file(file_name + ".transfer_set", ts_buf);
 
   // bitfields
   auto bf_buf = cista::serialize(tt_.bitfields_);
-  std::ofstream bf_file(file_name + ".bitfields", std::ios::binary);
-  bf_file.write(reinterpret_cast<const char*>(bf_buf.data()),
-                static_cast<std::int64_t>(bf_buf.size()));
-  bf_file.close();
+  write_file(file_name + ".bitfields", bf_buf);
 }
 
 void tb_preprocessing::load_transfer_set(std::string const& file_name) {
-  std::uint8_t byte{};
+
+  std::vector<std::uint8_t> vec;
 
   // transfer set
-  std::ifstream ts_file(file_name + ".transfer_set", std::ios::binary);
-  std::vector<std::uint8_t> ts_buf(10000);
-  while (ts_file.read(reinterpret_cast<char*>(&byte), sizeof byte)) {
-    ts_buf.emplace_back(byte);
-  }
+  read_file(file_name + ".transfer_set", vec);
+
   auto const ts_loaded =
-      cista::deserialize<nvec<std::uint32_t, transfer, 2>>(ts_buf);
-  ts_file.close();
+      cista::deserialize<nvec<std::uint32_t, transfer, 2>>(vec);
 
   std::vector<std::vector<transfer>> mule;
   mule.resize(100);
   for (auto& inner_vec : mule) {
     inner_vec.reserve(64);
   }
-
   for (auto t = 0U; t != ts_loaded->size(); ++t) {
     auto s = 0U;
     for (; s != ts_loaded->size(t); ++s) {
@@ -439,14 +429,11 @@ void tb_preprocessing::load_transfer_set(std::string const& file_name) {
   }
 
   // bitfields
-  std::ifstream bf_file(file_name + ".bitfields", std::ios::binary);
-  std::vector<std::uint8_t> bf_buf(10000);
-  while (bf_file.read(reinterpret_cast<char*>(&byte), sizeof byte)) {
-    bf_buf.emplace_back(byte);
-  }
+  vec.clear();
+  read_file(file_name + ".bitfields", vec);
+
   auto const bf_loaded =
-      cista::deserialize<vector_map<bitfield_idx_t, bitfield>>(bf_buf);
-  bf_file.close();
+      cista::deserialize<vector_map<bitfield_idx_t, bitfield>>(vec);
 
   tt_.bitfields_.clear();
   for (auto const& bf : *bf_loaded) {

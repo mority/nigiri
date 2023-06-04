@@ -8,6 +8,7 @@
 #include "../../loader/hrd/hrd_timetable.h"
 
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
+#include "tb_preprocessing_test.h"
 
 #include "./test_data.h"
 
@@ -283,9 +284,6 @@ TEST(earliest_times, random) {
             << num_entries << " entries.\n";
 }
 #endif
-
-using namespace nigiri::loader;
-using namespace nigiri::loader::gtfs;
 
 TEST(build_transfer_set, no_transfer) {
   // load timetable
@@ -594,7 +592,7 @@ TEST(build_transfer_set, unnecessary_transfer1) {
 #endif
 }
 
-TEST(tb_preprocessing, serialize_deserialize) {
+TEST(transfer_set, serialize_deserialize) {
   constexpr auto const src = source_idx_t{0U};
   timetable tt;
   tt.date_range_ = full_period();
@@ -605,9 +603,25 @@ TEST(tb_preprocessing, serialize_deserialize) {
   tbp.build_transfer_set();
 
   auto ts_buf = cista::serialize(tbp.ts_);
+  auto const ts_des =
+      cista::deserialize<nvec<std::uint32_t, transfer, 2>>(ts_buf);
+
+  ASSERT_EQ(tbp.ts_.size(), ts_des->size());
+  for (auto t = 0U; t != ts_des->size(); ++t) {
+    ASSERT_EQ(tbp.ts_.size(t), ts_des->size(t));
+    for (auto s = 0U; s != ts_des->size(t); ++s) {
+      ASSERT_EQ(tbp.ts_.at(t, s).size(), ts_des->at(t, s).size());
+      auto const& transfers_expected = tbp.ts_.at(t, s);
+      auto const& transfers_actual = ts_des->at(t, s);
+      for (auto i = 0U; i != transfers_expected.size(); ++i) {
+        EXPECT_TRUE(
+            transfers_equal(transfers_expected[i], transfers_actual[i]));
+      }
+    }
+  }
 }
 
-TEST(tb_preprocessing, store_load) {
+TEST(transfer_set, store_load) {
   constexpr auto const src = source_idx_t{0U};
   timetable tt;
   tt.date_range_ = full_period();
@@ -625,13 +639,6 @@ TEST(tb_preprocessing, store_load) {
   tb_preprocessing tbp_loaded{tt_loaded};
   tbp_loaded.load_transfer_set("test");
 
-  auto transfers_equal = [](transfer const& a, transfer const& b) {
-    return a.bitfield_idx_ == b.bitfield_idx_ &&
-           a.transport_idx_to_ == b.transport_idx_to_ &&
-           a.stop_idx_to_ == b.stop_idx_to_ &&
-           a.passes_midnight_ == b.passes_midnight_;
-  };
-
   ASSERT_EQ(tbp.ts_.size(), tbp_loaded.ts_.size());
   for (auto t = 0U; t != tbp_loaded.ts_.size(); ++t) {
     ASSERT_EQ(tbp.ts_.size(t), tbp_loaded.ts_.size(t));
@@ -645,4 +652,8 @@ TEST(tb_preprocessing, store_load) {
       }
     }
   }
+
+  // clean up
+  std::filesystem::remove("test.transfer_set");
+  std::filesystem::remove("test.bitfields");
 }
