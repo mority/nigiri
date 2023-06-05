@@ -10,7 +10,7 @@ void tb_query::execute(unixtime_t const start_time,
                        unixtime_t const worst_time_at_dest,
                        pareto_set<journey>& results) {
 
-  auto const day_idx_mam_pair = tt_.day_idx_mam(start_time);
+  auto const day_idx_mam_pair = tt_.day_idx_mam(state_.start_time_);
   // day index of start day
   auto const d = day_idx_mam_pair.first;
   // minutes after midnight on the start day

@@ -391,6 +391,8 @@ TEST(profile_query, intermodal) {
       interval{unixtime_t{sys_days{March / 30 / 2020}} + 5_hours,
                unixtime_t{sys_days{March / 30 / 2020}} + 6_hours});
 
+  EXPECT_EQ(2, results.size());
+
   std::stringstream ss;
   ss << "\n";
   for (auto const& x : results) {
