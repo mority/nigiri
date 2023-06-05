@@ -244,6 +244,8 @@ void tb_query::reconstruct(query const& q, journey& j) {
           stop{tt_.route_location_seq_[route_idx][stop_idx_end]}.location_idx();
 
       if (q.dest_match_mode_ != location_match_mode::kIntermodal) {
+        // station-to-station
+
         footpath fp{j.dest_, le_match.time_};
         auto const unix_fp_end =
             tt_.to_unixtime(tp_seg.get_transport_day(base_),
@@ -256,6 +258,48 @@ void tb_query::reconstruct(query const& q, journey& j) {
                           unix_fp_end,
                           fp};
         j.add(std::move(l_fp));
+      } else {
+        // coordinate-to-coordinate
+
+        // set destination location to END
+        j.dest_ = location_idx_t{1U};
+
+        // add offset leg for intermodal query
+
+        // virtual reflexive outgoing footpath
+        footpath const fp_reflexive{location_idx_end, duration_t{0U}};
+        auto MUMO_offset = find_MUMO(le_match, q, fp_reflexive);
+        if (MUMO_offset.has_value()) {
+          journey::leg l_mumo_end{
+              direction::kForward, location_idx_end,   j.dest_, unix_end,
+              j.dest_time_,        MUMO_offset.value()};
+          j.add(std::move(l_mumo_end));
+        } else {
+          // iterate outgoing footpaths of final location
+          for (auto const fp :
+               tt_.locations_.footpaths_out_[location_idx_end]) {
+            MUMO_offset = find_MUMO(le_match, q, fp);
+            if (MUMO_offset.has_value()) {
+              // reconstruct footpath leg to MUMO location and MUMO leg
+
+              auto const unix_fp_end =
+                  tt_.to_unixtime(tp_seg.get_transport_day(base_),
+                                  seg_end_delta.as_duration() + fp.duration());
+              journey::leg l_fp{direction::kForward, location_idx_end,
+                                fp.target(),         unix_end,
+                                unix_fp_end,         fp};
+              journey::leg l_mumo_end{
+                  direction::kForward, fp.target(),  j.dest_,
+                  unix_fp_end,         j.dest_time_, MUMO_offset.value()};
+
+              // add MUMO leg
+              j.add(std::move(l_mumo_end));
+              // add footpath to MUMO leg
+              j.add(std::move(l_fp));
+              break;
+            }
+          }
+        }
       }
     } else {
       // rescan for transfer to next leg
@@ -360,6 +404,21 @@ void tb_query::reconstruct(query const& q, journey& j) {
     cur_seg_q_idx = tp_seg.transferred_from_;
   }
 
+  if (q.start_match_mode_ == location_match_mode::kIntermodal) {
+    // add MUMO from START to first journey leg
+    for (auto const& os : q.start_) {
+      if (os.target() == j.legs_.back().from_) {
+        unixtime_t const mumo_start_unix{j.legs_.back().dep_time_ -
+                                         os.duration()};
+        journey::leg l_mumo_start{
+            direction::kForward, location_idx_t{0U},       os.target(),
+            mumo_start_unix,     j.legs_.back().dep_time_, os};
+        j.add(std::move(l_mumo_start));
+        break;
+      }
+    }
+  }
+
   // reverse order of journey legs
   std::reverse(j.legs_.begin(), j.legs_.end());
 }
@@ -398,3 +457,15 @@ std::optional<std::pair<std::uint32_t, l_entry>> tb_query::find_last_seg(
   }
   return std::nullopt;
 }
+
+std::optional<nigiri::routing::offset> tb_query::find_MUMO(l_entry const& le,
+                                                           query const& q,
+                                                           footpath const& fp) {
+  for (auto const& os : q.destination_) {
+    if (os.target_ == fp.target() &&
+        fp.duration() + duration_t{dist_to_dest_[fp.target_]} == le.time_) {
+      return os;
+    }
+  }
+  return std::nullopt;
+};

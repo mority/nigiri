@@ -16,7 +16,7 @@ pareto_set<routing::journey> tripbased_search(timetable& tt, routing::query q) {
   static auto search_state = routing::search_state{};
   routing::tripbased::tb_preprocessing tbp{tt};
   tbp.build_transfer_set();
-  day_idx_t base =
+  day_idx_t const base =
       tt.day_idx_mam(holds_alternative<unixtime_t>(q.start_time_)
                          ? get<unixtime_t>(q.start_time_)
                          : get<interval<unixtime_t>>(q.start_time_).to_)
@@ -40,6 +40,26 @@ pareto_set<routing::journey> tripbased_search(timetable& tt,
                   0U}},
       .destination_ = {
           {tt.locations_.location_id_to_idx_.at({to, src}), 0_minutes, 0U}}};
+  return tripbased_search(tt, std::move(q));
+}
+
+pareto_set<routing::journey> tripbased_intermodal_search(
+    timetable& tt,
+    std::vector<routing::offset> start,
+    std::vector<routing::offset> destination,
+    interval<unixtime_t> interval,
+    std::uint8_t const min_connection_count = 0U,
+    bool const extend_interval_earlier = false,
+    bool const extend_interval_later = false) {
+  auto q = routing::query{
+      .start_time_ = interval,
+      .start_match_mode_ = routing::location_match_mode::kIntermodal,
+      .dest_match_mode_ = routing::location_match_mode::kIntermodal,
+      .start_ = std::move(start),
+      .destination_ = std::move(destination),
+      .min_connection_count_ = min_connection_count,
+      .extend_interval_earlier_ = extend_interval_earlier,
+      .extend_interval_later_ = extend_interval_later};
   return tripbased_search(tt, std::move(q));
 }
 

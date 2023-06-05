@@ -333,3 +333,70 @@ TEST(profile_query, files_abc) {
 
   EXPECT_EQ(std::string_view{profile_abc_journeys}, ss.str());
 }
+
+constexpr auto const intermodal_abc_journeys = R"(
+[2020-03-30 05:20, 2020-03-30 08:00]
+TRANSFERS: 1
+     FROM: (START, START) [2020-03-30 05:20]
+       TO: (END, END) [2020-03-30 08:00]
+leg 0: (START, START) [2020-03-30 05:20] -> (A, 0000001) [2020-03-30 05:30]
+  MUMO (id=99, duration=10)
+leg 1: (A, 0000001) [2020-03-30 05:30] -> (B, 0000002) [2020-03-30 06:30]
+   0: 0000001 A...............................................                               d: 30.03 05:30 [30.03 07:30]  [{name=RE 1337, day=2020-03-30, id=1337/0000001/330/0000002/390/, src=0}]
+   1: 0000002 B............................................... a: 30.03 06:30 [30.03 08:30]
+leg 2: (B, 0000002) [2020-03-30 06:30] -> (B, 0000002) [2020-03-30 06:32]
+  FOOTPATH (duration=2)
+leg 3: (B, 0000002) [2020-03-30 06:45] -> (C, 0000003) [2020-03-30 07:45]
+   0: 0000002 B...............................................                               d: 30.03 06:45 [30.03 08:45]  [{name=RE 7331, day=2020-03-30, id=7331/0000002/405/0000003/465/, src=0}]
+   1: 0000003 C............................................... a: 30.03 07:45 [30.03 09:45]
+leg 4: (C, 0000003) [2020-03-30 07:45] -> (END, END) [2020-03-30 08:00]
+  MUMO (id=77, duration=15)
+
+
+[2020-03-30 05:50, 2020-03-30 08:30]
+TRANSFERS: 1
+     FROM: (START, START) [2020-03-30 05:50]
+       TO: (END, END) [2020-03-30 08:30]
+leg 0: (START, START) [2020-03-30 05:50] -> (A, 0000001) [2020-03-30 06:00]
+  MUMO (id=99, duration=10)
+leg 1: (A, 0000001) [2020-03-30 06:00] -> (B, 0000002) [2020-03-30 07:00]
+   0: 0000001 A...............................................                               d: 30.03 06:00 [30.03 08:00]  [{name=RE 1337, day=2020-03-30, id=1337/0000001/360/0000002/420/, src=0}]
+   1: 0000002 B............................................... a: 30.03 07:00 [30.03 09:00]
+leg 2: (B, 0000002) [2020-03-30 07:00] -> (B, 0000002) [2020-03-30 07:02]
+  FOOTPATH (duration=2)
+leg 3: (B, 0000002) [2020-03-30 07:15] -> (C, 0000003) [2020-03-30 08:15]
+   0: 0000002 B...............................................                               d: 30.03 07:15 [30.03 09:15]  [{name=RE 7331, day=2020-03-30, id=7331/0000002/435/0000003/495/, src=0}]
+   1: 0000003 C............................................... a: 30.03 08:15 [30.03 10:15]
+leg 4: (C, 0000003) [2020-03-30 08:15] -> (END, END) [2020-03-30 08:30]
+  MUMO (id=77, duration=15)
+
+
+)";
+
+TEST(profile_query, intermodal) {
+  constexpr auto const src = source_idx_t{0U};
+
+  timetable tt;
+  tt.date_range_ = full_period();
+  register_special_stations(tt);
+  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
+  finalize(tt);
+
+  auto const results = tripbased_intermodal_search(
+      tt,
+      {{tt.locations_.location_id_to_idx_.at({.id_ = "0000001", .src_ = src}),
+        10_minutes, 99U}},
+      {{tt.locations_.location_id_to_idx_.at({.id_ = "0000003", .src_ = src}),
+        15_minutes, 77U}},
+      interval{unixtime_t{sys_days{March / 30 / 2020}} + 5_hours,
+               unixtime_t{sys_days{March / 30 / 2020}} + 6_hours});
+
+  std::stringstream ss;
+  ss << "\n";
+  for (auto const& x : results) {
+    x.print(ss, tt);
+    ss << "\n\n";
+  }
+  std::cout << ss.str() << "\n";
+  EXPECT_EQ(std::string_view{intermodal_abc_journeys}, ss.str());
+}
