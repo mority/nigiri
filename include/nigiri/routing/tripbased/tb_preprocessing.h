@@ -25,9 +25,9 @@ struct tb_preprocessing {
 
     bool update(location_idx_t li_new, duration_t time_new, bitfield const& bf);
 
-    constexpr auto size() const noexcept { return location_idx_times_.size(); }
+    auto size() const noexcept { return location_idx_times_.size(); }
 
-    constexpr void clear() noexcept { location_idx_times_.clear(); }
+    void clear() noexcept { location_idx_times_.clear(); }
 
     tb_preprocessing& tbp_;
     mutable_fws_multimap<location_idx_t, earliest_time> location_idx_times_{};
