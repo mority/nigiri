@@ -1,6 +1,8 @@
 #include "nigiri/loader/init_finish.h"
 
+#if __cpp_lib_execution
 #include <execution>
+#endif
 
 #include "nigiri/loader/build_footpaths.h"
 #include "nigiri/loader/build_lb_graph.h"
