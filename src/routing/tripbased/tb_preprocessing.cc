@@ -389,22 +389,34 @@ void tb_preprocessing::build_transfer_set() {
             << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
 }
 
-void tb_preprocessing::store_transfer_set(std::string const& file_name) {
+auto file_names(std::filesystem::path const& file_name) {
+  auto const ts_file_name =
+      std::filesystem::path{file_name.string() + ".transfer_set"};
+  auto const bf_file_name =
+      std::filesystem::path{file_name.string() + ".bitfields"};
+  return std::make_tuple(ts_file_name, bf_file_name);
+}
+
+void tb_preprocessing::store_transfer_set(
+    std::filesystem::path const& file_name) {
+  auto const [ts_file_name, bf_file_name] = file_names(file_name);
+
   // transfer set
   auto ts_buf = cista::serialize(ts_);
-  write_file(file_name + ".transfer_set", ts_buf);
+  write_file(ts_file_name, ts_buf);
 
   // bitfields
   auto bf_buf = cista::serialize(tt_.bitfields_);
-  write_file(file_name + ".bitfields", bf_buf);
+  write_file(bf_file_name, bf_buf);
 }
 
-void tb_preprocessing::load_transfer_set(std::string const& file_name) {
-
+void tb_preprocessing::load_transfer_set(
+    std::filesystem::path const& file_name) {
+  auto const [ts_file_name, bf_file_name] = file_names(file_name);
   std::vector<std::uint8_t> vec;
 
   // transfer set
-  read_file(file_name + ".transfer_set", vec);
+  read_file(ts_file_name, vec);
 
   auto const ts_loaded =
       cista::deserialize<nvec<std::uint32_t, transfer, 2>>(vec);
@@ -430,7 +442,7 @@ void tb_preprocessing::load_transfer_set(std::string const& file_name) {
 
   // bitfields
   vec.clear();
-  read_file(file_name + ".bitfields", vec);
+  read_file(bf_file_name, vec);
 
   auto const bf_loaded =
       cista::deserialize<vector_map<bitfield_idx_t, bitfield>>(vec);

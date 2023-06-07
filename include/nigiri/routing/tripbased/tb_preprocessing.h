@@ -92,16 +92,18 @@ struct tb_preprocessing {
 
   void build_transfer_set();
 
+  auto filenames(std::filesystem::path const& file_name) const;
+
   // stores the transfers set and the bitfields in a file
-  void store_transfer_set(std::string const& file_name);
+  void store_transfer_set(std::filesystem::path const& file_name);
 
   // load precomputed transfer set from file
   // also needs to load the corresponding timetable from file since
   // bitfields of the transfers are stored in the timetable
-  void load_transfer_set(std::string const& file_name);
+  void load_transfer_set(std::filesystem::path const& file_name);
 
   // writes the content of the vector to the specified file
-  static void write_file(std::string const& file_name,
+  static void write_file(std::filesystem::path const& file_name,
                          std::vector<std::uint8_t> const& vec) {
     std::ofstream ofs(file_name,
                       std::ios::out | std::ios::binary | std::ios::trunc);
@@ -117,7 +119,7 @@ struct tb_preprocessing {
   }
 
   // reads the specified file and stores its content in the vector given
-  static void read_file(std::string const& file_name,
+  static void read_file(std::filesystem::path const& file_name,
                         std::vector<std::uint8_t>& vec) {
     std::ifstream ifs(file_name,
                       std::ios::in | std::ios::binary | std::ios::ate);
