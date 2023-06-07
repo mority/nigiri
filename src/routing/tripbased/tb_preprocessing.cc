@@ -389,7 +389,8 @@ void tb_preprocessing::build_transfer_set() {
             << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
 }
 
-auto file_names(std::filesystem::path const& file_name) {
+auto tb_preprocessing::file_names(
+    std::filesystem::path const& file_name) const {
   auto const ts_file_name =
       std::filesystem::path{file_name.string() + ".transfer_set"};
   auto const bf_file_name =

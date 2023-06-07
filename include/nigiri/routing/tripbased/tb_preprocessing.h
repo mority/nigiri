@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdio.h>
+// #include <stdio.h>
 #include "nigiri/timetable.h"
 #include <filesystem>
 #include <fstream>
@@ -92,7 +92,7 @@ struct tb_preprocessing {
 
   void build_transfer_set();
 
-  auto filenames(std::filesystem::path const& file_name) const;
+  auto file_names(std::filesystem::path const& file_name) const;
 
   // stores the transfers set and the bitfields in a file
   void store_transfer_set(std::filesystem::path const& file_name);
