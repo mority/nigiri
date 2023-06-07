@@ -387,6 +387,7 @@ void tb_preprocessing::build_transfer_set() {
 
   std::cout << "Found " << n_transfers_ << " transfers, occupying "
             << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
+  ts_ready_ = true;
 }
 
 auto tb_preprocessing::file_names(
@@ -452,4 +453,6 @@ void tb_preprocessing::load_transfer_set(
   for (auto const& bf : *bf_loaded) {
     tt_.bitfields_.emplace_back(bf);
   }
+
+  ts_ready_ = true;
 }

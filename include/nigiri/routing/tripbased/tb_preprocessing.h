@@ -152,6 +152,8 @@ struct tb_preprocessing {
   unsigned n_transfers_ = 0U;
   // the transfer set
   nvec<std::uint32_t, transfer, 2> ts_;
+  // true if the transfer set was successfully built or loaded
+  bool ts_ready_{false};
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   earliest_times ets_arr_;
