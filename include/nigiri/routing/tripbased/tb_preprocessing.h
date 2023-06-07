@@ -1,6 +1,5 @@
 #pragma once
 
-// #include <stdio.h>
 #include "nigiri/timetable.h"
 #include <filesystem>
 #include <fstream>
