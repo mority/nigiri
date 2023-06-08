@@ -1,4 +1,5 @@
 #include "utl/get_or_create.h"
+#include "utl/progress_tracker.h"
 
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
 #include "nigiri/stop.h"
@@ -93,6 +94,11 @@ void tb_preprocessing::build_transfer_set() {
   for (auto& inner_vec : transfers) {
     inner_vec.reserve(64);
   }
+
+  // progress tracker
+  auto progress_tracker = utl::get_active_progress_tracker();
+  progress_tracker->status("Building Transfer Set")
+      .in_high(tt_.transport_traffic_days_.size());
 
   // iterate over all trips of the timetable
   for (transport_idx_t t{0U}; t != tt_.transport_traffic_days_.size(); ++t) {
@@ -386,6 +392,8 @@ void tb_preprocessing::build_transfer_set() {
     ts_.emplace_back(it_range{
         transfers.cbegin(),
         transfers.cbegin() + static_cast<std::int64_t>(stop_seq_t.size())});
+
+    progress_tracker->update(t.v_);
   }
 
   std::cout << "Found " << n_transfers_ << " transfers, occupying "
