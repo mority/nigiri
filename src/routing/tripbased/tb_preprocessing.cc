@@ -393,7 +393,7 @@ void tb_preprocessing::build_transfer_set() {
         transfers.cbegin(),
         transfers.cbegin() + static_cast<std::int64_t>(stop_seq_t.size())});
 
-    progress_tracker->update(t.v_);
+    progress_tracker->increment();
   }
 
   std::cout << "Found " << n_transfers_ << " transfers, occupying "
