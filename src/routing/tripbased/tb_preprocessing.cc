@@ -1,13 +1,16 @@
-
-
 #include "utl/get_or_create.h"
 
 #include "nigiri/routing/tripbased/tb_preprocessing.h"
 #include "nigiri/stop.h"
 #include "nigiri/types.h"
 
+namespace nigiri::routing::tripbased {
+
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
+
+constexpr auto const kMode =
+    cista::mode::WITH_INTEGRITY | cista::mode::WITH_STATIC_VERSION;
 
 bitfield_idx_t tb_preprocessing::get_or_create_bfi(bitfield const& bf) {
   return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&bf, this]() {
@@ -22,7 +25,7 @@ bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
                                               duration_t time_new,
                                               bitfield const& bf) {
   // bitfield of the update
-  bitfield bf_new = bf;
+  bf_new_ = bf;
 
   // iterator to first entry that has no active days, overwrite with new entry
   // instead
@@ -33,7 +36,7 @@ bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
   for (auto i{0U}; i < location_idx_times_[location_idx].size(); ++i) {
     // the earliest time entry we are currently examining
     auto& et_cur = location_idx_times_[location_idx][i];
-    if (bf_new.none()) {
+    if (bf_new_.none()) {
       // all bits of new entry were set to zero, new entry does not improve
       // upon any times
       return false;
@@ -42,20 +45,20 @@ bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
         // new time is better than current time, update bit set of current
         // time
         et_cur.bf_idx_ = tbp_.get_or_create_bfi(
-            tbp_.tt_.bitfields_[et_cur.bf_idx_] & ~bf_new);
+            tbp_.tt_.bitfields_[et_cur.bf_idx_] & ~bf_new_);
       } else if (time_new == et_cur.time_) {
         // entry for this time already exists
-        if ((bf_new & ~tbp_.tt_.bitfields_[et_cur.bf_idx_]).none()) {
+        if ((bf_new_ & ~tbp_.tt_.bitfields_[et_cur.bf_idx_]).none()) {
           // all bits of bf_new already covered
           return false;
         } else {
           // new entry absorbs old entry
-          bf_new |= tbp_.tt_.bitfields_[et_cur.bf_idx_];
+          bf_new_ |= tbp_.tt_.bitfields_[et_cur.bf_idx_];
           et_cur.bf_idx_ = tbp_.get_or_create_bfi(bitfield{"0"});
         }
       } else {
         // new time is worse than current time, update bit set of new time
-        bf_new &= ~tbp_.tt_.bitfields_[et_cur.bf_idx_];
+        bf_new_ &= ~tbp_.tt_.bitfields_[et_cur.bf_idx_];
       }
     }
     // we remember the first invalid entry as an overwrite spot for the new
@@ -66,14 +69,14 @@ bool tb_preprocessing::earliest_times::update(location_idx_t location_idx,
     }
   }
 
-  if (bf_new.any()) {
+  if (bf_new_.any()) {
     if (overwrite_spot == location_idx_times_[location_idx].size()) {
       location_idx_times_[location_idx].emplace_back(
-          time_new, tbp_.get_or_create_bfi(bf_new));
+          time_new, tbp_.get_or_create_bfi(bf_new_));
     } else {
       location_idx_times_[location_idx][overwrite_spot].time_ = time_new;
       location_idx_times_[location_idx][overwrite_spot].bf_idx_ =
-          tbp_.get_or_create_bfi(bf_new);
+          tbp_.get_or_create_bfi(bf_new_);
     }
     return true;
   } else {
@@ -456,3 +459,51 @@ void tb_preprocessing::load_transfer_set(
 
   ts_ready_ = true;
 }
+
+cista::wrapped<tb_preprocessing> tb_preprocessing::read(
+    cista::memory_holder&& mem) {
+  return std::visit(
+      utl::overloaded{[&](cista::buf<cista::mmap>& b) {
+                        auto const ptr = reinterpret_cast<tb_preprocessing*>(
+                            &b[cista::data_start(kMode)]);
+                        return cista::wrapped{std::move(mem), ptr};
+                      },
+                      [&](cista::buffer& b) {
+                        auto const ptr =
+                            cista::deserialize<tb_preprocessing, kMode>(b);
+                        return cista::wrapped{std::move(mem), ptr};
+                      },
+                      [&](cista::byte_buf& b) {
+                        auto const ptr =
+                            cista::deserialize<tb_preprocessing, kMode>(b);
+                        return cista::wrapped{std::move(mem), ptr};
+                      }},
+      mem);
+}
+
+void tb_preprocessing::write(std::filesystem::path const& p) const {
+  auto mmap = cista::mmap{p.string().c_str(), cista::mmap::protection::WRITE};
+  auto writer = cista::buf<cista::mmap>(std::move(mmap));
+
+  {
+    auto const timer = scoped_timer{"tripbased_preprocessing.write"};
+    cista::serialize<kMode>(writer, *this);
+  }
+}
+
+void tb_preprocessing::write(cista::memory_holder& mem) const {
+  std::visit(utl::overloaded{[&](cista::buf<cista::mmap>& writer) {
+                               cista::serialize<kMode>(writer, *this);
+                             },
+                             [&](cista::buffer&) {
+                               throw std::runtime_error{"not supported"};
+                             },
+                             [&](cista::byte_buf& b) {
+                               auto writer = cista::buf{std::move(b)};
+                               cista::serialize<kMode>(writer, *this);
+                               b = std::move(writer.buf_);
+                             }},
+             mem);
+}
+
+}  // namespace nigiri::routing::tripbased

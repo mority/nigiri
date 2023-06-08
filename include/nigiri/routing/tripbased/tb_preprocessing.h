@@ -19,7 +19,6 @@ struct tb_preprocessing {
       bitfield_idx_t bf_idx_{};
     };
 
-    earliest_times() = delete;
     explicit earliest_times(tb_preprocessing& tbp) : tbp_(tbp) {}
 
     bool update(location_idx_t li_new, duration_t time_new, bitfield const& bf);
@@ -29,11 +28,13 @@ struct tb_preprocessing {
     void clear() noexcept { location_idx_times_.clear(); }
 
     tb_preprocessing& tbp_;
+    // temp for get_create_bfi
+    bitfield bf_new_;
     mutable_fws_multimap<location_idx_t, earliest_time> location_idx_times_{};
   };
 #endif
 
-  tb_preprocessing() = delete;
+  //  tb_preprocessing() = delete;
   explicit tb_preprocessing(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
       : tt_(tt),
         sigma_w_max_(sa_w_max)
@@ -133,6 +134,12 @@ struct tb_preprocessing {
     }
   }
 
+  static cista::wrapped<tb_preprocessing> read(cista::memory_holder&& mem);
+
+  void write(std::filesystem::path const& p) const;
+
+  void write(cista::memory_holder& mem) const;
+
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
@@ -160,5 +167,17 @@ struct tb_preprocessing {
   earliest_times ets_ch_;
 #endif
 };
+
+template <std::size_t NMaxTypes>
+constexpr auto static_type_hash(tb_preprocessing const*,
+                                cista::hash_data<NMaxTypes> h) noexcept {
+  return h.combine(cista::hash("nigiri::routing::tripbased::tb_preprocessing"));
+}
+
+template <typename Ctx>
+inline void serialize(Ctx&, tb_preprocessing const*, cista::offset_t const) {}
+
+template <typename Ctx>
+inline void deserialize(Ctx const&, tb_preprocessing*) {}
 
 }  // namespace nigiri::routing::tripbased
