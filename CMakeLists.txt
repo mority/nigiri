@@ -11,40 +11,42 @@ if(NIGIRI_LINT)
 endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  set(nigiri-compile-options
-        -Weverything
-        -Wno-c++98-compat
-        -Wno-c++98-compat-pedantic
-        -Wno-newline-eof
-        -Wno-missing-prototypes
-        -Wno-padded
-        -Wno-double-promotion
-        -Wno-undef
-        -Wno-undefined-reinterpret-cast
-        -Wno-float-conversion
-        -Wno-global-constructors
-        -Wno-exit-time-destructors
-        -Wno-switch-enum
-        -Wno-c99-designator
-        -Wno-zero-as-null-pointer-constant
-        -Wno-missing-noreturn
-        -Wno-undefined-func-template
-        -Wno-unsafe-buffer-usage
-        -Werror)
-elseif(MSVC)
-  set(nigiri-compile-options /WX)
-else()
-  set(nigiri-compile-options ${SORO_COMPILE_OPTIONS}
-        -Wall
-        -Wextra
-        -Werror)
-endif()
+    set(nigiri-compile-options
+            -Weverything
+            -Wno-c++98-compat
+            -Wno-c++98-compat-pedantic
+            -Wno-newline-eof
+            -Wno-missing-prototypes
+            -Wno-padded
+            -Wno-double-promotion
+            -Wno-undef
+            -Wno-undefined-reinterpret-cast
+            -Wno-float-conversion
+            -Wno-global-constructors
+            -Wno-exit-time-destructors
+            -Wno-switch-enum
+            -Wno-c99-designator
+            -Wno-zero-as-null-pointer-constant
+            -Wno-missing-noreturn
+            -Wno-undefined-func-template
+            -Wno-unsafe-buffer-usage
+            -Werror)
+elseif (MSVC)
+    set(nigiri-compile-options /WX)
+else ()
+    set(nigiri-compile-options ${SORO_COMPILE_OPTIONS}
+            -Wall
+            -Wextra
+            -Werror)
+endif ()
+
+find_package(OpenMP REQUIRED)
 
 # --- LIB ---
 file(GLOB_RECURSE nigiri-files src/*.cc)
 add_library(nigiri ${nigiri-files})
 target_include_directories(nigiri PUBLIC include)
-target_link_libraries(nigiri PUBLIC cista geo utl fmt date miniz date-tz wyhash unordered_dense)
+target_link_libraries(nigiri PUBLIC cista geo utl fmt date miniz date-tz wyhash unordered_dense OpenMP::OpenMP_CXX)
 target_compile_features(nigiri PUBLIC cxx_std_20)
 target_compile_options(nigiri PRIVATE ${nigiri-compile-options})
 
