@@ -36,14 +36,7 @@ struct tb_preprocessing {
 
   //  tb_preprocessing() = delete;
   explicit tb_preprocessing(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
-      : tt_(tt),
-        sigma_w_max_(sa_w_max)
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-        ,
-        ets_arr_(*this),
-        ets_ch_(*this)
-#endif
-  {
+      : tt_(tt), sigma_w_max_(sa_w_max) {
 
     // check system limits
     assert(tt.bitfields_.size() <= kBitfieldIdxMax);
@@ -161,11 +154,6 @@ struct tb_preprocessing {
   nvec<std::uint32_t, transfer, 2> ts_;
   // true if the transfer set was successfully built or loaded
   bool ts_ready_{false};
-
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-  earliest_times ets_arr_;
-  earliest_times ets_ch_;
-#endif
 };
 
 template <std::size_t NMaxTypes>
