@@ -136,6 +136,11 @@ struct tb_query {
                                   query const& q,
                                   footpath const& fp);
 
+  bool is_start(const query& q, const location_idx_t location_idx);
+
+  std::optional<offset> find_closest_start(const query& q,
+                                           const location_idx_t location_idx);
+
   timetable const& tt_;
   tb_query_state& state_;
   std::vector<bool>& is_dest_;

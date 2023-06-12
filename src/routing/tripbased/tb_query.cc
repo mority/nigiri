@@ -209,7 +209,7 @@ void tb_query::reconstruct(query const& q, journey& j) {
     auto const route_idx = tt_.transport_route_[tp_seg.get_transport_idx()];
 
     // the location index at the start of the segment
-    auto const location_idx_start =
+    auto const seg_start_idx =
         stop{tt_.route_location_seq_[route_idx][tp_seg.stop_idx_start_]}
             .location_idx();
 
@@ -229,7 +229,7 @@ void tb_query::reconstruct(query const& q, journey& j) {
     auto unix_end = tt_.to_unixtime(tp_seg.get_transport_day(base_),
                                     seg_end_delta.as_duration());
     // the location index of the end of the segment
-    auto location_idx_end =
+    auto seg_end_idx =
         stop{tt_.route_location_seq_[route_idx][stop_idx_end]}.location_idx();
 
     // add footpath
@@ -240,7 +240,7 @@ void tb_query::reconstruct(query const& q, journey& j) {
                                     event_type::kArr);
       unix_end = tt_.to_unixtime(tp_seg.get_transport_day(base_),
                                  seg_end_delta.as_duration());
-      location_idx_end =
+      seg_end_idx =
           stop{tt_.route_location_seq_[route_idx][stop_idx_end]}.location_idx();
 
       if (q.dest_match_mode_ != location_match_mode::kIntermodal) {
@@ -251,12 +251,8 @@ void tb_query::reconstruct(query const& q, journey& j) {
             tt_.to_unixtime(tp_seg.get_transport_day(base_),
                             seg_end_delta.as_duration() + fp.duration());
 
-        journey::leg l_fp{direction::kForward,
-                          location_idx_end,
-                          j.dest_,
-                          unix_end,
-                          unix_fp_end,
-                          fp};
+        journey::leg l_fp{direction::kForward, seg_end_idx, j.dest_, unix_end,
+                          unix_fp_end,         fp};
         j.add(std::move(l_fp));
       } else {
         // coordinate-to-coordinate
@@ -267,17 +263,16 @@ void tb_query::reconstruct(query const& q, journey& j) {
         // add offset leg for intermodal query
 
         // virtual reflexive outgoing footpath
-        footpath const fp_reflexive{location_idx_end, duration_t{0U}};
+        footpath const fp_reflexive{seg_end_idx, duration_t{0U}};
         auto MUMO_offset = find_MUMO(le_match, q, fp_reflexive);
         if (MUMO_offset.has_value()) {
           journey::leg l_mumo_end{
-              direction::kForward, location_idx_end,   j.dest_, unix_end,
+              direction::kForward, seg_end_idx,        j.dest_, unix_end,
               j.dest_time_,        MUMO_offset.value()};
           j.add(std::move(l_mumo_end));
         } else {
           // iterate outgoing footpaths of final location
-          for (auto const fp :
-               tt_.locations_.footpaths_out_[location_idx_end]) {
+          for (auto const fp : tt_.locations_.footpaths_out_[seg_end_idx]) {
             MUMO_offset = find_MUMO(le_match, q, fp);
             if (MUMO_offset.has_value()) {
               // reconstruct footpath leg to MUMO location and MUMO leg
@@ -285,7 +280,7 @@ void tb_query::reconstruct(query const& q, journey& j) {
               auto const unix_fp_end =
                   tt_.to_unixtime(tp_seg.get_transport_day(base_),
                                   seg_end_delta.as_duration() + fp.duration());
-              journey::leg l_fp{direction::kForward, location_idx_end,
+              journey::leg l_fp{direction::kForward, seg_end_idx,
                                 fp.target(),         unix_end,
                                 unix_fp_end,         fp};
               journey::leg l_mumo_end{
@@ -325,34 +320,30 @@ void tb_query::reconstruct(query const& q, journey& j) {
                                           stop_idx_end, event_type::kArr);
             unix_end = tt_.to_unixtime(tp_seg.get_transport_day(base_),
                                        seg_end_delta.as_duration());
-            location_idx_end =
-                stop{tt_.route_location_seq_[route_idx][stop_idx_end]}
-                    .location_idx();
+            seg_end_idx = stop{tt_.route_location_seq_[route_idx][stop_idx_end]}
+                              .location_idx();
 
             // create footpath journey leg for the transfer
-            auto create_fp_leg = [this, &tp_seg, &seg_end_delta,
-                                  &location_idx_end, &j,
-                                  &unix_end](footpath const& fp) {
+            auto create_fp_leg = [this, &tp_seg, &seg_end_delta, &seg_end_idx,
+                                  &j, &unix_end](footpath const& fp) {
               auto const unix_fp_end =
                   tt_.to_unixtime(tp_seg.get_transport_day(base_),
                                   seg_end_delta.as_duration() + fp.duration());
 
-              journey::leg l_fp{direction::kForward,  location_idx_end,
+              journey::leg l_fp{direction::kForward,  seg_end_idx,
                                 j.legs_.back().from_, unix_end,
                                 unix_fp_end,          fp};
               j.add(std::move(l_fp));
             };
 
             // handle reflexive footpath
-            if (location_idx_end == j.legs_.back().from_) {
+            if (seg_end_idx == j.legs_.back().from_) {
               footpath const reflexive_fp{
-                  location_idx_end,
-                  tt_.locations_.transfer_time_[location_idx_end]};
+                  seg_end_idx, tt_.locations_.transfer_time_[seg_end_idx]};
               create_fp_leg(reflexive_fp);
             } else {
               // find footpath used
-              for (auto const fp :
-                   tt_.locations_.footpaths_out_[location_idx_end]) {
+              for (auto const fp : tt_.locations_.footpaths_out_[seg_end_idx]) {
                 // check if footpath reaches the start of the next journey
                 // leg
                 if (fp.target() == j.legs_.back().from_) {
@@ -373,29 +364,35 @@ void tb_query::reconstruct(query const& q, journey& j) {
     journey::transport_enter_exit tee{
         transport{tp_seg.get_transport_idx(), tp_seg.get_transport_day(base_)},
         tp_seg.stop_idx_start_, stop_idx_end};
-    journey::leg l_tp{direction::kForward, location_idx_start, location_idx_end,
-                      unix_start,          unix_end,           tee};
+    journey::leg l_tp{direction::kForward, seg_start_idx, seg_end_idx,
+                      unix_start,          unix_end,      tee};
     j.add(std::move(l_tp));
 
-    // first segment reached?
-    if (tp_seg.transferred_from_ == TRANSFERRED_FROM_NULL) {
-      // add initial footpath if necessary
-      if (q.start_match_mode_ != location_match_mode::kIntermodal &&
-          location_idx_start != state_.start_location_) {
-        for (auto const& fp :
-             tt_.locations_.footpaths_out_[state_.start_location_]) {
-          if (fp.target() == location_idx_start) {
-            // transport time: start of footpath
-            auto const time_fp_start =
-                seg_start_delta.as_duration() - fp.duration();
-            // unix time: start of footpath
-            auto const unix_fp_start =
-                tt_.to_unixtime(tp_seg.get_transport_day(base_), time_fp_start);
-            journey::leg l_fp{direction::kForward, state_.start_location_,
-                              location_idx_start,  unix_fp_start,
-                              unix_start,          fp};
-            j.add(std::move(l_fp));
-          }
+    // first segment reached? -> add initial footpath if necessary
+    if (tp_seg.transferred_from_ == TRANSFERRED_FROM_NULL &&
+        q.start_match_mode_ != location_match_mode::kIntermodal &&
+        !is_start(q, seg_start_idx)) {
+
+      auto const start_offset = find_closest_start(q, seg_start_idx);
+      if (!start_offset.has_value()) {
+        std::cerr << "Journey reconstruction failed: Could not find a "
+                     "matching start location\n";
+        return;
+      }
+
+      for (auto const& fp :
+           tt_.locations_.footpaths_out_[start_offset->target()]) {
+        if (fp.target() == seg_start_idx) {
+          // transport time: start of footpath
+          auto const time_fp_start =
+              seg_start_delta.as_duration() - fp.duration();
+          // unix time: start of footpath
+          auto const unix_fp_start =
+              tt_.to_unixtime(tp_seg.get_transport_day(base_), time_fp_start);
+          journey::leg l_fp{direction::kForward, start_offset->target(),
+                            seg_start_idx,       unix_fp_start,
+                            unix_start,          fp};
+          j.add(std::move(l_fp));
         }
       }
     }
@@ -469,3 +466,27 @@ std::optional<nigiri::routing::offset> tb_query::find_MUMO(l_entry const& le,
   }
   return std::nullopt;
 };
+
+bool tb_query::is_start(query const& q, location_idx_t const location_idx) {
+  for (auto const& os : q.start_) {
+    if (os.target() == location_idx && os.duration() == duration_t{0U}) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::optional<nigiri::routing::offset> tb_query::find_closest_start(
+    query const& q, location_idx_t const location_idx) {
+  auto min = duration_t::max();
+  std::optional<nigiri::routing::offset> result = std::nullopt;
+  for (auto const& os : q.start_) {
+    for (auto const fp : tt_.locations_.footpaths_out_[os.target()]) {
+      if (fp.target() == location_idx && fp.duration() < min) {
+        min = fp.duration();
+        result = os;
+      }
+    }
+  }
+  return result;
+}
