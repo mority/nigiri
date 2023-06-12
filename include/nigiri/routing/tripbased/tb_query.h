@@ -141,8 +141,7 @@ struct tb_query {
   std::optional<offset> find_closest_start(const query& q,
                                            const location_idx_t location_idx);
 
-  std::optional<location_idx_t> reconstruct_dest(const query& q,
-                                                 const l_entry& le);
+  std::optional<location_idx_t> reconstruct_dest(const l_entry& le);
 
   timetable const& tt_;
   tb_query_state& state_;

@@ -247,7 +247,7 @@ void tb_query::reconstruct(query const& q, journey& j) {
         // station-to-station
 
         if (!is_dest_[j.dest_.v_]) {
-          auto const reconstructed_dest = reconstruct_dest(q, le_match);
+          auto const reconstructed_dest = reconstruct_dest(le_match);
           if (!reconstructed_dest.has_value()) {
             std::cerr << "Journey reconstruction failed: Could not find a "
                          "matching destination\n";
@@ -501,15 +501,12 @@ std::optional<nigiri::routing::offset> tb_query::find_closest_start(
   return result;
 }
 
-std::optional<location_idx_t> tb_query::reconstruct_dest(query const& q,
-                                                         l_entry const& le) {
+std::optional<location_idx_t> tb_query::reconstruct_dest(l_entry const& le) {
   auto const le_location_idx =
       stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}.location_idx();
   for (auto const& fp : tt_.locations_.footpaths_out_[le_location_idx]) {
-    for (auto const& os : q.destination_) {
-      if (fp.target() == os.target() && fp.duration() == le.time_) {
-        return os.target();
-      }
+    if (is_dest_[fp.target().v_] && fp.duration() == le.time_) {
+      return fp.target();
     }
   }
   return std::nullopt;
