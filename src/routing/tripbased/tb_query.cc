@@ -246,6 +246,16 @@ void tb_query::reconstruct(query const& q, journey& j) {
       if (q.dest_match_mode_ != location_match_mode::kIntermodal) {
         // station-to-station
 
+        if (!is_dest_[j.dest_.v_]) {
+          auto const reconstructed_dest = reconstruct_dest(q, le_match);
+          if (!reconstructed_dest.has_value()) {
+            std::cerr << "Journey reconstruction failed: Could not find a "
+                         "matching destination\n";
+            return;
+          }
+          j.dest_ = reconstructed_dest.value();
+        }
+
         footpath fp{j.dest_, le_match.time_};
         auto const unix_fp_end =
             tt_.to_unixtime(tp_seg.get_transport_day(base_),
@@ -489,4 +499,18 @@ std::optional<nigiri::routing::offset> tb_query::find_closest_start(
     }
   }
   return result;
+}
+
+std::optional<location_idx_t> tb_query::reconstruct_dest(query const& q,
+                                                         l_entry const& le) {
+  auto const le_location_idx =
+      stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}.location_idx();
+  for (auto const& fp : tt_.locations_.footpaths_out_[le_location_idx]) {
+    for (auto const& os : q.destination_) {
+      if (fp.target() == os.target() && fp.duration() == le.time_) {
+        return os.target();
+      }
+    }
+  }
+  return std::nullopt;
 }
