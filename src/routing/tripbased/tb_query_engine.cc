@@ -1,14 +1,14 @@
 #include <ranges>
 
-#include "nigiri/routing/tripbased/tb_query.h"
+#include "nigiri/routing/tripbased/tb_query_engine.h"
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-void tb_query::execute(unixtime_t const start_time,
-                       std::uint8_t const max_transfers,
-                       unixtime_t const worst_time_at_dest,
-                       pareto_set<journey>& results) {
+void tb_query_engine::execute(unixtime_t const start_time,
+                              std::uint8_t const max_transfers,
+                              unixtime_t const worst_time_at_dest,
+                              pareto_set<journey>& results) {
 
   auto const day_idx_mam_pair = tt_.day_idx_mam(state_.start_time_);
   // day index of start day
@@ -49,7 +49,7 @@ void tb_query::execute(unixtime_t const start_time,
             tau_dep_t_i_delta = event_times.begin();
           }
           // iterate departures until maximum waiting time is reached
-          while (sigma_w <= state_.tbp_.sigma_w_max_) {
+          while (sigma_w <= state_.ts_.stats_.sigma_w_max_) {
             // shift amount due to travel time of transport
             auto const sigma_t = day_idx_t{tau_dep_t_i_delta->days()};
             // day index of the transport segment
@@ -159,7 +159,7 @@ void tb_query::execute(unixtime_t const start_time,
         for (auto i{seg.stop_idx_start_ + 1U}; i <= seg.stop_idx_end_; ++i) {
           // get transfers for this transport/stop
           auto const& transfers =
-              state_.tbp_.ts_.at(seg.get_transport_idx().v_, i);
+              state_.ts_.transfers_.at(seg.get_transport_idx().v_, i);
           // iterate transfers from this stop
           for (auto const& transfer_cur : transfers) {
             // bitset specifying the days on which the transfer is possible
@@ -189,7 +189,7 @@ void tb_query::execute(unixtime_t const start_time,
   }
 }
 
-void tb_query::reconstruct(query const& q, journey& j) {
+void tb_query_engine::reconstruct(query const& q, journey& j) {
 
   auto const last_seg_match = find_last_seg(j);
   if (!last_seg_match.has_value()) {
@@ -312,7 +312,7 @@ void tb_query::reconstruct(query const& q, journey& j) {
            stop_idx <= tp_seg.stop_idx_end_; ++stop_idx) {
         // get transfers for this transport/stop
         auto const& transfers =
-            state_.tbp_.ts_.at(tp_seg.get_transport_idx().v_, stop_idx);
+            state_.ts_.transfers_.at(tp_seg.get_transport_idx().v_, stop_idx);
         // iterate transfers for this stop
         for (auto const& transfer_cur : transfers) {
           if (transfer_cur.get_transport_idx_to() ==
@@ -430,7 +430,7 @@ void tb_query::reconstruct(query const& q, journey& j) {
   std::reverse(j.legs_.begin(), j.legs_.end());
 }
 
-std::optional<std::pair<std::uint32_t, l_entry>> tb_query::find_last_seg(
+std::optional<std::pair<std::uint32_t, l_entry>> tb_query_engine::find_last_seg(
     journey const& j) {
   for (auto q_cur = state_.q_.start_[j.transfers_];
        q_cur != state_.q_.end_[j.transfers_]; ++q_cur) {
@@ -465,9 +465,8 @@ std::optional<std::pair<std::uint32_t, l_entry>> tb_query::find_last_seg(
   return std::nullopt;
 }
 
-std::optional<nigiri::routing::offset> tb_query::find_MUMO(l_entry const& le,
-                                                           query const& q,
-                                                           footpath const& fp) {
+std::optional<nigiri::routing::offset> tb_query_engine::find_MUMO(
+    l_entry const& le, query const& q, footpath const& fp) {
   for (auto const& os : q.destination_) {
     if (os.target_ == fp.target() &&
         fp.duration() + duration_t{dist_to_dest_[fp.target_]} == le.time_) {
@@ -477,7 +476,8 @@ std::optional<nigiri::routing::offset> tb_query::find_MUMO(l_entry const& le,
   return std::nullopt;
 };
 
-bool tb_query::is_start(query const& q, location_idx_t const location_idx) {
+bool tb_query_engine::is_start(query const& q,
+                               location_idx_t const location_idx) {
   for (auto const& os : q.start_) {
     if (os.target() == location_idx && os.duration() == duration_t{0U}) {
       return true;
@@ -486,7 +486,7 @@ bool tb_query::is_start(query const& q, location_idx_t const location_idx) {
   return false;
 }
 
-std::optional<nigiri::routing::offset> tb_query::find_closest_start(
+std::optional<nigiri::routing::offset> tb_query_engine::find_closest_start(
     query const& q, location_idx_t const location_idx) {
   auto min = duration_t::max();
   std::optional<nigiri::routing::offset> result = std::nullopt;
@@ -501,7 +501,8 @@ std::optional<nigiri::routing::offset> tb_query::find_closest_start(
   return result;
 }
 
-std::optional<location_idx_t> tb_query::reconstruct_dest(l_entry const& le) {
+std::optional<location_idx_t> tb_query_engine::reconstruct_dest(
+    l_entry const& le) {
   auto const le_location_idx =
       stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}.location_idx();
   for (auto const& fp : tt_.locations_.footpaths_out_[le_location_idx]) {

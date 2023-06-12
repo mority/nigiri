@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#include "nigiri/routing/tripbased/tb.h"
+#include "nigiri/routing/tripbased/bits.h"
 #include "nigiri/types.h"
 
 using namespace nigiri;

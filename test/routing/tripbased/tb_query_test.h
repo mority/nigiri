@@ -10,12 +10,12 @@
 namespace nigiri::test {
 
 pareto_set<routing::journey> tripbased_search(timetable& tt, routing::query q) {
-  using algo_t = routing::tripbased::tb_query;
+  using algo_t = routing::tripbased::tb_query_engine;
   using algo_state_t = routing::tripbased::tb_query_state;
 
   static auto search_state = routing::search_state{};
-  routing::tripbased::tb_preprocessing tbp{tt};
-  tbp.build_transfer_set();
+  routing::tripbased::tb_preprocessor tbp{tt};
+  tbp.build();
   day_idx_t const base =
       tt.day_idx_mam(holds_alternative<unixtime_t>(q.start_time_)
                          ? get<unixtime_t>(q.start_time_)

@@ -5,7 +5,7 @@
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
-#include "nigiri/routing/tripbased/tb_preprocessing.h"
+#include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "nigiri/routing/tripbased/tb_query_state.h"
 
 #define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()
@@ -18,18 +18,18 @@ namespace nigiri::routing::tripbased {
 
 struct tb_query_stats {};
 
-struct tb_query {
+struct tb_query_engine {
   using algo_state_t = tb_query_state;
   using algo_stats_t = tb_query_stats;
 
   static constexpr bool kUseLowerBounds = false;
 
-  tb_query(timetable const& tt,
-           tb_query_state& state,
-           std::vector<bool>& is_dest,
-           std::vector<std::uint16_t>& dist_to_dest,
-           std::vector<std::uint16_t>& lb,
-           day_idx_t const base)
+  tb_query_engine(timetable const& tt,
+                  tb_query_state& state,
+                  std::vector<bool>& is_dest,
+                  std::vector<std::uint16_t>& dist_to_dest,
+                  std::vector<std::uint16_t>& lb,
+                  day_idx_t const base)
       : tt_{tt},
         state_{state},
         is_dest_{is_dest},

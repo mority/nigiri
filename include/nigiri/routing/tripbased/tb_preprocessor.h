@@ -2,24 +2,25 @@
 
 #include "nigiri/timetable.h"
 #include <filesystem>
-#include <fstream>
-#include "tb.h"
+#include "bits.h"
+#include "transfer.h"
+#include "transfer_set.h"
 
 #define TB_PREPRO_UTURN_REMOVAL
 #define TB_PREPRO_TRANSFER_REDUCTION
 
 namespace nigiri::routing::tripbased {
 
-struct tb_preprocessing {
+struct tb_preprocessor {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   struct earliest_times {
     struct earliest_time {
       duration_t time_{};
-      bitfield_idx_t bf_idx_{};
+      bitfield bf_{};
     };
 
-    explicit earliest_times(tb_preprocessing& tbp) : tbp_(tbp) {}
+    explicit earliest_times(tb_preprocessor& tbp) : tbp_(tbp) {}
 
     bool update(location_idx_t li_new, duration_t time_new, bitfield const& bf);
 
@@ -27,15 +28,15 @@ struct tb_preprocessing {
 
     void clear() noexcept { location_idx_times_.clear(); }
 
-    tb_preprocessing& tbp_;
+    tb_preprocessor& tbp_;
     // temp for get_create_bfi
     bitfield bf_new_;
     mutable_fws_multimap<location_idx_t, earliest_time> location_idx_times_{};
   };
 #endif
 
-  //  tb_preprocessing() = delete;
-  explicit tb_preprocessing(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
+  //  preprocessor() = delete;
+  explicit tb_preprocessor(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
       : tt_(tt), sigma_w_max_(sa_w_max) {
 
     // check system limits
@@ -63,8 +64,8 @@ struct tb_preprocessing {
          ++route_idx) {
       num_el_con_ += (tt_.route_location_seq_[route_idx].size() - 1) *
                      tt_.route_transport_ranges_[route_idx].size().v_;
-      if (route_max_length < tt_.route_location_seq_[route_idx].size()) {
-        route_max_length = tt_.route_location_seq_[route_idx].size();
+      if (route_max_length_ < tt_.route_location_seq_[route_idx].size()) {
+        route_max_length_ = tt_.route_location_seq_[route_idx].size();
       }
     }
 
@@ -83,51 +84,9 @@ struct tb_preprocessing {
     //              transfers\n";
   }
 
-  void build_transfer_set();
+  void build(transfer_set& ts);
 
-  auto file_names(std::filesystem::path const& file_name) const;
-
-  // stores the transfers set and the bitfields in a file
-  void store_transfer_set(std::filesystem::path const& file_name);
-
-  // load precomputed transfer set from file
-  // also needs to load the corresponding timetable from file since
-  // bitfields of the transfers are stored in the timetable
-  void load_transfer_set(std::filesystem::path const& file_name);
-
-  // writes the content of the vector to the specified file
-  static void write_file(std::filesystem::path const& file_name,
-                         std::vector<std::uint8_t> const& vec) {
-    std::ofstream ofs(file_name,
-                      std::ios::out | std::ios::binary | std::ios::trunc);
-    if (ofs.is_open()) {
-      ofs.write(reinterpret_cast<const char*>(vec.data()),
-                vec.empty()
-                    ? 0
-                    : static_cast<std::int64_t>(sizeof(vec[0]) * vec.size()));
-      ofs.close();
-    } else {
-      std::cout << "Could not ope file: " << file_name << std::endl;
-    }
-  }
-
-  // reads the specified file and stores its content in the vector given
-  static void read_file(std::filesystem::path const& file_name,
-                        std::vector<std::uint8_t>& vec) {
-    std::ifstream ifs(file_name,
-                      std::ios::in | std::ios::binary | std::ios::ate);
-    if (ifs.is_open()) {
-      auto length = ifs.tellg();
-      ifs.seekg(0, std::ios::beg);
-      vec.resize(static_cast<std::uint64_t>(length));
-      ifs.read(reinterpret_cast<char*>(vec.data()), length);
-      ifs.close();
-    } else {
-      std::cout << "Could not ope file: " << file_name << std::endl;
-    }
-  }
-
-  static cista::wrapped<tb_preprocessing> read(cista::memory_holder&& mem);
+  static cista::wrapped<tb_preprocessor> read(cista::memory_holder&& mem);
 
   void write(std::filesystem::path const& p) const;
 
@@ -142,30 +101,18 @@ struct tb_preprocessing {
 
   // the timetable that is being processed
   timetable& tt_;
+
   // the number of elementary connections in the timetable
   unsigned num_el_con_ = 0U;
+
   // length of the longest route
-  std::size_t route_max_length = 0U;
+  std::size_t route_max_length_ = 0U;
+
   // max. look-ahead
   day_idx_t const sigma_w_max_{};
+
   // the number of transfers found
   unsigned n_transfers_ = 0U;
-  // the transfer set
-  nvec<std::uint32_t, transfer, 2> ts_;
-  // true if the transfer set was successfully built or loaded
-  bool ts_ready_{false};
 };
-
-template <std::size_t NMaxTypes>
-constexpr auto static_type_hash(tb_preprocessing const*,
-                                cista::hash_data<NMaxTypes> h) noexcept {
-  return h.combine(cista::hash("nigiri::routing::tripbased::tb_preprocessing"));
-}
-
-template <typename Ctx>
-inline void serialize(Ctx&, tb_preprocessing const*, cista::offset_t const) {}
-
-template <typename Ctx>
-inline void deserialize(Ctx const&, tb_preprocessing*) {}
 
 }  // namespace nigiri::routing::tripbased

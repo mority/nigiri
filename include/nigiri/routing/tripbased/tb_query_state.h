@@ -1,9 +1,9 @@
 #pragma once
 
-#include "nigiri/routing/tripbased/tb.h"
-#include "nigiri/routing/tripbased/tb_preprocessing.h"
-#include "nigiri/routing/tripbased/tb_query_queue.h"
-#include "nigiri/routing/tripbased/tb_query_reached.h"
+#include "nigiri/routing/tripbased/bits.h"
+#include "nigiri/routing/tripbased/queue.h"
+#include "nigiri/routing/tripbased/reached.h"
+#include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "nigiri/types.h"
 
 namespace nigiri {
@@ -27,8 +27,10 @@ struct l_entry {
 
 struct tb_query_state {
   tb_query_state() = delete;
-  tb_query_state(tb_preprocessing& tbp, day_idx_t const base)
-      : tbp_{tbp}, base_{base}, r_{tbp}, q_{r_, base} {
+  tb_query_state(timetable const& tt,
+                 transfer_set const& ts,
+                 day_idx_t const base)
+      : ts_{ts}, base_{base}, r_{tt}, q_{r_, base} {
     l_.reserve(128);
     t_min_.resize(kNumTransfersMax, unixtime_t::max());
     q_.start_.reserve(kNumTransfersMax);
@@ -37,7 +39,7 @@ struct tb_query_state {
   }
 
   // should contain a built transfer set
-  tb_preprocessing& tbp_;
+  transfer_set const& ts_;
 
   // base day of the query
   day_idx_t const base_;

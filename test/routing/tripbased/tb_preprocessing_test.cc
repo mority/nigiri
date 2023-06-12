@@ -7,7 +7,7 @@
 #include "nigiri/loader/init_finish.h"
 #include "../../loader/hrd/hrd_timetable.h"
 
-#include "nigiri/routing/tripbased/tb_preprocessing.h"
+#include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "tb_preprocessing_test.h"
 
 #include "./test_data.h"
@@ -23,7 +23,7 @@ using namespace nigiri::test_data::hrd_timetable;
 TEST(tripbased, get_or_create_bfi) {
   // init
   timetable tt;
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // bitfield already registered with timetable
   bitfield const bf0{"0"};
@@ -46,8 +46,8 @@ TEST(tripbased, get_or_create_bfi) {
 TEST(earliest_times, basic) {
   // init
   timetable tt;
-  tb_preprocessing tbp{tt};
-  tb_preprocessing::earliest_times ets{tbp};
+  tb_preprocessor tbp{tt};
+  tb_preprocessor::earliest_times ets{tbp};
 
   // update empty
   location_idx_t const li_23{23U};
@@ -166,8 +166,8 @@ TEST(earliest_times, basic) {
 TEST(earliest_times, same_time_more_bits) {
   // init
   timetable tt;
-  tb_preprocessing tbp{tt};
-  tb_preprocessing::earliest_times ets{tbp};
+  tb_preprocessor tbp{tt};
+  tb_preprocessor::earliest_times ets{tbp};
 
   location_idx_t const li{23U};
   duration_t const time{42U};
@@ -188,8 +188,8 @@ TEST(earliest_times, same_time_more_bits) {
 TEST(earliest_times, same_time_less_bits) {
   // init
   timetable tt;
-  tb_preprocessing tbp{tt};
-  tb_preprocessing::earliest_times ets{tbp};
+  tb_preprocessor tbp{tt};
+  tb_preprocessor::earliest_times ets{tbp};
 
   location_idx_t const li{23U};
   duration_t const time{42U};
@@ -210,8 +210,8 @@ TEST(earliest_times, same_time_less_bits) {
 TEST(earliest_times, same_time_other_bits) {
   // init
   timetable tt;
-  tb_preprocessing tbp{tt};
-  tb_preprocessing::earliest_times ets{tbp};
+  tb_preprocessor tbp{tt};
+  tb_preprocessor::earliest_times ets{tbp};
 
   location_idx_t const li{23U};
   duration_t const time{42U};
@@ -233,8 +233,8 @@ TEST(earliest_times, same_time_other_bits) {
 TEST(earliest_times, random) {
   // init
   timetable tt;
-  tb_preprocessing tbp{tt};
-  tb_preprocessing::earliest_times ets{tbp};
+  tb_preprocessor tbp{tt};
+  tb_preprocessor::earliest_times ets{tbp};
 
   // fill params
   auto const num_updates = 100000U;
@@ -294,10 +294,10 @@ TEST(build_transfer_set, no_transfer) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
   EXPECT_EQ(0, tbp.n_transfers_);
 }
@@ -311,10 +311,10 @@ TEST(build_transfer_set, same_day_transfer) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
   EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers = tbp.ts_.at(0U, 1U);
@@ -337,10 +337,10 @@ TEST(build_transfer_set, from_long_transfer) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
   EXPECT_EQ(1, tbp.n_transfers_);
   auto const transfers = tbp.ts_.at(0U, 1U);
@@ -363,10 +363,10 @@ TEST(build_transfer_set, weekday_transfer) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
   EXPECT_EQ(1, tbp.n_transfers_);
   auto const transfers = tbp.ts_.at(0U, 1U);
@@ -389,10 +389,10 @@ TEST(build_transfer_set, daily_transfer) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
   EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers = tbp.ts_.at(0U, 1U);
@@ -415,10 +415,10 @@ TEST(build_transfer_set, earlier_stop_transfer) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
   EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers = tbp.ts_.at(0U, 4U);
@@ -441,10 +441,10 @@ TEST(build_transfer_set, earlier_transport_transfer) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
   EXPECT_EQ(1, tbp.n_transfers_);
   auto const& transfers = tbp.ts_.at(1U, 1U);
@@ -467,10 +467,10 @@ TEST(build_transfer_set, uturn_transfer) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
   // transfer reduction removes a transfer of the test case on its own
 #if defined(TB_PREPRO_UTURN_REMOVAL) || defined(TB_PREPRO_TRANSFER_REDUCTION)
@@ -521,10 +521,10 @@ TEST(build_transfer_set, unnecessary_transfer0) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   EXPECT_EQ(0, tbp.n_transfers_);
@@ -551,10 +551,10 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // run preprocessing
-  tbp.build_transfer_set();
+  tbp.build();
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   EXPECT_EQ(1, tbp.n_transfers_);
@@ -599,8 +599,8 @@ TEST(transfer_set, serialize_deserialize) {
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
-  tb_preprocessing tbp{tt};
-  tbp.build_transfer_set();
+  tb_preprocessor tbp{tt};
+  tbp.build();
 
   auto ts_buf = cista::serialize(tbp.ts_);
   auto const ts_des =
@@ -628,15 +628,15 @@ TEST(transfer_set, store_load) {
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
-  tb_preprocessing tbp{tt};
-  tbp.build_transfer_set();
+  tb_preprocessor tbp{tt};
+  tbp.build();
   tbp.store_transfer_set("test");
 
   timetable tt_loaded;
   tt.date_range_ = full_period();
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt_loaded);
   finalize(tt_loaded);
-  tb_preprocessing tbp_loaded{tt_loaded};
+  tb_preprocessor tbp_loaded{tt_loaded};
   tbp_loaded.load_transfer_set("test");
 
   ASSERT_EQ(tbp.ts_.size(), tbp_loaded.ts_.size());

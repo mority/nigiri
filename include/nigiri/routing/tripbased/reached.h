@@ -1,8 +1,9 @@
 #pragma once
 
 #include "nigiri/routing/pareto_set.h"
-#include "nigiri/routing/tripbased/tb.h"
-#include "nigiri/routing/tripbased/tb_preprocessing.h"
+#include "nigiri/routing/tripbased/bits.h"
+#include "nigiri/routing/tripbased/transport_segment.h"
+#include "nigiri/timetable.h"
 #include "nigiri/types.h"
 
 namespace nigiri::routing::tripbased {
@@ -19,8 +20,8 @@ struct reached_entry {
 
 struct reached {
   reached() = delete;
-  explicit reached(tb_preprocessing& tbp) : tbp_(tbp) {
-    data_.resize(tbp_.tt_.n_routes());
+  explicit reached(timetable const& tt) : tt_(tt) {
+    data_.resize(tt.n_routes());
   }
 
   void reset();
@@ -32,7 +33,7 @@ struct reached {
   std::uint16_t query(transport_segment_idx_t const,
                       std::uint16_t const n_transfers);
 
-  tb_preprocessing& tbp_;
+  timetable const& tt_;
 
   // reached stops per route
   std::vector<pareto_set<reached_entry>> data_;

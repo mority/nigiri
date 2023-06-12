@@ -1,4 +1,4 @@
-#include "nigiri/routing/tripbased/tb_query_queue.h"
+#include "nigiri/routing/tripbased/queue.h"
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "nigiri/routing/tripbased/tb.h"
-#include "nigiri/routing/tripbased/tb_query_reached.h"
+#include "nigiri/routing/tripbased/bits.h"
+#include "nigiri/routing/tripbased/reached.h"
 #include "nigiri/types.h"
 
 namespace nigiri::routing::tripbased {

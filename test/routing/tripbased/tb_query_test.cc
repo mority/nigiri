@@ -5,7 +5,7 @@
 #include "nigiri/loader/gtfs/load_timetable.h"
 #include "nigiri/loader/hrd/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
-#include "nigiri/routing/tripbased/tb_query.h"
+#include "nigiri/routing/tripbased/tb_query_engine.h"
 
 #include "../../loader/hrd/hrd_timetable.h"
 
@@ -31,7 +31,7 @@ TEST(tb_query, enqueue) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessing tbp{tt};
+  tb_preprocessor tbp{tt};
 
   // init query
   day_idx_t const base{5U};
@@ -39,7 +39,7 @@ TEST(tb_query, enqueue) {
   std::vector<bool> is_dest;
   std::vector<std::uint16_t> dist_to_dest;
   std::vector<std::uint16_t> lb;
-  tb_query tbq{tt, state, is_dest, dist_to_dest, lb, base};
+  tb_query_engine tbq{tt, state, is_dest, dist_to_dest, lb, base};
   state.q_.reset();
 
   transport_idx_t const tpi0{0U};
