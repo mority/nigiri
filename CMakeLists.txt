@@ -5,10 +5,10 @@ include(cmake/buildcache.cmake)
 include(cmake/pkg.cmake)
 
 option(NIGIRI_LINT "Run clang-tidy with the compiler." OFF)
-if(NIGIRI_LINT)
-  # clang-tidy will be run on all targets defined hereafter
-  include(cmake/clang-tidy.cmake)
-endif()
+if (NIGIRI_LINT)
+    # clang-tidy will be run on all targets defined hereafter
+    include(cmake/clang-tidy.cmake)
+endif ()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(nigiri-compile-options
@@ -29,7 +29,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
             -Wno-zero-as-null-pointer-constant
             -Wno-missing-noreturn
             -Wno-undefined-func-template
-            -Wno-unsafe-buffer-usage
+            #            -Wno-unsafe-buffer-usage
             -Werror)
 elseif (MSVC)
     set(nigiri-compile-options /WX)
@@ -40,13 +40,11 @@ else ()
             -Werror)
 endif ()
 
-find_package(OpenMP REQUIRED)
-
 # --- LIB ---
 file(GLOB_RECURSE nigiri-files src/*.cc)
 add_library(nigiri ${nigiri-files})
 target_include_directories(nigiri PUBLIC include)
-target_link_libraries(nigiri PUBLIC cista geo utl fmt date miniz date-tz wyhash unordered_dense OpenMP::OpenMP_CXX)
+target_link_libraries(nigiri PUBLIC cista geo utl fmt date miniz date-tz wyhash unordered_dense)
 target_compile_features(nigiri PUBLIC cxx_std_20)
 target_compile_options(nigiri PRIVATE ${nigiri-compile-options})
 
