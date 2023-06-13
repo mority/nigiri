@@ -36,61 +36,59 @@ struct tb_preprocessor {
 #endif
 
   //  preprocessor() = delete;
-  explicit tb_preprocessor(timetable& tt, day_idx_t sa_w_max = day_idx_t{1U})
-      : tt_(tt), sigma_w_max_(sa_w_max) {
+  explicit tb_preprocessor(timetable& tt,
+                           duration_t transfer_time_max = duration_t{1440U})
+      : tt_(tt), transfer_time_max_(transfer_time_max) {
+    {
+      auto const timer = scoped_timer("trip-based preprocessing: init");
 
-    // check system limits
-    assert(tt.bitfields_.size() <= kBitfieldIdxMax);
-    if (tt.bitfields_.size() > kBitfieldIdxMax) {
-      std::cerr << "WARNING: number of bitfields exceeds maximum value of "
-                   "bitfield index\n";
-    }
-    assert(tt.transport_route_.size() <= kTransportIdxMax);
-    if (tt.transport_route_.size() > kTransportIdxMax) {
-      std::cerr << "WARNING: number of transports exceeds maximum value of "
-                   "transport index\n";
-    }
-    for (auto const stop_seq : tt_.route_location_seq_) {
-      assert(stop_seq.size() <= kStopIdxMax);
-      if (stop_seq.size() > kStopIdxMax) {
-        std::cerr
-            << "WARNING: number of stops exceeds maximum value of stop index\n";
+      // check system limits
+      assert(tt.bitfields_.size() <= kBitfieldIdxMax);
+      if (tt.bitfields_.size() > kBitfieldIdxMax) {
+        std::cerr << "WARNING: number of bitfields exceeds maximum value of "
+                     "bitfield index\n";
       }
-    }
-    static_assert(kMaxDays <= kDayIdxMax);
-
-    // count elementary connections and longest route
-    for (route_idx_t route_idx{0U}; route_idx < tt_.route_location_seq_.size();
-         ++route_idx) {
-      num_el_con_ += (tt_.route_location_seq_[route_idx].size() - 1) *
-                     tt_.route_transport_ranges_[route_idx].size().v_;
-      if (route_max_length_ < tt_.route_location_seq_[route_idx].size()) {
-        route_max_length_ = tt_.route_location_seq_[route_idx].size();
+      assert(tt.transport_route_.size() <= kTransportIdxMax);
+      if (tt.transport_route_.size() > kTransportIdxMax) {
+        std::cerr << "WARNING: number of transports exceeds maximum value of "
+                     "transport index\n";
       }
-    }
+      for (auto const stop_seq : tt_.route_location_seq_) {
+        assert(stop_seq.size() <= kStopIdxMax);
+        if (stop_seq.size() > kStopIdxMax) {
+          std::cerr << "WARNING: number of stops exceeds maximum value of stop "
+                       "index\n";
+        }
+      }
+      static_assert(kMaxDays <= kDayIdxMax);
 
-    // init bitfields hashmap with bitfields that are already used by the
-    // timetable
-    for (bitfield_idx_t bfi{0U}; bfi < tt_.bitfields_.size();
-         ++bfi) {  // bfi: bitfield index
-      bitfield_to_bitfield_idx_.emplace(tt_.bitfields_[bfi], bfi);
-    }
+      // count elementary connections and longest route
+      for (route_idx_t route_idx{0U};
+           route_idx < tt_.route_location_seq_.size(); ++route_idx) {
+        num_el_con_ += (tt_.route_location_seq_[route_idx].size() - 1) *
+                       tt_.route_transport_ranges_[route_idx].size().v_;
+        if (route_max_length_ < tt_.route_location_seq_[route_idx].size()) {
+          route_max_length_ = tt_.route_location_seq_[route_idx].size();
+        }
+      }
 
-    // number of expected transfers
-    //    auto const num_exp_transfers = num_el_con_;
-    // reserve space for transfer set
-    //    std::cout << "Reserving " << num_exp_transfers * sizeof(transfer)
-    //              << " bytes for " << num_exp_transfers << " expected
-    //              transfers\n";
+      // init bitfields hashmap with bitfields that are already used by the
+      // timetable
+      for (bitfield_idx_t bfi{0U}; bfi < tt_.bitfields_.size();
+           ++bfi) {  // bfi: bitfield index
+        bitfield_to_bitfield_idx_.emplace(tt_.bitfields_[bfi], bfi);
+      }
+
+      // number of expected transfers
+      //    auto const num_exp_transfers = num_el_con_;
+      // reserve space for transfer set
+      //    std::cout << "Reserving " << num_exp_transfers * sizeof(transfer)
+      //              << " bytes for " << num_exp_transfers << " expected
+      //              transfers\n";
+    }
   }
 
   void build(transfer_set& ts);
-
-  static cista::wrapped<tb_preprocessor> read(cista::memory_holder&& mem);
-
-  void write(std::filesystem::path const& p) const;
-
-  void write(cista::memory_holder& mem) const;
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
@@ -109,10 +107,18 @@ struct tb_preprocessor {
   std::size_t route_max_length_ = 0U;
 
   // max. look-ahead
-  day_idx_t const sigma_w_max_{};
+  duration_t const transfer_time_max_;
 
   // the number of transfers found
   unsigned n_transfers_ = 0U;
 };
+
+static void build_transfer_set(timetable& tt, transfer_set& ts) {
+  {
+    auto const timer = scoped_timer("trip-based preprocessing");
+    tb_preprocessor tbp(tt);
+    tbp.build(ts);
+  }
+}
 
 }  // namespace nigiri::routing::tripbased

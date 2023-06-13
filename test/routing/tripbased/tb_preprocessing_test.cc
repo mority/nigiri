@@ -8,6 +8,7 @@
 #include "../../loader/hrd/hrd_timetable.h"
 
 #include "nigiri/routing/tripbased/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/transfer_set.h"
 #include "tb_preprocessing_test.h"
 
 #include "./test_data.h"
@@ -59,7 +60,7 @@ TEST(earliest_times, basic) {
   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
 
   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
 
   // update end
   location_idx_t const li_66{66U};
@@ -71,9 +72,9 @@ TEST(earliest_times, basic) {
   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
+  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
 
   // update inner
   location_idx_t const li_55{55U};
@@ -86,11 +87,11 @@ TEST(earliest_times, basic) {
   ASSERT_EQ(1, ets.location_idx_times_[li_55].size());
   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_110, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(bf_110, ets.location_idx_times_[li_55][0].bf_);
   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
+  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
 
   // update existing, addition, no overwrite
   duration_t const time_87{87U};
@@ -103,13 +104,13 @@ TEST(earliest_times, basic) {
   ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_100, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
   EXPECT_EQ(time_87, ets.location_idx_times_[li_55][1].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li_55][1].bf_idx_]);
+  EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
+  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
 
   // update existing, overwrite
   duration_t const time_86{86U};
@@ -120,13 +121,13 @@ TEST(earliest_times, basic) {
   ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_100, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
   EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li_55][1].bf_idx_]);
+  EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
+  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
 
   // update existing, overwrite
   duration_t const time_41{41U};
@@ -137,13 +138,13 @@ TEST(earliest_times, basic) {
   ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
   EXPECT_EQ(time_41, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_100, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
   EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li_55][1].bf_idx_]);
+  EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
+  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
 
   // update existing, overwrite
   duration_t const time_76{76U};
@@ -154,13 +155,13 @@ TEST(earliest_times, basic) {
   ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
   EXPECT_EQ(time_41, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_23][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_100, tt.bitfields_[ets.location_idx_times_[li_55][0].bf_idx_]);
+  EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
   EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li_55][1].bf_idx_]);
+  EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
   EXPECT_EQ(time_76, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li_66][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li_66][0].bf_);
 }
 
 TEST(earliest_times, same_time_more_bits) {
@@ -177,12 +178,12 @@ TEST(earliest_times, same_time_more_bits) {
   ets.update(li, time, bf_010);
   ASSERT_EQ(1, ets.location_idx_times_[li].size());
   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
+  EXPECT_EQ(bf_010, ets.location_idx_times_[li][0].bf_);
 
   ets.update(li, time, bf_111);
   ASSERT_EQ(1, ets.location_idx_times_[li].size());
   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
 }
 
 TEST(earliest_times, same_time_less_bits) {
@@ -199,12 +200,12 @@ TEST(earliest_times, same_time_less_bits) {
   ets.update(li, time, bf_111);
   ASSERT_EQ(1, ets.location_idx_times_[li].size());
   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
 
   ets.update(li, time, bf_101);
   ASSERT_EQ(1, ets.location_idx_times_[li].size());
   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
 }
 
 TEST(earliest_times, same_time_other_bits) {
@@ -222,12 +223,12 @@ TEST(earliest_times, same_time_other_bits) {
   ets.update(li, time, bf_010);
   ASSERT_EQ(1, ets.location_idx_times_[li].size());
   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_010, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
+  EXPECT_EQ(bf_010, ets.location_idx_times_[li][0].bf_);
 
   ets.update(li, time, bf_101);
   ASSERT_EQ(1, ets.location_idx_times_[li].size());
   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_111, tt.bitfields_[ets.location_idx_times_[li][0].bf_idx_]);
+  EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
 }
 
 TEST(earliest_times, random) {
@@ -269,12 +270,12 @@ TEST(earliest_times, random) {
     for (auto const& et : times) {
       // if it has at least one active day it must be the only entry for this
       // time
-      if (tt.bitfields_[et.bf_idx_].any()) {
+      if (et.bf_.any()) {
         EXPECT_EQ(time_set.end(), time_set.find(et.time_));
         time_set.emplace(et.time_);
       }
-      EXPECT_TRUE((bf_or & tt.bitfields_[et.bf_idx_]).none());
-      bf_or |= tt.bitfields_[et.bf_idx_];
+      EXPECT_TRUE((bf_or & et.bf_).none());
+      bf_or |= et.bf_;
       ++num_entries;
     }
   }
@@ -293,13 +294,11 @@ TEST(build_transfer_set, no_transfer) {
   load_timetable(loader_config{0}, src, no_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
-  EXPECT_EQ(0, tbp.n_transfers_);
+  EXPECT_EQ(0, ts.n_transfers_);
 }
 
 TEST(build_transfer_set, same_day_transfer) {
@@ -310,14 +309,12 @@ TEST(build_transfer_set, same_day_transfer) {
   load_timetable(loader_config{0}, src, same_day_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
-  EXPECT_EQ(1, tbp.n_transfers_);
-  auto const& transfers = tbp.ts_.at(0U, 1U);
+  EXPECT_EQ(1, ts.n_transfers_);
+  auto const& transfers = ts.at(0U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
@@ -336,14 +333,12 @@ TEST(build_transfer_set, from_long_transfer) {
   load_timetable(loader_config{0}, src, long_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
-  EXPECT_EQ(1, tbp.n_transfers_);
-  auto const transfers = tbp.ts_.at(0U, 1U);
+  EXPECT_EQ(1, ts.n_transfers_);
+  auto const transfers = ts.at(0U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
@@ -362,14 +357,12 @@ TEST(build_transfer_set, weekday_transfer) {
   load_timetable(loader_config{0}, src, weekday_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
-  EXPECT_EQ(1, tbp.n_transfers_);
-  auto const transfers = tbp.ts_.at(0U, 1U);
+  EXPECT_EQ(1, ts.n_transfers_);
+  auto const transfers = ts.at(0U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
@@ -388,14 +381,12 @@ TEST(build_transfer_set, daily_transfer) {
   load_timetable(loader_config{0}, src, daily_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
-  EXPECT_EQ(1, tbp.n_transfers_);
-  auto const& transfers = tbp.ts_.at(0U, 1U);
+  EXPECT_EQ(1, ts.n_transfers_);
+  auto const& transfers = ts.at(0U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
@@ -414,14 +405,12 @@ TEST(build_transfer_set, earlier_stop_transfer) {
   load_timetable(loader_config{0}, src, earlier_stop_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
-  EXPECT_EQ(1, tbp.n_transfers_);
-  auto const& transfers = tbp.ts_.at(0U, 4U);
+  EXPECT_EQ(1, ts.n_transfers_);
+  auto const& transfers = ts.at(0U, 4U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
   EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
@@ -440,14 +429,12 @@ TEST(build_transfer_set, earlier_transport_transfer) {
   load_timetable(loader_config{0}, src, earlier_transport_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
-  EXPECT_EQ(1, tbp.n_transfers_);
-  auto const& transfers = tbp.ts_.at(1U, 1U);
+  EXPECT_EQ(1, ts.n_transfers_);
+  auto const& transfers = ts.at(1U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
   bitfield const bf_exp{"100000"};
@@ -466,23 +453,21 @@ TEST(build_transfer_set, uturn_transfer) {
   load_timetable(loader_config{0}, src, uturn_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
   // transfer reduction removes a transfer of the test case on its own
 #if defined(TB_PREPRO_UTURN_REMOVAL) || defined(TB_PREPRO_TRANSFER_REDUCTION)
-  EXPECT_EQ(1, tbp.n_transfers_);
+  EXPECT_EQ(1, ts.n_transfers_);
 #else
-  EXPECT_EQ(2, tbp.n_transfers_);
+  EXPECT_EQ(2, ts.n_transfers_);
 #endif
 
   bitfield const bf_exp{"100000"};
 
   // the earlier transfer
-  auto const& transfers0 = tbp.ts_.at(0U, 1U);
+  auto const& transfers0 = ts.at(0U, 1U);
   // transfer reduction on its own removes the earlier transfer instead of the
   // U-turn transfer
 #if defined(TB_PREPRO_TRANSFER_REDUCTION) && !defined(TB_PREPRO_UTURN_REMOVAL)
@@ -498,7 +483,7 @@ TEST(build_transfer_set, uturn_transfer) {
 #endif
 
   // the U-turn transfer
-  auto const& transfers1 = tbp.ts_.at(0U, 2U);
+  auto const& transfers1 = ts.at(0U, 2U);
 #ifdef TB_PREPRO_UTURN_REMOVAL
   EXPECT_EQ(0, transfers1.size());
 #else
@@ -520,17 +505,15 @@ TEST(build_transfer_set, unnecessary_transfer0) {
   load_timetable(loader_config{0}, src, unnecessary0_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  EXPECT_EQ(0, tbp.n_transfers_);
+  EXPECT_EQ(0, ts.n_transfers_);
 #else
-  EXPECT_EQ(1, tbp.n_transfers_);
-  auto const& transfers0 = tbp.ts_.at(0U, 1U);
+  EXPECT_EQ(1, ts.n_transfers_);
+  auto const& transfers0 = ts.at(0U, 1U);
   ASSERT_EQ(1, transfers0.size());
   auto const& t = transfers0[0];
   bitfield const bf_exp{"100000"};
@@ -550,16 +533,14 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   load_timetable(loader_config{0}, src, unnecessary1_transfer_files(), tt);
   finalize(tt);
 
-  // init preprocessing
-  tb_preprocessor tbp{tt};
-
   // run preprocessing
-  tbp.build();
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  EXPECT_EQ(1, tbp.n_transfers_);
+  EXPECT_EQ(1, ts.n_transfers_);
 
-  auto const& transfers0 = tbp.ts_.at(0U, 2U);
+  auto const& transfers0 = ts.at(0U, 2U);
   ASSERT_EQ(1, transfers0.size());
   auto const& t = transfers0[0];
   bitfield const bf_exp{"100000"};
@@ -569,9 +550,9 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   EXPECT_EQ(0, t.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t.get_bitfield_idx()]);
 #else
-  EXPECT_EQ(2, tbp.n_transfers_);
+  EXPECT_EQ(2, ts.n_transfers_);
 
-  auto const& transfers0 = tbp.ts_.at(0U, 1U);
+  auto const& transfers0 = ts.at(0U, 1U);
   ASSERT_EQ(1, transfers0.size());
   auto const& t0 = transfers0[0];
   bitfield const bf_exp{"100000"};
@@ -581,7 +562,7 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   EXPECT_EQ(0, t0.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t0.get_bitfield_idx()]);
 
-  auto const& transfers1 = tbp.ts_.at(0U, 2U);
+  auto const& transfers1 = ts.at(0U, 2U);
   ASSERT_EQ(1, transfers1.size());
   auto const& t1 = transfers1[0];
   EXPECT_EQ(transport_idx_t{1U}, t1.transport_idx_to_);
@@ -590,70 +571,4 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   EXPECT_EQ(0, t1.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t1.get_bitfield_idx()]);
 #endif
-}
-
-TEST(transfer_set, serialize_deserialize) {
-  constexpr auto const src = source_idx_t{0U};
-  timetable tt;
-  tt.date_range_ = full_period();
-  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
-  finalize(tt);
-
-  tb_preprocessor tbp{tt};
-  tbp.build();
-
-  auto ts_buf = cista::serialize(tbp.ts_);
-  auto const ts_des =
-      cista::deserialize<nvec<std::uint32_t, transfer, 2>>(ts_buf);
-
-  ASSERT_EQ(tbp.ts_.size(), ts_des->size());
-  for (auto t = 0U; t != ts_des->size(); ++t) {
-    ASSERT_EQ(tbp.ts_.size(t), ts_des->size(t));
-    for (auto s = 0U; s != ts_des->size(t); ++s) {
-      ASSERT_EQ(tbp.ts_.at(t, s).size(), ts_des->at(t, s).size());
-      auto const& transfers_expected = tbp.ts_.at(t, s);
-      auto const& transfers_actual = ts_des->at(t, s);
-      for (auto i = 0U; i != transfers_expected.size(); ++i) {
-        EXPECT_TRUE(
-            transfers_equal(transfers_expected[i], transfers_actual[i]));
-      }
-    }
-  }
-}
-
-TEST(transfer_set, store_load) {
-  constexpr auto const src = source_idx_t{0U};
-  timetable tt;
-  tt.date_range_ = full_period();
-  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
-  finalize(tt);
-
-  tb_preprocessor tbp{tt};
-  tbp.build();
-  tbp.store_transfer_set("test");
-
-  timetable tt_loaded;
-  tt.date_range_ = full_period();
-  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt_loaded);
-  finalize(tt_loaded);
-  tb_preprocessor tbp_loaded{tt_loaded};
-  tbp_loaded.load_transfer_set("test");
-
-  ASSERT_EQ(tbp.ts_.size(), tbp_loaded.ts_.size());
-  for (auto t = 0U; t != tbp_loaded.ts_.size(); ++t) {
-    ASSERT_EQ(tbp.ts_.size(t), tbp_loaded.ts_.size(t));
-    for (auto s = 0U; s != tbp_loaded.ts_.size(t); ++s) {
-      ASSERT_EQ(tbp.ts_.at(t, s).size(), tbp_loaded.ts_.at(t, s).size());
-      auto const& transfers_expected = tbp.ts_.at(t, s);
-      auto const& transfers_actual = tbp_loaded.ts_.at(t, s);
-      for (auto i = 0U; i != transfers_expected.size(); ++i) {
-        EXPECT_TRUE(
-            transfers_equal(transfers_expected[i], transfers_actual[i]));
-      }
-    }
-  }
-
-  // clean up
-  std::filesystem::remove("test.transfer_set");
-  std::filesystem::remove("test.bitfields");
 }

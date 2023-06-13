@@ -159,7 +159,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
         for (auto i{seg.stop_idx_start_ + 1U}; i <= seg.stop_idx_end_; ++i) {
           // get transfers for this transport/stop
           auto const& transfers =
-              state_.ts_.transfers_.at(seg.get_transport_idx().v_, i);
+              state_.ts_.data_.at(seg.get_transport_idx().v_, i);
           // iterate transfers from this stop
           for (auto const& transfer_cur : transfers) {
             // bitset specifying the days on which the transfer is possible
@@ -312,7 +312,7 @@ void tb_query_engine::reconstruct(query const& q, journey& j) {
            stop_idx <= tp_seg.stop_idx_end_; ++stop_idx) {
         // get transfers for this transport/stop
         auto const& transfers =
-            state_.ts_.transfers_.at(tp_seg.get_transport_idx().v_, stop_idx);
+            state_.ts_.data_.at(tp_seg.get_transport_idx().v_, stop_idx);
         // iterate transfers for this stop
         for (auto const& transfer_cur : transfers) {
           if (transfer_cur.get_transport_idx_to() ==

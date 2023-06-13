@@ -89,7 +89,7 @@ void tb_preprocessor::build(transfer_set& ts) {
       .in_high(tt_.transport_traffic_days_.size());
 
   {
-    auto const timer = scoped_timer("building transfer set");
+    auto const timer = scoped_timer("trip-based preprocessing: transfer set");
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
     earliest_times ets_arr_(*this);
@@ -399,7 +399,7 @@ void tb_preprocessor::build(transfer_set& ts) {
       }
 
       // add transfers of this transport to the transfer set
-      ts.transfers_.emplace_back(it_range{
+      ts.data_.emplace_back(it_range{
           transfers.cbegin(),
           transfers.cbegin() + static_cast<std::int64_t>(stop_seq_t.size())});
       progress_tracker->increment();
@@ -409,11 +409,11 @@ void tb_preprocessor::build(transfer_set& ts) {
   std::cout << "Found " << n_transfers_ << " transfers, occupying "
             << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
 
-  ts.stats_.num_el_con_ = num_el_con_;
-  ts.stats_.route_max_length_ = route_max_length_;
-  ts.stats_.sigma_w_max_ = sigma_w_max_;
-  ts.stats_.n_transfers_ = n_transfers_;
-  ts.stats_.ready_ = true;
+  ts.num_el_con_ = num_el_con_;
+  ts.route_max_length_ = route_max_length_;
+  ts.transfer_time_max_ = transfer_time_max_;
+  ts.n_transfers_ = n_transfers_;
+  ts.ready_ = true;
 }
 
 }  // namespace nigiri::routing::tripbased
