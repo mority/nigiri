@@ -113,7 +113,7 @@ struct tb_preprocessor {
   unsigned n_transfers_ = 0U;
 };
 
-static void build_transfer_set(timetable& tt, transfer_set& ts) {
+static inline void build_transfer_set(timetable& tt, transfer_set& ts) {
   {
     auto const timer = scoped_timer("trip-based preprocessing");
     tb_preprocessor tbp(tt);

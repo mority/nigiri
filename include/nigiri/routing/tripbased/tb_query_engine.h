@@ -5,7 +5,6 @@
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
-#include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "nigiri/routing/tripbased/tb_query_state.h"
 
 #define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()

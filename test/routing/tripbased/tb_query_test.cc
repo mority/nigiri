@@ -31,11 +31,12 @@ TEST(tb_query, enqueue) {
   finalize(tt);
 
   // init preprocessing
-  tb_preprocessor tbp{tt};
+  transfer_set ts;
+  build_transfer_set(tt, ts);
 
   // init query
   day_idx_t const base{5U};
-  tb_query_state state{tbp, base};
+  tb_query_state state{tt, ts, base};
   std::vector<bool> is_dest;
   std::vector<std::uint16_t> dist_to_dest;
   std::vector<std::uint16_t> lb;

@@ -127,21 +127,27 @@ void tb_preprocessor::build(transfer_set& ts) {
 #else
       for (auto i = 1U; i != stop_seq_t.size(); ++i) {
 #endif
+        // skip stop if exiting is not allowed
+        if (!stop{stop_seq_t[i]}.out_allowed()) {
+          continue;
+        }
 
         // the location index from which we are transferring
         auto const p_t_i = stop{stop_seq_t[i]}.location_idx();
 
-        // delta at from stop
+        // delta for tau_arr(t,i)
         auto const tau_arr_t_i_delta = tt_.event_mam(t, i, event_type::kArr);
 
-        // duration at from stop
-        auto const tau_arr_t_i = tau_arr_t_i_delta.as_duration();
+        // time of day for tau_arr(t,i)
+        auto const alpha = duration_t{tau_arr_t_i_delta.mam()};
 
         // shift amount due to travel time of the transport we are
         // transferring from
-        auto const sigma_t = day_idx_t{tau_arr_t_i_delta.days()};
+        auto const sigma_t = tau_arr_t_i_delta.days();
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
+        // duration for tau_arr(t,i)
+        auto const tau_arr_t_i = tau_arr_t_i_delta.as_duration();
         // the bitfield of the transport we are transferring from
         auto const& beta_t = tt_.bitfields_[tt_.transport_traffic_days_[t]];
         // init the earliest times data structure
@@ -152,26 +158,17 @@ void tb_preprocessor::build(transfer_set& ts) {
         }
 #endif
 
-        auto handle_fp = [&tau_arr_t_i, &sigma_t, this, &t, &i, &route_t,
-                          &transfers
+        auto handle_fp = [&sigma_t, this, &t, &i, &route_t, &transfers, &alpha
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                           ,
-                          &ets_arr_, &ets_ch_
+                          &tau_arr_t_i, &ets_arr_, &ets_ch_
 #endif
         ](footpath const& fp) {
           // q: location index of destination of footpath
           auto const q = fp.target();
 
-          auto const tau_alpha = tau_arr_t_i + fp.duration();
-
-          // tau_alpha_delta: arrival time at stop_to in relation to t
-          auto const tau_alpha_delta = delta{tau_alpha};
-
-          // time of day when arriving a stop q
-          auto const alpha = duration_t{tau_alpha_delta.mam()};
-
-          // sigma_fp: shift amount footpath
-          auto const sigma_fp = day_idx_t{tau_alpha_delta.days()} - sigma_t;
+          // arrival at stop q in alpha time scale
+          auto const tau_q = delta{alpha + fp.duration()};
 
           // iterate over lines serving stop_to
           auto const routes_at_q = tt_.location_routes_[q];
@@ -188,10 +185,9 @@ void tb_preprocessor::build(transfer_set& ts) {
               auto const p_u_j =
                   stop{tt_.route_location_seq_[route_u][j]}.location_idx();
 
-              if (p_u_j == q) {
-
-                // sigma_w: shift amount due to waiting for connection
-                day_idx_t sigma_w{0U};
+              // stop must match and entering must be allowed
+              if (p_u_j ==
+                  q&& stop{tt_.route_location_seq_[route_u][j]}.in_allowed()) {
 
                 // departure times of transports of route route_u at stop j
                 auto const event_times =
@@ -199,33 +195,45 @@ void tb_preprocessor::build(transfer_set& ts) {
 
                 // find first departure at or after a
                 // departure time of current transport_to
-                auto tau_dep_u_j_delta = std::lower_bound(
-                    event_times.begin(), event_times.end(), tau_alpha_delta,
+                auto tau_dep_u_j = std::lower_bound(
+                    event_times.begin(), event_times.end(), tau_q,
                     [&](auto&& x, auto&& y) { return x.mam() < y.mam(); });
 
+                // shift amount during transfer
+                auto sigma = tau_q.days();
+
                 // no departure on this day at or after a
-                if (tau_dep_u_j_delta == event_times.end()) {
-                  ++sigma_w;  // start looking on the following day
-                  tau_dep_u_j_delta =
+                if (tau_dep_u_j == event_times.end()) {
+                  ++sigma;  // start looking on the following day
+                  tau_dep_u_j =
                       event_times.begin();  // with the earliest transport
                 }
 
-                // omega: days of t that still require connection
+                // days of t that still require connection
                 bitfield omega = tt_.bitfields_[tt_.transport_traffic_days_[t]];
+
+                // active days of current transfer
+                bitfield theta;
 
                 // check if any bit in omega is set to 1 and maximum waiting
                 // time not exceeded
-                while (omega.any() && sigma_w <= sigma_w_max_) {
+                while (omega.any()) {
+                  // init theta
+                  theta = omega;
 
                   // departure time of current transport in relation to time
                   // tau_alpha_delta
                   auto const tau_dep_alpha_u_j =
-                      duration_t{tau_dep_u_j_delta->mam()} +
-                      duration_t{sigma_w.v_ * 1440};
+                      duration_t{tau_dep_u_j->mam() + sigma * 1440};
+
+                  // check if max transfer time is exceeded
+                  if (tau_dep_alpha_u_j - alpha > transfer_time_max_) {
+                    break;
+                  }
 
                   // offset from begin of tp_to interval
                   auto const k =
-                      std::distance(event_times.begin(), tau_dep_u_j_delta);
+                      std::distance(event_times.begin(), tau_dep_u_j);
 
                   // transport index of transport that we transfer to
                   auto const u =
@@ -242,31 +250,27 @@ void tb_preprocessor::build(transfer_set& ts) {
                                       (tt_.event_mam(u, j, event_type::kDep)
                                            .as_duration() -
                                        tt_.event_mam(u, i, event_type::kArr)
-                                           .as_duration()) <=
-                                  alpha - fp.duration()));
+                                           .as_duration()) <
+                                  alpha));
 
                   if (req) {
-                    // shift amount due to number of times transport_to passed
+                    // shift amount due to number of times transport u passed
                     // midnight
-                    auto const sigma_u = day_idx_t{tau_dep_u_j_delta->days()};
+                    auto const sigma_u = tau_dep_u_j->days();
 
                     // total shift amount
-                    auto const sigma =
-                        static_cast<int>(sigma_u.v_) -
-                        static_cast<int>(sigma_t.v_ + sigma_fp.v_ + sigma_w.v_);
+                    auto const sigma_total = sigma_u - sigma_t - sigma;
 
                     // bitfield transport to
                     auto const& beta_u =
                         tt_.bitfields_[tt_.transport_traffic_days_[u]];
 
-                    // bitfield transfer from
-                    auto theta = omega;
-
                     // align bitfields and perform AND
-                    if (sigma < 0) {
-                      theta &= beta_u >> static_cast<unsigned>(-1 * sigma);
+                    if (sigma_total < 0) {
+                      theta &=
+                          beta_u >> static_cast<unsigned>(-1 * sigma_total);
                     } else {
-                      theta &= beta_u << static_cast<unsigned>(sigma);
+                      theta &= beta_u << static_cast<unsigned>(sigma_total);
                     }
 
                     // check for match
@@ -279,7 +283,7 @@ void tb_preprocessor::build(transfer_set& ts) {
 #ifdef TB_PREPRO_UTURN_REMOVAL
                       auto const check_uturn = [&j, this, &route_u, &i,
                                                 &route_t, &tau_dep_alpha_u_j,
-                                                &u, &alpha, &fp, &t]() {
+                                                &u, &alpha, &t]() {
                         // check if next stop for u and previous stop for
                         // t exists
                         if (j + 1 < tt_.route_location_seq_[route_u].size() &&
@@ -301,15 +305,14 @@ void tb_preprocessor::build(transfer_set& ts) {
                                  tt_.event_mam(u, j, event_type::kDep)
                                      .as_duration());
                             auto const tau_arr_alpha_t_prev =
-                                alpha - fp.duration() -
-                                (tt_.event_mam(t, i, event_type::kArr)
-                                     .as_duration() -
-                                 tt_.event_mam(t, i, event_type::kArr)
-                                     .as_duration());
-                            auto const transfer_time =
+                                alpha - (tt_.event_mam(t, i, event_type::kArr)
+                                             .as_duration() -
+                                         tt_.event_mam(t, i, event_type::kArr)
+                                             .as_duration());
+                            auto const min_change_time =
                                 tt_.locations_
                                     .transfer_time_[p_t_prev.location_idx()];
-                            return tau_arr_alpha_t_prev + transfer_time <=
+                            return tau_arr_alpha_t_prev + min_change_time <=
                                    tau_dep_alpha_u_next;
                           }
                         }
@@ -318,15 +321,14 @@ void tb_preprocessor::build(transfer_set& ts) {
                       if (!check_uturn()) {
 #endif
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-                        auto const check_impr = [&tau_alpha_delta, &alpha,
-                                                 &tau_dep_alpha_u_j, &j, this,
-                                                 &route_u, &u,
-                                                 &tau_dep_u_j_delta, &theta,
-                                                 &ets_arr_, &ets_ch_]() {
+                        auto const check_impr = [&alpha, &tau_dep_alpha_u_j, &j,
+                                                 this, &route_u, &u,
+                                                 &tau_dep_u_j, &theta,
+                                                 &ets_arr_, &ets_ch_,
+                                                 &tau_arr_t_i]() {
                           bool impr = false;
                           auto const tau_dep_t_u_j =
-                              tau_alpha_delta.as_duration() +
-                              (tau_dep_alpha_u_j - alpha);
+                              tau_arr_t_i + (tau_dep_alpha_u_j - alpha);
                           for (auto l = j + 1;
                                l != tt_.route_location_seq_[route_u].size();
                                ++l) {
@@ -334,7 +336,7 @@ void tb_preprocessor::build(transfer_set& ts) {
                                 tau_dep_t_u_j +
                                 (tt_.event_mam(u, l, event_type::kArr)
                                      .as_duration() -
-                                 tau_dep_u_j_delta->as_duration());
+                                 tau_dep_u_j->as_duration());
                             auto const p_u_l =
                                 stop{tt_.route_location_seq_[route_u][l]}
                                     .location_idx();
@@ -359,8 +361,9 @@ void tb_preprocessor::build(transfer_set& ts) {
                           // transfer
                           auto const theta_idx = get_or_create_bfi(theta);
                           // add transfer to transfers of this transport
-                          transfers[i].emplace_back(transfer{
-                              theta_idx.v_, u.v_, j, (sigma_fp + sigma_w).v_});
+                          transfers[i].emplace_back(
+                              transfer{theta_idx.v_, u.v_, j,
+                                       static_cast<std::uint64_t>(sigma)});
                           ++n_transfers_;
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                         }
@@ -373,15 +376,15 @@ void tb_preprocessor::build(transfer_set& ts) {
 
                   // prep next iteration
                   // is this the last transport of the day?
-                  if (std::next(tau_dep_u_j_delta) == event_times.end()) {
+                  if (std::next(tau_dep_u_j) == event_times.end()) {
 
                     // passing midnight
-                    ++sigma_w;
+                    ++sigma;
 
                     // start with the earliest transport on the next day
-                    tau_dep_u_j_delta = event_times.begin();
+                    tau_dep_u_j = event_times.begin();
                   } else {
-                    ++tau_dep_u_j_delta;
+                    ++tau_dep_u_j;
                   }
                 }
               }

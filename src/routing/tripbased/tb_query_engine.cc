@@ -19,11 +19,9 @@ void tb_query_engine::execute(unixtime_t const start_time,
   // fill Q_0
   auto create_q0_entry = [&tau, this, &d](footpath const& fp) {
     // arrival time after walking the footpath
-    auto const tau_alpha = tau + fp.duration();
-    // arrival time after walking the footpath
-    auto const tau_alpha_delta = delta{tau_alpha};
+    auto const alpha = delta{tau + fp.duration()};
     // shift amount due to walking the footpath
-    auto const sigma_fp = day_idx_t{tau_alpha_delta.days()};
+    auto sigma = day_idx_t{alpha.days()};
     // iterate routes at target stop of footpath
     for (auto const route_idx : tt_.location_routes_[fp.target()]) {
       // iterate stop sequence of route, skip last stop
@@ -32,35 +30,31 @@ void tb_query_engine::execute(unixtime_t const start_time,
         auto const q =
             stop{tt_.route_location_seq_[route_idx][i]}.location_idx();
         if (q == fp.target()) {
-          // shift amount due to waiting for connection
-          day_idx_t sigma_w{0U};
           // departure times of this route at this q
           auto const event_times =
               tt_.event_times_at_stop(route_idx, i, event_type::kDep);
           // iterator to departure time of connecting transport at this
           // q
-          auto tau_dep_t_i_delta = std::lower_bound(
-              event_times.begin(), event_times.end(), tau_alpha_delta,
+          auto tau_dep_t_i = std::lower_bound(
+              event_times.begin(), event_times.end(), alpha,
               [&](auto&& x, auto&& y) { return x.mam() < y.mam(); });
           // no departure found on the day of alpha
-          if (tau_dep_t_i_delta == event_times.end()) {
+          if (tau_dep_t_i == event_times.end()) {
             // start looking at the following day
-            ++sigma_w;
-            tau_dep_t_i_delta = event_times.begin();
+            ++sigma;
+            tau_dep_t_i = event_times.begin();
           }
           // iterate departures until maximum waiting time is reached
-          while (sigma_w <= state_.ts_.stats_.sigma_w_max_) {
+          while (sigma <= 1) {
             // shift amount due to travel time of transport
-            auto const sigma_t = day_idx_t{tau_dep_t_i_delta->days()};
+            auto const sigma_t = day_idx_t{tau_dep_t_i->days()};
             // day index of the transport segment
-            auto const d_seg = d + sigma_fp + sigma_w - sigma_t;
+            auto const d_seg = d + sigma - sigma_t;
             // offset of connecting transport in route_transport_ranges
-            auto const k =
-                std::distance(event_times.begin(), tau_dep_t_i_delta);
+            auto const k = static_cast<std::size_t>(
+                std::distance(event_times.begin(), tau_dep_t_i));
             // transport_idx_t of the connecting transport
-            auto const t =
-                tt_.route_transport_ranges_[route_idx]
-                                           [static_cast<std::size_t>(k)];
+            auto const t = tt_.route_transport_ranges_[route_idx][k];
             // bitfield of the connecting transport
             auto const& beta_t = tt_.bitfields_[tt_.transport_traffic_days_[t]];
 
@@ -70,12 +64,12 @@ void tb_query_engine::execute(unixtime_t const start_time,
               break;
             }
             // passing midnight?
-            if (tau_dep_t_i_delta + 1 == event_times.end()) {
-              ++sigma_w;
+            if (tau_dep_t_i + 1 == event_times.end()) {
+              ++sigma;
               // start with the earliest transport on the next day
-              tau_dep_t_i_delta = event_times.begin();
+              tau_dep_t_i = event_times.begin();
             } else {
-              ++tau_dep_t_i_delta;
+              ++tau_dep_t_i;
             }
           }
         }
