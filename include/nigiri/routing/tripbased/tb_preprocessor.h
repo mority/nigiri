@@ -132,7 +132,7 @@ static inline std::size_t hash_tt(timetable const& tt) {
   boost::hash_combine(res, tt.date_range_.to_.time_since_epoch().count());
   boost::hash_combine(res, tt.trip_id_to_idx_.size());
   boost::hash_combine(res, tt.trip_ids_.size());
-  boost::hash_combine(res, tt.source_file_names_);
+  boost::hash_combine(res, tt.source_file_names_.size());
   boost::hash_combine(res, tt.route_transport_ranges_.size());
   boost::hash_combine(res, tt.route_stop_times_.size());
   boost::hash_combine(res, tt.transport_traffic_days_.size());
@@ -141,7 +141,7 @@ static inline std::size_t hash_tt(timetable const& tt) {
   boost::hash_combine(res, tt.attributes_.size());
   boost::hash_combine(res, tt.attribute_combinations_.size());
   boost::hash_combine(res, tt.providers_.size());
-  boost::hash_combine(res, tt.trip_direction_strings_);
+  boost::hash_combine(res, tt.trip_direction_strings_.size());
   boost::hash_combine(res, tt.trip_directions_.size());
 
   int num_bf = 0;
