@@ -596,6 +596,7 @@ TEST(build_transfer_set, serialization) {
           cista::file{ts_file_name.string().c_str(), "r"}.content()}));
 
   EXPECT_EQ((*ts_loaded)->tt_hash_, hash_tt(tt));
+  EXPECT_EQ((*ts)->hash(), (*ts_loaded)->hash());
 
   ASSERT_EQ((*ts)->data_.size(), (*ts_loaded)->data_.size());
   for (std::uint32_t t = 0U; t != (*ts)->data_.size(); ++t) {

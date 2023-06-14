@@ -19,6 +19,8 @@ struct transfer_set {
   void write(std::filesystem::path const&) const;
   static cista::wrapped<transfer_set> read(cista::memory_holder&&);
 
+  std::size_t hash();
+
   // hash of the timetable for which the transfer set was built
   std::size_t tt_hash_ = 0U;
   // the number of elementary connections in the timetable
