@@ -38,7 +38,7 @@ struct tb_query_state {
     q_.segments_.reserve(10000);
   }
 
-  // should contain a built transfer set
+  // transfer set built by preprocessor
   transfer_set const& ts_;
 
   // base day of the query

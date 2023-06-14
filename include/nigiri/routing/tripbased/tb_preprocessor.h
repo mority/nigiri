@@ -1,5 +1,6 @@
 #pragma once
 
+#include "boost/functional/hash.hpp"
 #include "nigiri/timetable.h"
 #include <filesystem>
 #include "bits.h"
@@ -119,6 +120,32 @@ static inline void build_transfer_set(timetable& tt, transfer_set& ts) {
     tb_preprocessor tbp(tt);
     tbp.build(ts);
   }
+}
+
+static inline std::size_t hash_tt(timetable const& tt) {
+  std::size_t res{0U};
+
+  // locations
+  boost::hash_combine(res, tt.locations_.location_id_to_idx_.size());
+  boost::hash_combine(res, tt.locations_.names_.size());
+  boost::hash_combine(res, tt.locations_.timezones_.size());
+  boost::hash_combine(res, tt.date_range_.from_.time_since_epoch().count());
+  boost::hash_combine(res, tt.date_range_.to_.time_since_epoch().count());
+  boost::hash_combine(res, tt.trip_id_to_idx_.size());
+  boost::hash_combine(res, tt.trip_ids_.size());
+  boost::hash_combine(res, tt.source_file_names_);
+  boost::hash_combine(res, tt.route_transport_ranges_.size());
+  boost::hash_combine(res, tt.route_stop_times_.size());
+  boost::hash_combine(res, tt.transport_traffic_days_.size());
+  boost::hash_combine(res, tt.bitfields_.size());
+  boost::hash_combine(res, tt.merged_trips_.size());
+  boost::hash_combine(res, tt.attributes_.size());
+  boost::hash_combine(res, tt.attribute_combinations_.size());
+  boost::hash_combine(res, tt.providers_.size());
+  boost::hash_combine(res, tt.trip_direction_strings_);
+  boost::hash_combine(res, tt.trip_directions_.size());
+
+  return res;
 }
 
 }  // namespace nigiri::routing::tripbased

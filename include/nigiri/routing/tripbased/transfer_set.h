@@ -19,15 +19,17 @@ struct transfer_set {
   void write(std::filesystem::path const&) const;
   static cista::wrapped<transfer_set> read(cista::memory_holder&&);
 
+  // hash of the timetable for which the transfer set was built
+  std::size_t tt_hash_ = 0U;
   // the number of elementary connections in the timetable
   unsigned num_el_con_ = 0U;
   // length of the longest route in the timetable
   std::size_t route_max_length_ = 0U;
-  // max. transfer time
+  // max. transfer time used during preprocessing
   duration_t transfer_time_max_{0U};
   // the number of transfers found
   unsigned n_transfers_ = 0U;
-  // if build was successful
+  // if building successfully finished
   bool ready_{false};
 
   // the transfer set

@@ -412,6 +412,7 @@ void tb_preprocessor::build(transfer_set& ts) {
   std::cout << "Found " << n_transfers_ << " transfers, occupying "
             << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
 
+  ts.tt_hash_ = hash_tt(tt_);
   ts.num_el_con_ = num_el_con_;
   ts.route_max_length_ = route_max_length_;
   ts.transfer_time_max_ = transfer_time_max_;
