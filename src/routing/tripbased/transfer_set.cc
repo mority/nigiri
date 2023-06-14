@@ -52,8 +52,11 @@ cista::wrapped<transfer_set> transfer_set::read(cista::memory_holder&& mem) {
 std::size_t transfer_set::hash() {
   std::size_t seed = 0;
 
+  boost::hash_combine(seed, data_.size());
   for (std::uint32_t t = 0; t != data_.size(); ++t) {
+    boost::hash_combine(seed, data_.size(t));
     for (std::uint32_t l = 0; l != data_.size(t); ++l) {
+      boost::hash_combine(seed, data_.at(t, l).size());
       for (auto const& transfer : data_.at(t, l)) {
         boost::hash_combine(seed, transfer.value());
       }
