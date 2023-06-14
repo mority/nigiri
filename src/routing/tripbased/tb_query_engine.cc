@@ -20,8 +20,6 @@ void tb_query_engine::execute(unixtime_t const start_time,
   auto create_q0_entry = [&tau, this, &d](footpath const& fp) {
     // arrival time after walking the footpath
     auto const alpha = delta{tau + fp.duration()};
-    // shift amount due to walking the footpath
-    auto sigma = day_idx_t{alpha.days()};
     // iterate routes at target stop of footpath
     for (auto const route_idx : tt_.location_routes_[fp.target()]) {
       // iterate stop sequence of route, skip last stop
@@ -38,6 +36,8 @@ void tb_query_engine::execute(unixtime_t const start_time,
           auto tau_dep_t_i = std::lower_bound(
               event_times.begin(), event_times.end(), alpha,
               [&](auto&& x, auto&& y) { return x.mam() < y.mam(); });
+          // shift amount due to walking the footpath
+          auto sigma = day_idx_t{alpha.days()};
           // no departure found on the day of alpha
           if (tau_dep_t_i == event_times.end()) {
             // start looking at the following day
