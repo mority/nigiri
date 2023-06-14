@@ -3,7 +3,6 @@
 #include "boost/functional/hash.hpp"
 #include "nigiri/timetable.h"
 #include <filesystem>
-#include <ranges>
 #include "bits.h"
 #include "transfer.h"
 #include "transfer_set.h"
@@ -146,8 +145,8 @@ static inline std::size_t hash_tt(timetable const& tt) {
   boost::hash_combine(res, tt.trip_directions_.size());
 
   int num_bf = 0;
-  for (auto const& bitfield : std::ranges::reverse_view(tt.bitfields_)) {
-    for (auto const& block : bitfield.blocks_) {
+  for (auto bf = tt.bitfields_.rbegin(); bf != tt.bitfields_.rend(); ++bf) {
+    for (auto const& block : bf->blocks_) {
       boost::hash_combine(res, block);
     }
     if (++num_bf == 10) {
