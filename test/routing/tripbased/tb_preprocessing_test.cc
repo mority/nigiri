@@ -1,3 +1,4 @@
+#include <filesystem>
 #include <random>
 
 #include "gtest/gtest.h"
@@ -571,4 +572,43 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   EXPECT_EQ(0, t1.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t1.get_bitfield_idx()]);
 #endif
+}
+
+TEST(build_transfer_set, serialization) {
+  constexpr auto const src = source_idx_t{0U};
+  timetable tt;
+  tt.date_range_ = full_period();
+  register_special_stations(tt);
+  load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
+  finalize(tt);
+
+  std::shared_ptr<cista::wrapped<transfer_set>> const ts =
+      std::make_shared<cista::wrapped<transfer_set>>(
+          cista::raw::make_unique<transfer_set>());
+
+  build_transfer_set(tt, **ts);
+
+  std::filesystem::path const ts_file_name{"test.transfer_set"};
+  (*ts)->write(ts_file_name);
+
+  auto ts_loaded = std::make_shared<cista::wrapped<transfer_set>>(
+      transfer_set::read(cista::memory_holder{
+          cista::file{ts_file_name.string().c_str(), "r"}.content()}));
+
+  EXPECT_EQ((*ts_loaded)->tt_hash_, hash_tt(tt));
+
+  ASSERT_EQ((*ts)->data_.size(), (*ts_loaded)->data_.size());
+  for (std::uint32_t t = 0U; t != (*ts)->data_.size(); ++t) {
+    ASSERT_EQ((*ts)->data_.size(t), (*ts_loaded)->data_.size(t));
+    for (std::uint32_t l = 0U; l != (*ts)->data_.size(t); ++l) {
+      ASSERT_EQ((*ts)->data_.at(t, l).size(),
+                (*ts_loaded)->data_.at(t, l).size());
+      for (std::uint32_t tr = 0U; tr != (*ts)->data_.at(t, l).size(); ++tr) {
+        EXPECT_TRUE(transfers_equal((*ts)->data_.at(t, l)[tr],
+                                    (*ts_loaded)->data_.at(t, l)[tr]));
+      }
+    }
+  }
+
+  std::filesystem::remove(ts_file_name);
 }

@@ -36,16 +36,4 @@ struct transfer_set {
   nvec<std::uint32_t, transfer, 2> data_;
 };
 
-template <std::size_t NMaxTypes>
-constexpr auto static_type_hash(transfer_set const*,
-                                cista::hash_data<NMaxTypes> h) noexcept {
-  return h.combine(cista::hash("nigiri::routing::tripbased::transfer_set"));
-}
-
-template <typename Ctx>
-inline void serialize(Ctx&, transfer_set const*, cista::offset_t const) {}
-
-template <typename Ctx>
-inline void deserialize(Ctx const&, transfer_set*) {}
-
 }  // namespace nigiri::routing::tripbased
