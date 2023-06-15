@@ -6,6 +6,8 @@
 
 namespace nigiri::routing::tripbased {
 
+using queue_idx_t = std::uint32_t;
+
 struct queue {
   queue() = delete;
   explicit queue(reached& r, day_idx_t const base) : r_(r), base_(base) {}
@@ -18,14 +20,14 @@ struct queue {
                std::uint16_t const n_transfers,
                std::uint32_t const transferred_from);
 
-  auto& operator[](unsigned pos) { return segments_[pos]; }
+  auto& operator[](queue_idx_t pos) { return segments_[pos]; }
 
   auto size() const { return segments_.size(); }
 
   reached& r_;
   day_idx_t const base_;
-  std::vector<std::uint32_t> start_;
-  std::vector<std::uint32_t> end_;
+  std::vector<queue_idx_t> start_;
+  std::vector<queue_idx_t> end_;
   std::vector<transport_segment> segments_;
 };
 

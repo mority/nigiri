@@ -47,7 +47,7 @@ struct tb_query_engine {
             // iterate routes serving source of footpath
             for (auto const route_idx : tt_.location_routes_[fp.target()]) {
               // iterate stop sequence of route
-              for (std::uint16_t stop_idx{0U};
+              for (std::uint16_t stop_idx{1U};
                    stop_idx < tt_.route_location_seq_[route_idx].size();
                    ++stop_idx) {
                 auto const location_idx =
@@ -78,7 +78,7 @@ struct tb_query_engine {
             // iterate routes serving source of footpath
             for (auto const route_idx : tt_.location_routes_[fp.target()]) {
               // iterate stop sequence of route
-              for (std::uint16_t stop_idx{0U};
+              for (std::uint16_t stop_idx{1U};
                    stop_idx < tt_.route_location_seq_[route_idx].size();
                    ++stop_idx) {
                 auto const location_idx =
@@ -122,25 +122,55 @@ struct tb_query_engine {
                unixtime_t const worst_time_at_dest,
                pareto_set<journey>& results);
 
+  struct journey_end {
+    journey_end(queue_idx_t const seg_idx,
+                l_entry const& le,
+                location_idx_t const le_location,
+                location_idx_t const last_location)
+        : seg_idx_(seg_idx),
+          le_(le),
+          le_location_(le_location),
+          last_location_(last_location) {}
+
+    // the last transport segment of the journey
+    queue_idx_t seg_idx_;
+    // the l_entry for the destination of the journey
+    l_entry le_;
+    // the location idx of the l_entry
+    location_idx_t le_location_;
+    // the reconstructed destination of the journey
+    location_idx_t last_location_;
+  };
+
+  void reconstruct1(query const& q, journey& j) const;
+
+  std::optional<journey_end> reconstruct_journey_end(query const& q,
+                                                     journey const& j) const;
+
+  void add_final_footpath(query const& q,
+                          journey& j,
+                          journey_end const& je) const;
+
   // reconstructs the journey that ends with the given transport segment
-  void reconstruct(query const& q, journey& j);
+  void reconstruct(query const& q, journey& j) const;
 
   // given a journey
   // returns the queue index of the last segment and the relevant l_entry
   // or nullopt if no matching last segment could be found
   std::optional<std::pair<std::uint32_t, l_entry>> find_last_seg(
-      journey const& j);
+      journey const& j) const;
 
   std::optional<offset> find_MUMO(l_entry const& le,
                                   query const& q,
-                                  footpath const& fp);
+                                  footpath const& fp) const;
 
-  static bool is_start(const query& q, const location_idx_t location_idx);
+  static bool is_start(query const& q, location_idx_t const location_idx);
 
-  std::optional<offset> find_closest_start(const query& q,
-                                           const location_idx_t location_idx);
+  std::optional<offset> find_closest_start(
+      const query& q, const location_idx_t location_idx) const;
 
-  std::optional<location_idx_t> reconstruct_dest(const l_entry& le);
+  std::optional<location_idx_t> reconstruct_dest(query const& q,
+                                                 const l_entry& le) const;
 
   timetable const& tt_;
   tb_query_state& state_;
