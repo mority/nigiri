@@ -122,6 +122,8 @@ struct tb_query_engine {
                unixtime_t const worst_time_at_dest,
                pareto_set<journey>& results);
 
+  void reconstruct(query const& q, journey& j) const;
+
   struct journey_end {
     journey_end(queue_idx_t const seg_idx,
                 l_entry const& le,
@@ -142,8 +144,6 @@ struct tb_query_engine {
     location_idx_t last_location_;
   };
 
-  void reconstruct1(query const& q, journey& j) const;
-
   std::optional<journey_end> reconstruct_journey_end(query const& q,
                                                      journey const& j) const;
 
@@ -151,26 +151,14 @@ struct tb_query_engine {
                           journey& j,
                           journey_end const& je) const;
 
-  // reconstructs the journey that ends with the given transport segment
-  void reconstruct(query const& q, journey& j) const;
+  void add_segment_leg(journey& j, transport_segment const& seg) const;
 
-  // given a journey
-  // returns the queue index of the last segment and the relevant l_entry
-  // or nullopt if no matching last segment could be found
-  std::optional<std::pair<std::uint32_t, l_entry>> find_last_seg(
-      journey const& j) const;
+  // reconstruct the transfer from the given segment to the last journey leg
+  // returns the stop idx at which the segment is exited
+  std::optional<unsigned> reconstruct_transfer(
+      journey& j, transport_segment const& seg) const;
 
-  std::optional<offset> find_MUMO(l_entry const& le,
-                                  query const& q,
-                                  footpath const& fp) const;
-
-  static bool is_start(query const& q, location_idx_t const location_idx);
-
-  std::optional<offset> find_closest_start(
-      const query& q, const location_idx_t location_idx) const;
-
-  std::optional<location_idx_t> reconstruct_dest(query const& q,
-                                                 const l_entry& le) const;
+  void add_initial_footpath(query const& q, journey& j) const;
 
   timetable const& tt_;
   tb_query_state& state_;
