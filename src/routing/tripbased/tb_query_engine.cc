@@ -1,6 +1,7 @@
 #include <ranges>
 
 #include "nigiri/routing/journey.h"
+#include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/tb_query_engine.h"
 #include "nigiri/special_stations.h"
 
@@ -13,23 +14,36 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               pareto_set<journey>& results) {
 
   auto const day_idx_mam_pair = tt_.day_idx_mam(state_.start_time_);
-  // day index of start day
+  // auto const day_idx_mam_pair = tt_.day_idx_mam(start_time);
+  //  day index of start day
   auto const d = day_idx_mam_pair.first;
   // minutes after midnight on the start day
   auto const tau = day_idx_mam_pair.second;
+
+#ifndef NDEBUG
+  TBDL << "Initializing Q_0\n";
+#endif
 
   // fill Q_0
   auto create_q0_entry = [&tau, this, &d](footpath const& fp) {
     // arrival time after walking the footpath
     auto const alpha = delta{tau + fp.duration()};
+
     // iterate routes at target stop of footpath
     for (auto const route_idx : tt_.location_routes_[fp.target()]) {
+#ifndef NDEBUG
+      TBDL << "Route " << route_idx << "\n";
+#endif
       // iterate stop sequence of route, skip last stop
       for (std::uint16_t i = 0U;
            i < tt_.route_location_seq_[route_idx].size() - 1; ++i) {
         auto const q =
             stop{tt_.route_location_seq_[route_idx][i]}.location_idx();
         if (q == fp.target()) {
+#ifndef NDEBUG
+          TBDL << "serves " << tt_.locations_.names_.at(fp.target()).view()
+               << " at stop idx: " << i << "\n";
+#endif
           // departure times of this route at this q
           auto const event_times =
               tt_.event_times_at_stop(route_idx, i, event_type::kDep);
@@ -61,7 +75,12 @@ void tb_query_engine::execute(unixtime_t const start_time,
             auto const& beta_t = tt_.bitfields_[tt_.transport_traffic_days_[t]];
 
             if (beta_t.test(d_seg.v_)) {
-              // enqueue segment if alpha matching bit is found
+              // enqueue segment if matching bit is found
+#ifndef NDEBUG
+              TBDL << "Attempting to enqueue a segment for transport " << t
+                   << ", departing at "
+                   << hhmmss(duration_t{tau_dep_t_i->mam()}) << "\n";
+#endif
               state_.q_.enqueue(d_seg, t, i, 0U, TRANSFERRED_FROM_NULL);
               break;
             }
@@ -79,10 +98,20 @@ void tb_query_engine::execute(unixtime_t const start_time,
     }
   };
   // virtual reflexive footpath
+#ifndef NDEBUG
+  TBDL << "Examining routes at start location: "
+       << tt_.locations_.names_.at(state_.start_location_).view() << "\n";
+#endif
   create_q0_entry(footpath{state_.start_location_, duration_t{0U}});
   // iterate outgoing footpaths of source location
   for (auto const fp_q :
        tt_.locations_.footpaths_out_[state_.start_location_]) {
+#ifndef NDEBUG
+    TBDL << "Examining routes at location: "
+         << tt_.locations_.names_.at(fp_q.target()).view()
+         << " reached after walking " << fp_q.duration() << " minutes"
+         << "\n";
+#endif
     create_q0_entry(fp_q);
   }
 
@@ -245,7 +274,7 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
 std::optional<tb_query_engine::journey_end>
 tb_query_engine::reconstruct_journey_end(query const& q,
                                          journey const& j) const {
-  
+
   // iterate transport segments in queue with matching number of transfers
   for (auto q_cur = state_.q_.start_[j.transfers_];
        q_cur != state_.q_.end_[j.transfers_]; ++q_cur) {

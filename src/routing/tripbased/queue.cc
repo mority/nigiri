@@ -1,4 +1,6 @@
 #include "nigiri/routing/tripbased/queue.h"
+#include "nigiri/routing/tripbased/dbg.h"
+#include "nigiri/routing/tripbased/transport_segment.h"
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
@@ -16,6 +18,7 @@ void queue::enqueue(day_idx_t const transport_day,
                     std::uint16_t const stop_idx,
                     std::uint16_t const n_transfers,
                     std::uint32_t const transferred_from) {
+
   // compute transport segment index
   auto const transport_segment_idx =
       embed_day_offset(base_, transport_day, transport_idx);
@@ -33,6 +36,10 @@ void queue::enqueue(day_idx_t const transport_day,
     // add transport segment
     segments_.emplace_back(transport_segment_idx, stop_idx, r_query_res,
                            transferred_from);
+#ifndef NDEBUG
+    TBDL << "Enqueued transport segment:\n";
+    segments_.back().print(std::cout, r_.tt_);
+#endif
 
     // increment index
     ++end_[n_transfers];

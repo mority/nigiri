@@ -7,8 +7,6 @@
 #include "nigiri/routing/query.h"
 #include "nigiri/routing/tripbased/tb_query_state.h"
 
-#define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()
-
 namespace nigiri {
 struct timetable;
 }  // namespace nigiri

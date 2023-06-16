@@ -1,7 +1,5 @@
 #pragma once
 
-#define TBDL std::cerr << "[" << __FILE_NAME__ << ":" << __LINE__ << "] "
-
 #define BITFIELD_IDX_BITS 25U
 #define TRANSPORT_IDX_BITS 26U
 #define STOP_IDX_BITS 10U
