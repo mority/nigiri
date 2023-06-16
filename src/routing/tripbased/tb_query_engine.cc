@@ -1,5 +1,6 @@
 #include <ranges>
 
+#include "nigiri/routing/journey.h"
 #include "nigiri/routing/tripbased/tb_query_engine.h"
 #include "nigiri/special_stations.h"
 
@@ -111,8 +112,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
       // check if target location is reached from current transport segment
       for (auto const& le : state_.l_) {
         if (le.route_idx_ == tt_.transport_route_[seg.get_transport_idx()] &&
-            seg.stop_idx_start_ < le.stop_idx_ &&
-            le.stop_idx_ <= seg.stop_idx_end_) {
+            seg.stop_idx_start_ < le.stop_idx_) {
           // the time it takes to travel on this transport segment
           auto const travel_time_seg =
               tt_.event_mam(seg.get_transport_idx(), le.stop_idx_,
@@ -245,29 +245,25 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
 std::optional<tb_query_engine::journey_end>
 tb_query_engine::reconstruct_journey_end(query const& q,
                                          journey const& j) const {
-  TBDL << "Attempting to reconstruct journey end\n";
-
+  
   // iterate transport segments in queue with matching number of transfers
   for (auto q_cur = state_.q_.start_[j.transfers_];
        q_cur != state_.q_.end_[j.transfers_]; ++q_cur) {
     // the transport segment currently processed
-    auto const& tp_seg = state_.q_[q_cur];
+    auto const& seg = state_.q_[q_cur];
 
-    TBDL << "Examining segment"
-
-        // the route index of the current segment
-        auto const route_idx = tt_.transport_route_[tp_seg.get_transport_idx()];
+    // the route index of the current segment
+    auto const route_idx = tt_.transport_route_[seg.get_transport_idx()];
 
     // find matching entry in l_
     for (auto const& le : state_.l_) {
       // check if route and stop indices match
-      if (le.route_idx_ == route_idx && tp_seg.stop_idx_start_ < le.stop_idx_ &&
-          le.stop_idx_ <= tp_seg.stop_idx_end_) {
+      if (le.route_idx_ == route_idx && seg.stop_idx_start_ < le.stop_idx_) {
         // transport day of the segment
-        auto const transport_day = tp_seg.get_transport_day(base_);
+        auto const transport_day = seg.get_transport_day(base_);
         // transport time at destination
         auto const transport_time =
-            tt_.event_mam(tp_seg.get_transport_idx(), le.stop_idx_,
+            tt_.event_mam(seg.get_transport_idx(), le.stop_idx_,
                           event_type::kArr)
                 .as_duration() +
             le.time_;
