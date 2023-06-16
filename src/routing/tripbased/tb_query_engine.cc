@@ -1,6 +1,7 @@
 #include <ranges>
 
 #include "nigiri/routing/tripbased/tb_query_engine.h"
+#include "nigiri/special_stations.h"
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
@@ -192,7 +193,10 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
     return;
   }
 
-  if (q.dest_match_mode_ != location_match_mode::kIntermodal) {
+  if (q.dest_match_mode_ == location_match_mode::kIntermodal) {
+    // set destination to END if routing to intermodal
+    j.dest_ = get_special_station(special_station::kEnd);
+  } else {
     // set reconstructed destination if routing to station
     j.dest_ = je->last_location_;
   }
@@ -211,6 +215,9 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
 
   // add segments and transfers until first segment is reached
   while (seg.transferred_from_ != TRANSFERRED_FROM_NULL) {
+    // get previous segment
+    seg = state_.q_.segments_[seg.transferred_from_];
+
     // reconstruct transfer to following segment
     auto const stop_idx_exit = reconstruct_transfer(j, seg);
     if (!stop_idx_exit.has_value()) {
@@ -223,9 +230,6 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
 
     // add journey leg for current segment
     add_segment_leg(j, seg);
-
-    // prep next iteration
-    seg = state_.q_.segments_[seg.transferred_from_];
   }
 
   // add initial footpath
@@ -411,15 +415,14 @@ std::optional<unsigned> tb_query_engine::reconstruct_transfer(
           .stop_range_.from_;
   auto const target_location_idx = j.legs_.back().from_;
 
-  // reconstruct the stop index at which the segment is exited
-  auto stop_idx_exit = seg.stop_idx_start_ + 1U;
-
   // iterate stops of segment
-  for (; stop_idx_exit <= seg.stop_idx_end_; ++stop_idx_exit) {
+  for (auto stop_idx_exit = seg.stop_idx_start_ + 1U;
+       stop_idx_exit <= seg.stop_idx_end_; ++stop_idx_exit) {
     auto const exit_location_idx =
         stop{tt_.route_location_seq_
                  [tt_.transport_route_[seg.get_transport_idx()]][stop_idx_exit]}
             .location_idx();
+
     // iterate transfers at each stop
     for (auto const& transfer :
          state_.ts_.at(seg.get_transport_idx().v_, stop_idx_exit)) {
@@ -508,9 +511,12 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
       if (offset.target() == j.legs_.back().from_) {
         unixtime_t const mumo_start_unix{j.legs_.back().dep_time_ -
                                          offset.duration()};
-        journey::leg l_mumo_start{direction::kForward,      location_idx_t{0U},
-                                  offset.target(),          mumo_start_unix,
-                                  j.legs_.back().dep_time_, offset};
+        journey::leg l_mumo_start{direction::kForward,
+                                  get_special_station(special_station::kStart),
+                                  offset.target(),
+                                  mumo_start_unix,
+                                  j.legs_.back().dep_time_,
+                                  offset};
         j.add(std::move(l_mumo_start));
         return;
       }
