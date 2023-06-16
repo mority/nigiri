@@ -185,6 +185,9 @@ void tb_query_engine::execute(unixtime_t const start_time,
 }
 
 void tb_query_engine::reconstruct(query const& q, journey& j) const {
+  TBDL << "Beginning reconstruction of journey:\n";
+  j.print(std::cout, tt_, true);
+
   // find journey end
   auto je = reconstruct_journey_end(q, j);
   if (!je.has_value()) {
@@ -242,6 +245,7 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
 std::optional<tb_query_engine::journey_end>
 tb_query_engine::reconstruct_journey_end(query const& q,
                                          journey const& j) const {
+  TBDL << "Attempting to reconstruct journey end\n";
 
   // iterate transport segments in queue with matching number of transfers
   for (auto q_cur = state_.q_.start_[j.transfers_];
@@ -249,8 +253,10 @@ tb_query_engine::reconstruct_journey_end(query const& q,
     // the transport segment currently processed
     auto const& tp_seg = state_.q_[q_cur];
 
-    // the route index of the current segment
-    auto const route_idx = tt_.transport_route_[tp_seg.get_transport_idx()];
+    TBDL << "Examining segment"
+
+        // the route index of the current segment
+        auto const route_idx = tt_.transport_route_[tp_seg.get_transport_idx()];
 
     // find matching entry in l_
     for (auto const& le : state_.l_) {

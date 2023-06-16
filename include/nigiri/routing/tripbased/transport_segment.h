@@ -3,6 +3,10 @@
 #include "nigiri/routing/tripbased/bits.h"
 #include "nigiri/types.h"
 
+namespace nigiri {
+struct timetable;
+}  // namespace nigiri
+
 namespace nigiri::routing::tripbased {
 
 using transport_segment_idx_t = std::uint32_t;
@@ -58,6 +62,8 @@ struct transport_segment {
   transport_idx_t get_transport_idx() const {
     return transport_idx(transport_segment_idx_);
   }
+
+  void print(std::ostream&, timetable const&) const;
 
   // store day offset of the instance in upper bits of transport idx
   transport_segment_idx_t transport_segment_idx_;
