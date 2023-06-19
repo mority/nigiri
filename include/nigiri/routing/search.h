@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utl/enumerate.h"
 #include "utl/equal_ranges_linear.h"
 #include "utl/erase_if.h"
 #include "utl/timing.h"
@@ -94,6 +95,7 @@ struct search {
 
     return Algo{
         tt_,
+        rtt_,
         algo_state,
         state_.is_destination_,
         state_.dist_to_dest_,
@@ -104,10 +106,12 @@ struct search {
   }
 
   search(timetable const& tt,
+         rt_timetable const* rtt,
          search_state& s,
          algo_state_t& algo_state,
          query q)
       : tt_{tt},
+        rtt_{rtt},
         state_{s},
         q_{std::move(q)},
         search_interval_{std::visit(
@@ -326,6 +330,7 @@ private:
   }
 
   timetable const& tt_;
+  rt_timetable const* rtt_;
   search_state& state_;
   query q_;
   interval<unixtime_t> search_interval_;
