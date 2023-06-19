@@ -18,6 +18,7 @@ void queue::enqueue(day_idx_t const transport_day,
                     std::uint16_t const stop_idx,
                     std::uint16_t const n_transfers,
                     std::uint32_t const transferred_from) {
+  assert(segments_.size() < std::numeric_limits<queue_idx_t>::max());
 
   // compute transport segment index
   auto const transport_segment_idx =
@@ -37,8 +38,8 @@ void queue::enqueue(day_idx_t const transport_day,
     segments_.emplace_back(transport_segment_idx, stop_idx, r_query_res,
                            transferred_from);
 #ifndef NDEBUG
-    TBDL << "Enqueued transport segment:\n";
-    segments_.back().print(std::cout, r_.tt_);
+    TBDL << "Enqueued transport segment: ";
+    print(std::cout, static_cast<queue_idx_t>(segments_.size() - 1));
 #endif
 
     // increment index
@@ -47,4 +48,9 @@ void queue::enqueue(day_idx_t const transport_day,
     // update reached
     r_.update(transport_segment_idx, stop_idx, n_transfers);
   }
+}
+
+void queue::print(std::ostream& out, queue_idx_t const q_idx) {
+  out << "q_idx: " << std::to_string(q_idx) << ", segment of ";
+  segments_[q_idx].print(out, r_.tt_);
 }

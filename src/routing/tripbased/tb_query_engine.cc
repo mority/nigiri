@@ -42,7 +42,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
         if (q == fp.target()) {
 #ifndef NDEBUG
           TBDL << "serves " << tt_.locations_.names_.at(fp.target()).view()
-               << " at stop idx: " << i << "\n";
+               << " at stop idx = " << i << "\n";
 #endif
           // departure times of this route at this q
           auto const event_times =
@@ -77,7 +77,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
             if (beta_t.test(d_seg.v_)) {
               // enqueue segment if matching bit is found
 #ifndef NDEBUG
-              TBDL << "Attempting to enqueue a segment for transport " << t
+              TBDL << "Attempting to enqueue a segment of transport " << t
                    << ", departing at "
                    << hhmmss(duration_t{tau_dep_t_i->mam()}) << "\n";
 #endif
@@ -119,11 +119,21 @@ void tb_query_engine::execute(unixtime_t const start_time,
   // n transfers
   for (std::uint8_t n = 0U; n != state_.q_.start_.size() && n <= max_transfers;
        ++n) {
+#ifndef NDEBUG
+    TBDL << "Processing segments of Q_" << std::to_string(n) << ":\n";
+#endif
+
     // iterate trip segments in Q_n
     for (auto q_cur = state_.q_.start_[n]; q_cur != state_.q_.end_[n];
          ++q_cur) {
       // the current transport segment
       auto seg = state_.q_[q_cur];
+
+#ifndef NDEBUG
+      TBDL << "Examining segment: ";
+      seg.print(std::cout, tt_);
+#endif
+
       // departure time at the start of the transport segment
       auto const tau_dep_t_b_delta = tt_.event_mam(
           seg.get_transport_idx(), seg.stop_idx_start_, event_type::kDep);
@@ -151,6 +161,13 @@ void tb_query_engine::execute(unixtime_t const start_time,
           // current transport segment
           auto const t_cur = tt_.to_unixtime(
               d, tau_d + travel_time_seg.as_duration() + le.time_);
+
+#ifndef NDEBUG
+          auto seg_dest_time =
+              d_hhmmss(tau_d + travel_time_seg.as_duration() + le.time_);
+          TBDL << "segment reaches a destination on query day "
+               << seg_dest_time.first << " at " << seg_dest_time.second << "\n";
+#endif
           if (t_cur < state_.t_min_[n]) {
             state_.t_min_[n] = t_cur;
             // add journey without reconstructing yet
@@ -161,7 +178,18 @@ void tb_query_engine::execute(unixtime_t const start_time,
                           .location_idx();
             j.transfers_ = n;
             // add journey to pareto set (removes dominated entries)
+#ifndef NDEBUG
+            TBDL << "updating pareto set with new journey: ";
+            j.print(std::cout, tt_);
+            auto [non_dominated, begin, end] = results.add(std::move(j));
+            if (non_dominated) {
+              TBDL << "new journey ending with this segment is non-dominated\n";
+            } else {
+              TBDL << "new journey ending with this segment is dominated\n";
+            }
+#else
             results.add(std::move(j));
+#endif
           }
         }
       }
@@ -179,16 +207,32 @@ void tb_query_engine::execute(unixtime_t const start_time,
       // transfer out of current transport segment?
       if (unix_time_next < state_.t_min_[n] &&
           unix_time_next < worst_time_at_dest) {
+#ifndef NDEBUG
+        TBDL << "Time at next stop of segment is viable\n";
+#endif
+
         // iterate stops of the current transport segment
         for (auto i{seg.stop_idx_start_ + 1U}; i <= seg.stop_idx_end_; ++i) {
+#ifndef NDEBUG
+          TBDL
+              << "Processing transfers at stop idx = " << i << ": "
+              << tt_.locations_.names_
+                     .at(stop{
+                         tt_.route_location_seq_
+                             [tt_.transport_route_[seg.get_transport_idx()]][i]}
+                             .location_idx())
+                     .view()
+              << "\n";
+#endif
+
           // get transfers for this transport/stop
           auto const& transfers =
               state_.ts_.data_.at(seg.get_transport_idx().v_, i);
           // iterate transfers from this stop
-          for (auto const& transfer_cur : transfers) {
+          for (auto const& transfer : transfers) {
             // bitset specifying the days on which the transfer is possible
             // from the current transport segment
-            auto const& theta = tt_.bitfields_[transfer_cur.get_bitfield_idx()];
+            auto const& theta = tt_.bitfields_[transfer.get_bitfield_idx()];
             // enqueue if transfer is possible
             if (theta.test(d_seg)) {
               // arrival time at start location of transfer
@@ -196,15 +240,29 @@ void tb_query_engine::execute(unixtime_t const start_time,
                   tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr);
               // departure time at end location of transfer
               auto const tau_dep_u_j_delta =
-                  tt_.event_mam(transfer_cur.get_transport_idx_to(),
-                                transfer_cur.stop_idx_to_, event_type::kDep);
+                  tt_.event_mam(transfer.get_transport_idx_to(),
+                                transfer.stop_idx_to_, event_type::kDep);
 
               auto const d_tr = seg.get_transport_day(base_) +
                                 day_idx_t{tau_arr_t_i_delta.days()} -
                                 day_idx_t{tau_dep_u_j_delta.days()} +
-                                transfer_cur.get_passes_midnight();
-              state_.q_.enqueue(d_tr, transfer_cur.get_transport_idx_to(),
-                                transfer_cur.get_stop_idx_to(), n + 1U, q_cur);
+                                transfer.get_passes_midnight();
+#ifndef NDEBUG
+              TBDL << "Found a transfer to transport "
+                   << transfer.get_transport_idx_to()
+                   << " at its stop idx = " << transfer.stop_idx_to_ << ": "
+                   << tt_.locations_.names_
+                          .at(stop{tt_.route_location_seq_
+                                       [tt_.transport_route_
+                                            [transfer.get_transport_idx_to()]]
+                                       [transfer.get_stop_idx_to()]}
+                                  .location_idx())
+                          .view()
+                   << "\n";
+#endif
+
+              state_.q_.enqueue(d_tr, transfer.get_transport_idx_to(),
+                                transfer.get_stop_idx_to(), n + 1U, q_cur);
             }
           }
         }
@@ -214,7 +272,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
 }
 
 void tb_query_engine::reconstruct(query const& q, journey& j) const {
-  TBDL << "Beginning reconstruction of journey:\n";
+  TBDL << "Beginning reconstruction of journey: ";
   j.print(std::cout, tt_, true);
 
   // find journey end

@@ -24,6 +24,8 @@ struct queue {
 
   auto size() const { return segments_.size(); }
 
+  void print(std::ostream&, queue_idx_t const);
+
   reached& r_;
   day_idx_t const base_;
   std::vector<queue_idx_t> start_;
