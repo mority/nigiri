@@ -3,6 +3,7 @@
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/tb_query_engine.h"
+#include "nigiri/rt/frun.h"
 #include "nigiri/special_stations.h"
 
 using namespace nigiri;
@@ -79,7 +80,9 @@ void tb_query_engine::execute(unixtime_t const start_time,
 #ifndef NDEBUG
               TBDL << "Attempting to enqueue a segment of transport " << t
                    << ", departing at "
-                   << hhmmss(duration_t{tau_dep_t_i->mam()}) << "\n";
+                   << dhhmm(duration_t{sigma.v_ * 1440U} +
+                            duration_t{tau_dep_t_i->mam()})
+                   << "\n";
 #endif
               state_.q_.enqueue(d_seg, t, i, 0U, TRANSFERRED_FROM_NULL);
               break;
@@ -131,7 +134,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
 
 #ifndef NDEBUG
       TBDL << "Examining segment: ";
-      seg.print(std::cout, tt_);
+      state_.q_.print(std::cout, q_cur);
 #endif
 
       // departure time at the start of the transport segment
@@ -163,10 +166,9 @@ void tb_query_engine::execute(unixtime_t const start_time,
               d, tau_d + travel_time_seg.as_duration() + le.time_);
 
 #ifndef NDEBUG
-          auto seg_dest_time =
-              d_hhmmss(tau_d + travel_time_seg.as_duration() + le.time_);
-          TBDL << "segment reaches a destination on query day "
-               << seg_dest_time.first << " at " << seg_dest_time.second << "\n";
+          TBDL << "segment reaches a destination at "
+               << dhhmm(tau_d + travel_time_seg.as_duration() + le.time_)
+               << "\n";
 #endif
           if (t_cur < state_.t_min_[n]) {
             state_.t_min_[n] = t_cur;
@@ -212,7 +214,8 @@ void tb_query_engine::execute(unixtime_t const start_time,
 #endif
 
         // iterate stops of the current transport segment
-        for (auto i{seg.stop_idx_start_ + 1U}; i <= seg.stop_idx_end_; ++i) {
+        for (stop_idx_t i = seg.stop_idx_start_ + 1U; i <= seg.stop_idx_end_;
+             ++i) {
 #ifndef NDEBUG
           TBDL
               << "Processing transfers at stop idx = " << i << ": "
@@ -273,7 +276,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
 
 void tb_query_engine::reconstruct(query const& q, journey& j) const {
   TBDL << "Beginning reconstruction of journey: ";
-  j.print(std::cout, tt_, true);
+  j.print(std::cout, tt_, nullptr, true);
 
   // find journey end
   auto je = reconstruct_journey_end(q, j);
@@ -467,12 +470,12 @@ void tb_query_engine::add_segment_leg(journey& j,
   auto const from =
       stop{
           tt_.route_location_seq_[tt_.transport_route_[seg.get_transport_idx()]]
-                                 [seg.stop_idx_start_]}
+                                 [seg.get_stop_idx_start()]}
           .location_idx();
   auto const to =
       stop{
           tt_.route_location_seq_[tt_.transport_route_[seg.get_transport_idx()]]
-                                 [seg.stop_idx_end_]}
+                                 [seg.get_stop_idx_end()]}
           .location_idx();
   auto const dep_time =
       tt_.to_unixtime(seg.get_transport_day(base_),
@@ -485,28 +488,27 @@ void tb_query_engine::add_segment_leg(journey& j,
                                     event_type::kArr)
                           .as_duration());
   transport const t{seg.get_transport_idx(), seg.get_transport_day(base_)};
-  journey::transport_enter_exit const tee{t, seg.stop_idx_start_,
-                                          seg.stop_idx_end_};
-  journey::leg leg_seg{direction::kForward, from, to, dep_time, arr_time, tee};
+  rt::frun const r{tt_, nullptr, t};
+  journey::run_enter_exit const ree{r, seg.get_stop_idx_start(),
+                                    seg.get_stop_idx_end()};
+  journey::leg leg_seg{direction::kForward, from, to, dep_time, arr_time, ree};
   j.add(std::move(leg_seg));
 }
 
 std::optional<unsigned> tb_query_engine::reconstruct_transfer(
     journey& j, transport_segment const& seg) const {
-  assert(std::holds_alternative<journey::transport_enter_exit>(
-      j.legs_.back().uses_));
+  assert(std::holds_alternative<journey::run_enter_exit>(j.legs_.back().uses_));
 
   // data on target of transfer
   auto const target_transport_idx =
-      std::get<journey::transport_enter_exit>(j.legs_.back().uses_).t_.t_idx_;
+      std::get<journey::run_enter_exit>(j.legs_.back().uses_).r_.t_.t_idx_;
   auto const target_stop_idx =
-      std::get<journey::transport_enter_exit>(j.legs_.back().uses_)
-          .stop_range_.from_;
+      std::get<journey::run_enter_exit>(j.legs_.back().uses_).stop_range_.from_;
   auto const target_location_idx = j.legs_.back().from_;
 
   // iterate stops of segment
-  for (auto stop_idx_exit = seg.stop_idx_start_ + 1U;
-       stop_idx_exit <= seg.stop_idx_end_; ++stop_idx_exit) {
+  for (stop_idx_t stop_idx_exit = seg.get_stop_idx_start() + 1U;
+       stop_idx_exit <= seg.get_stop_idx_end(); ++stop_idx_exit) {
     auto const exit_location_idx =
         stop{tt_.route_location_seq_
                  [tt_.transport_route_[seg.get_transport_idx()]][stop_idx_exit]}

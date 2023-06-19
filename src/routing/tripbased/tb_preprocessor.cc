@@ -123,9 +123,11 @@ void tb_preprocessor::build(transfer_set& ts) {
       ets_arr_.clear();
       ets_ch_.clear();
       // reverse iteration
-      for (auto i = stop_seq_t.size() - 1; i != 0U; --i) {
+      for (stop_idx_t i = static_cast<stop_idx_t>(stop_seq_t.size() - 1U);
+           i != 0U; --i) {
 #else
-      for (auto i = 1U; i != stop_seq_t.size(); ++i) {
+      for (auto i = static_cast<std::uint16_t>(1U); i != stop_seq_t.size();
+           ++i) {
 #endif
         // skip stop if exiting is not allowed
         if (!stop{stop_seq_t[i]}.out_allowed()) {
@@ -178,7 +180,7 @@ void tb_preprocessor::build(transfer_set& ts) {
 
             // route_u might visit stop multiple times, skip if stop_to is the
             // last stop in the stop sequence of route_u si_to: stop index to
-            for (unsigned j = 0U;
+            for (stop_idx_t j = 0U;
                  j < tt_.route_location_seq_[route_u].size() - 1; ++j) {
 
               // location index at current stop index
@@ -329,7 +331,7 @@ void tb_preprocessor::build(transfer_set& ts) {
                           bool impr = false;
                           auto const tau_dep_t_u_j =
                               tau_arr_t_i + (tau_dep_alpha_u_j - alpha);
-                          for (auto l = j + 1;
+                          for (stop_idx_t l = j + 1U;
                                l != tt_.route_location_seq_[route_u].size();
                                ++l) {
                             auto const tau_arr_t_u_l =

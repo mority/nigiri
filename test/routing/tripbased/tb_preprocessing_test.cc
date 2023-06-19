@@ -292,7 +292,7 @@ TEST(build_transfer_set, no_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, no_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, no_transfer_files(), tt);
   finalize(tt);
 
   // run preprocessing
@@ -307,7 +307,8 @@ TEST(build_transfer_set, same_day_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, same_day_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, same_day_transfer_files(),
+                 tt);
   finalize(tt);
 
   // run preprocessing
@@ -331,7 +332,7 @@ TEST(build_transfer_set, from_long_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, long_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, long_transfer_files(), tt);
   finalize(tt);
 
   // run preprocessing
@@ -355,7 +356,8 @@ TEST(build_transfer_set, weekday_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, weekday_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, weekday_transfer_files(),
+                 tt);
   finalize(tt);
 
   // run preprocessing
@@ -379,7 +381,7 @@ TEST(build_transfer_set, daily_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, daily_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, daily_transfer_files(), tt);
   finalize(tt);
 
   // run preprocessing
@@ -403,7 +405,8 @@ TEST(build_transfer_set, earlier_stop_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, earlier_stop_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src,
+                 earlier_stop_transfer_files(), tt);
   finalize(tt);
 
   // run preprocessing
@@ -427,7 +430,8 @@ TEST(build_transfer_set, earlier_transport_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, earlier_transport_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src,
+                 earlier_transport_transfer_files(), tt);
   finalize(tt);
 
   // run preprocessing
@@ -451,7 +455,7 @@ TEST(build_transfer_set, uturn_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, uturn_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, uturn_transfer_files(), tt);
   finalize(tt);
 
   // run preprocessing
@@ -503,7 +507,8 @@ TEST(build_transfer_set, unnecessary_transfer0) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, unnecessary0_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src,
+                 unnecessary0_transfer_files(), tt);
   finalize(tt);
 
   // run preprocessing
@@ -531,7 +536,8 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, unnecessary1_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src,
+                 unnecessary1_transfer_files(), tt);
   finalize(tt);
 
   // run preprocessing

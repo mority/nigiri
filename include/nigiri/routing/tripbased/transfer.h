@@ -25,7 +25,7 @@ struct transfer {
   }
 
   // the stop index of the target transport
-  std::uint16_t get_stop_idx_to() const {
+  stop_idx_t get_stop_idx_to() const {
     return static_cast<std::uint16_t>(stop_idx_to_);
   }
 

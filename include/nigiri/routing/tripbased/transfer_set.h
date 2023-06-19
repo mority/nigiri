@@ -11,8 +11,8 @@ constexpr auto const kMode =
 
 struct transfer_set {
   auto at(std::uint32_t const transport_idx,
-          std::uint32_t const location_idx) const {
-    return data_.at(transport_idx, location_idx);
+          std::uint32_t const stop_idx) const {
+    return data_.at(transport_idx, stop_idx);
   }
 
   void write(cista::memory_holder&) const;

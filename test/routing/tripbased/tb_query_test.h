@@ -26,7 +26,7 @@ pareto_set<routing::journey> tripbased_search(timetable& tt, routing::query q) {
   auto algo_state = algo_state_t{tt, ts, base};
 
   return *(routing::search<direction::kForward, algo_t>{
-      tt, search_state, algo_state, std::move(q)}
+      tt, nullptr, search_state, algo_state, std::move(q)}
                .execute()
                .journeys_);
 }

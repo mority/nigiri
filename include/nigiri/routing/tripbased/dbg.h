@@ -1,20 +1,24 @@
 #pragma once
 
 #include "nigiri/types.h"
+#include <format>
 
 #define TBDL std::cout << "[" << __FILE_NAME__ << ":" << __LINE__ << "] "
 
-static inline auto hhmmss(nigiri::duration_t const d) {
-  return std::chrono::hh_mm_ss<nigiri::duration_t>{d};
-}
-
-static inline auto d_hhmmss(nigiri::duration_t const d) {
-  auto d_remainder = d;
-  nigiri::duration_t day{1440};
+static inline std::string dhhmm(nigiri::duration_t const& d) {
+  nigiri::duration_t rem = d;
   unsigned days = 0;
-  while (d_remainder > day) {
+  while (rem >= nigiri::duration_t{1440}) {
+    rem -= nigiri::duration_t{1440};
     ++days;
-    d_remainder -= day;
   }
-  return std::make_pair(days, hhmmss(d_remainder));
+  unsigned hours = 0;
+  while (rem >= nigiri::duration_t{60}) {
+    rem -= nigiri::duration_t{60};
+    ++hours;
+  }
+  std::string result = std::to_string(days) + "d" +
+                       fmt::format("{:0>2}", hours) + ":" +
+                       fmt::format("{:0>2}", rem.count());
+  return result;
 }

@@ -27,7 +27,7 @@ TEST(tb_query, enqueue) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, enqueue_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, enqueue_files(), tt);
   finalize(tt);
 
   // init preprocessing
@@ -40,7 +40,7 @@ TEST(tb_query, enqueue) {
   std::vector<bool> is_dest;
   std::vector<std::uint16_t> dist_to_dest;
   std::vector<std::uint16_t> lb;
-  tb_query_engine tbq{tt, state, is_dest, dist_to_dest, lb, base};
+  tb_query_engine tbq{tt, nullptr, state, is_dest, dist_to_dest, lb, base};
   state.q_.reset();
 
   transport_idx_t const tpi0{0U};
@@ -103,12 +103,12 @@ TRANSFERS: 1
      FROM: (S0, S0) [2021-03-01 00:00]
        TO: (S2, S2) [2021-03-01 13:00]
 leg 0: (S0, S0) [2021-03-01 00:00] -> (S1, S1) [2021-03-01 06:00]
-   0: S0      S0..............................................                               d: 01.03 00:00 [01.03 00:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON, src=0}]
+   0: S0      S0..............................................                               d: 01.03 00:00 [01.03 00:00]  [{name=R0 , day=2021-03-01, id=R0_MON, src=0}]
    1: S1      S1.............................................. a: 01.03 06:00 [01.03 06:00]
 leg 1: (S1, S1) [2021-03-01 06:00] -> (S1, S1) [2021-03-01 06:02]
   FOOTPATH (duration=2)
 leg 2: (S1, S1) [2021-03-01 12:00] -> (S2, S2) [2021-03-01 13:00]
-   0: S1      S1..............................................                               d: 01.03 12:00 [01.03 12:00]  [{name=R1 , day=2021-03-01, id=0/R1_MON, src=0}]
+   0: S1      S1..............................................                               d: 01.03 12:00 [01.03 12:00]  [{name=R1 , day=2021-03-01, id=R1_MON, src=0}]
    1: S2      S2.............................................. a: 01.03 13:00 [01.03 13:00]
 leg 3: (S2, S2) [2021-03-01 13:00] -> (S2, S2) [2021-03-01 13:00]
   FOOTPATH (duration=0)
@@ -121,7 +121,8 @@ TEST(earliest_arrival_query, same_day_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, same_day_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, same_day_transfer_files(),
+                 tt);
   finalize(tt);
 
   auto const results = tripbased_search(
@@ -143,12 +144,12 @@ TRANSFERS: 1
      FROM: (S1, S1) [2021-03-04 06:00]
        TO: (S3, S3) [2021-03-04 09:00]
 leg 0: (S1, S1) [2021-03-04 06:00] -> (S2, S2) [2021-03-04 07:00]
-   0: S1      S1..............................................                               d: 04.03 06:00 [04.03 06:00]  [{name=R1 , day=2021-03-04, id=0/R1_THU, src=0}]
+   0: S1      S1..............................................                               d: 04.03 06:00 [04.03 06:00]  [{name=R1 , day=2021-03-04, id=R1_THU, src=0}]
    1: S2      S2.............................................. a: 04.03 07:00 [04.03 07:00]
 leg 1: (S2, S2) [2021-03-04 07:00] -> (S2, S2) [2021-03-04 07:02]
   FOOTPATH (duration=2)
 leg 2: (S2, S2) [2021-03-04 08:00] -> (S3, S3) [2021-03-04 09:00]
-   1: S2      S2..............................................                               d: 04.03 08:00 [04.03 08:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON, src=0}]
+   1: S2      S2..............................................                               d: 04.03 08:00 [04.03 08:00]  [{name=R0 , day=2021-03-01, id=R0_MON, src=0}]
    2: S3      S3.............................................. a: 04.03 09:00 [04.03 09:00]
 leg 3: (S3, S3) [2021-03-04 09:00] -> (S3, S3) [2021-03-04 09:00]
   FOOTPATH (duration=0)
@@ -161,7 +162,7 @@ TEST(earliest_arrival_query, early_train) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, early_train_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src, early_train_files(), tt);
   finalize(tt);
 
   auto const results = tripbased_search(
@@ -176,6 +177,8 @@ TEST(earliest_arrival_query, early_train) {
     ss << "\n\n";
   }
 
+  std::cout << ss.str();
+
   EXPECT_EQ(std::string_view{early_train_journeys}, ss.str());
 }
 
@@ -185,12 +188,12 @@ TRANSFERS: 1
      FROM: (S3, S3) [2021-03-01 03:00]
        TO: (S2, S2) [2021-03-01 06:00]
 leg 0: (S3, S3) [2021-03-01 03:00] -> (S1, S1) [2021-03-01 04:00]
-   3: S3      S3..............................................                               d: 01.03 03:00 [01.03 03:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON0, src=0}]
+   3: S3      S3..............................................                               d: 01.03 03:00 [01.03 03:00]  [{name=R0 , day=2021-03-01, id=R0_MON0, src=0}]
    4: S1      S1.............................................. a: 01.03 04:00 [01.03 04:00]
 leg 1: (S1, S1) [2021-03-01 04:00] -> (S1, S1) [2021-03-01 04:02]
   FOOTPATH (duration=2)
 leg 2: (S1, S1) [2021-03-01 05:00] -> (S2, S2) [2021-03-01 06:00]
-   1: S1      S1..............................................                               d: 01.03 05:00 [01.03 05:00]  [{name=R0 , day=2021-03-01, id=0/R0_MON1, src=0}]
+   1: S1      S1..............................................                               d: 01.03 05:00 [01.03 05:00]  [{name=R0 , day=2021-03-01, id=R0_MON1, src=0}]
    2: S2      S2.............................................. a: 01.03 06:00 [01.03 06:00]
 leg 3: (S2, S2) [2021-03-01 06:00] -> (S2, S2) [2021-03-01 06:00]
   FOOTPATH (duration=0)
@@ -203,7 +206,8 @@ TEST(earliest_arrival_query, earlier_stop_transfer) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, earlier_stop_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src,
+                 earlier_stop_transfer_files(), tt);
   finalize(tt);
 
   auto const results = tripbased_search(
@@ -226,7 +230,8 @@ TEST(earliest_arrival_query, no_journey_possible) {
   timetable tt;
   tt.date_range_ = gtfs_full_period();
   constexpr auto const src = source_idx_t{0U};
-  load_timetable(loader_config{0}, src, earlier_stop_transfer_files(), tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, src,
+                 earlier_stop_transfer_files(), tt);
   finalize(tt);
 
   auto const results = tripbased_search(

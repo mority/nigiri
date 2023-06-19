@@ -49,8 +49,8 @@ static inline transport_idx_t transport_idx(
 
 struct transport_segment {
   transport_segment(transport_segment_idx_t transport_segment_idx,
-                    std::uint32_t stop_idx_start,
-                    std::uint32_t stop_idx_end,
+                    stop_idx_t stop_idx_start,
+                    stop_idx_t stop_idx_end,
                     std::uint32_t transferred_from)
       : transport_segment_idx_(transport_segment_idx),
         stop_idx_start_(stop_idx_start),
@@ -63,6 +63,14 @@ struct transport_segment {
 
   transport_idx_t get_transport_idx() const {
     return transport_idx(transport_segment_idx_);
+  }
+
+  stop_idx_t get_stop_idx_start() const {
+    return static_cast<stop_idx_t>(stop_idx_start_);
+  }
+
+  stop_idx_t get_stop_idx_end() const {
+    return static_cast<stop_idx_t>(stop_idx_end_);
   }
 
   void print(std::ostream&, timetable const&) const;

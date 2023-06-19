@@ -22,12 +22,14 @@ struct tb_query_engine {
   static constexpr bool kUseLowerBounds = false;
 
   tb_query_engine(timetable const& tt,
+                  rt_timetable const* rtt,
                   tb_query_state& state,
                   std::vector<bool>& is_dest,
                   std::vector<std::uint16_t>& dist_to_dest,
                   std::vector<std::uint16_t>& lb,
                   day_idx_t const base)
       : tt_{tt},
+        rtt_{rtt},
         state_{state},
         is_dest_{is_dest},
         dist_to_dest_{dist_to_dest},
@@ -159,6 +161,7 @@ struct tb_query_engine {
   void add_initial_footpath(query const& q, journey& j) const;
 
   timetable const& tt_;
+  rt_timetable const* rtt_;
   tb_query_state& state_;
   std::vector<bool>& is_dest_;
   std::vector<std::uint16_t>& dist_to_dest_;
