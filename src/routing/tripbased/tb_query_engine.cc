@@ -22,7 +22,10 @@ void tb_query_engine::execute(unixtime_t const start_time,
   auto const tau = day_idx_mam_pair.second;
 
 #ifndef NDEBUG
-  TBDL << "Initializing Q_0\n";
+  TBDL << "tb_query | start_location: "
+       << tt_.locations_.names_.at(state_.start_location_).view()
+       << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
+       << "\n";
 #endif
 
   // fill Q_0
