@@ -6,7 +6,6 @@
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/pareto_set.h"
-#include "nigiri/routing/raptor/debug.h"
 #include "nigiri/routing/raptor/raptor_state.h"
 #include "nigiri/routing/raptor/reconstruct.h"
 #include "nigiri/rt/rt_timetable.h"
