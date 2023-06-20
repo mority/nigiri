@@ -18,7 +18,7 @@ static inline std::string dhhmm(nigiri::duration_t const& d) {
     ++hours;
   }
   std::string result = std::to_string(days) + "d" +
-                       fmt::format("{:0>2}", hours) + ":" +
-                       fmt::format("{:0>2}", rem.count());
+                       fmt::format("{:0>2}", hours) +
+                       fmt::format("{:0>2}", rem.count()) + "h";
   return result;
 }
