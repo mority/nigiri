@@ -57,7 +57,7 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
         -Wno-zero-as-null-pointer-constant
         -Wno-missing-noreturn
         -Wno-undefined-func-template
-        -Wno-unsafe-buffer-usage
+        #       -Wno-unsafe-buffer-usage
         -Wno-c++20-compat
         -Werror)
 elseif(MSVC)
@@ -97,3 +97,5 @@ file(GLOB_RECURSE nigiri-test-files test/*.cc)
 add_executable(nigiri-test ${nigiri-test-files})
 target_link_libraries(nigiri-test nigiri gtest ianatzdb-res nigiri-generated)
 target_compile_options(nigiri-test PRIVATE ${nigiri-compile-options})
+
+add_link_options("-fuse-ld=mold")
