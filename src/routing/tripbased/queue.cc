@@ -6,6 +6,9 @@ using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
 void queue::reset() {
+#ifndef NDEBUG
+  TBDL << "Resetting transport segment queue\n";
+#endif
   start_.clear();
   start_.emplace_back(0U);
   end_.clear();

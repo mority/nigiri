@@ -14,15 +14,11 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               unixtime_t const worst_time_at_dest,
                               pareto_set<journey>& results) {
 
-  auto const day_idx_mam_pair = tt_.day_idx_mam(state_.start_time_);
-  // auto const day_idx_mam_pair = tt_.day_idx_mam(start_time);
-  //  day index of start day
-  auto const d = day_idx_mam_pair.first;
-  // minutes after midnight on the start day
-  auto const tau = day_idx_mam_pair.second;
+  // start day and time
+  auto const [d, tau] = tt_.day_idx_mam(state_.start_time_);
 
 #ifndef NDEBUG
-  TBDL << "tb_query | start_location: "
+  TBDL << "execute | start_location: "
        << tt_.locations_.names_.at(state_.start_location_).view()
        << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
        << "\n";
@@ -217,8 +213,8 @@ void tb_query_engine::execute(unixtime_t const start_time,
 #endif
 
         // iterate stops of the current transport segment
-        for (stop_idx_t i = seg.stop_idx_start_ + 1U; i <= seg.stop_idx_end_;
-             ++i) {
+        for (stop_idx_t i = seg.get_stop_idx_start() + 1U;
+             i <= seg.get_stop_idx_end(); ++i) {
 #ifndef NDEBUG
           TBDL
               << "Processing transfers at stop idx = " << i << ": "

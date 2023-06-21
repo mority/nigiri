@@ -5,6 +5,7 @@
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
+#include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/tb_query_state.h"
 
 namespace nigiri {
@@ -106,13 +107,25 @@ struct tb_query_engine {
   algo_stats_t get_stats() const { return stats_; }
 
   void reset_arrivals() {
+#ifndef NDEBUG
+    TBDL << "reset_arrivals\n";
+#endif
     state_.r_.reset();
     std::fill(state_.t_min_.begin(), state_.t_min_.end(), unixtime_t::max());
   }
 
-  void next_start_time() { state_.q_.reset(); }
+  void next_start_time() {
+#ifndef NDEBUG
+    TBDL << "next_start_time\n";
+#endif
+    state_.q_.reset();
+  }
 
   void add_start(location_idx_t const l, unixtime_t const t) {
+#ifndef NDEBUG
+    TBDL << "add_start: " << tt_.locations_.names_.at(l).view() << ", "
+         << dhhmm(unix_tt(tt_, t)) << "\n";
+#endif
     state_.start_location_ = l;
     state_.start_time_ = t;
   }

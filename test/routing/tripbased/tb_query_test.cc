@@ -11,8 +11,10 @@
 
 #include "./test_data.h"
 
+#include <chrono>
 #include "./tb_query_test.h"
 
+using namespace std::chrono;
 using namespace nigiri;
 using namespace nigiri::test;
 using namespace nigiri::loader;
@@ -94,9 +96,6 @@ TEST(tb_query, enqueue) {
             tbq.state_.r_.query(embed_day_offset(base, day_idx6, tpi0), 1));
 }
 
-#include <chrono>
-using namespace std::chrono;
-
 constexpr auto const same_day_transfer_journeys = R"(
 [2021-02-28 23:00, 2021-03-01 13:00]
 TRANSFERS: 1
@@ -177,8 +176,6 @@ TEST(earliest_arrival_query, early_train) {
     ss << "\n\n";
   }
 
-  std::cout << ss.str();
-
   EXPECT_EQ(std::string_view{early_train_journeys}, ss.str());
 }
 
@@ -219,8 +216,6 @@ TEST(earliest_arrival_query, earlier_stop_transfer) {
     x.print(ss, tt);
     ss << "\n\n";
   }
-
-  std::cout << ss.str();
 
   EXPECT_EQ(std::string_view{earlier_stop_transfer_journeys}, ss.str());
 }
@@ -405,6 +400,6 @@ TEST(profile_query, intermodal) {
     x.print(ss, tt);
     ss << "\n\n";
   }
-  std::cout << ss.str() << "\n";
+
   EXPECT_EQ(std::string_view{intermodal_abc_journeys}, ss.str());
 }
