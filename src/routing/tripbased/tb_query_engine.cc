@@ -15,7 +15,11 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               pareto_set<journey>& results) {
 
   // start day and time
-  auto const [d, tau] = tt_.day_idx_mam(state_.start_time_);
+  auto const day_idx_mam = tt_.day_idx_mam(state_.start_time_);
+  // start day
+  auto const d = day_idx_mam.first;
+  // start time
+  auto const tau = day_idx_mam.second;
 
 #ifndef NDEBUG
   TBDL << "execute | start_location: "
