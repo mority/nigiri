@@ -119,6 +119,8 @@ struct tb_query_engine {
     TBDL << "next_start_time\n";
 #endif
     state_.q_.reset();
+    state_.start_locations_.clear();
+    state_.start_times_.clear();
   }
 
   void add_start(location_idx_t const l, unixtime_t const t) {
@@ -178,6 +180,8 @@ struct tb_query_engine {
       journey& j, transport_segment const& seg) const;
 
   void add_initial_footpath(query const& q, journey& j) const;
+
+  bool is_start_location(query const&, location_idx_t const) const;
 
   timetable const& tt_;
   rt_timetable const* rtt_;

@@ -1,5 +1,6 @@
 #include <ranges>
 
+#include "nigiri/routing/for_each_meta.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/tb_query_engine.h"
@@ -14,6 +15,10 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               unixtime_t const worst_time_at_dest,
                               pareto_set<journey>& results) {
   assert(state_.start_locations_.size() == state_.start_times_.size());
+#ifndef NDEBUG
+  TBDL << "Executing earliest arrival queries, number of starts: "
+       << state_.start_locations_.size() << "\n";
+#endif
   for (unsigned start_idx = 0; start_idx < state_.start_locations_.size();
        ++start_idx) {
     earliest_arrival_query(start_time, max_transfers, worst_time_at_dest,
@@ -39,7 +44,7 @@ void tb_query_engine::earliest_arrival_query(
   auto const tau = day_idx_mam.second;
 
 #ifndef NDEBUG
-  TBDL << "execute | start_location: "
+  TBDL << "earliest arrival query " << start_idx << " | start_location: "
        << tt_.locations_.names_.at(start_location).view()
        << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
        << "\n";
@@ -99,7 +104,7 @@ void tb_query_engine::earliest_arrival_query(
               // enqueue segment if matching bit is found
 #ifndef NDEBUG
               TBDL << "Attempting to enqueue a segment of transport " << t
-                   << ", departing at "
+                   << ": " << tt_.transport_name(t) << ", departing at "
                    << dhhmm(duration_t{sigma.v_ * 1440U} +
                             duration_t{tau_dep_t_i->mam()})
                    << "\n";
@@ -449,7 +454,7 @@ void tb_query_engine::add_final_footpath(query const& q,
       }
     }
     // add footpath if location of l_entry and journey end destination differ
-    if (je.le_location_ != je.last_location_) {
+    if (!matches(tt_, q.dest_match_mode_, je.le_location_, je.last_location_)) {
       for (auto const fp : tt_.locations_.footpaths_out_[je.le_location_]) {
         if (fp.target() == je.last_location_) {
           unixtime_t const fp_time_end = j.legs_.back().dep_time_;
@@ -464,7 +469,7 @@ void tb_query_engine::add_final_footpath(query const& q,
     }
   } else {
     // to station routing
-    if (je.le_location_ == je.last_location_) {
+    if (matches(tt_, q.dest_match_mode_, je.le_location_, je.last_location_)) {
       // add footpath with duration = 0 if destination is reached directly
       footpath const fp{je.last_location_, duration_t{0}};
       journey::leg leg_fp{direction::kForward, je.last_location_,
@@ -593,14 +598,14 @@ std::optional<unsigned> tb_query_engine::reconstruct_transfer(
 
 void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
   // check if first transport departs at start location
-  if (j.legs_.back().from_ != state_.start_location_) {
-    // first transport does not start at queried start location
+  if (!is_start_location(q, j.legs_.back().from_)) {
+    // first transport does not start at a start location
     // -> add footpath leg
     std::optional<footpath> fp_initial = std::nullopt;
-    for (auto const& fp :
-         tt_.locations_.footpaths_out_[state_.start_location_]) {
-      if (fp.target() == j.legs_.back().from_) {
+    for (auto const& fp : tt_.locations_.footpaths_in_[j.legs_.back().from_]) {
+      if (is_start_location(q, fp.target())) {
         fp_initial = fp;
+        break;
       }
     }
     if (!fp_initial.has_value()) {
@@ -609,8 +614,8 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
       return;
     }
     journey::leg leg_fp{direction::kForward,
-                        state_.start_location_,
                         fp_initial->target(),
+                        j.legs_.back().from_,
                         j.legs_.back().dep_time_ - fp_initial->duration(),
                         j.legs_.back().dep_time_,
                         fp_initial.value()};
@@ -636,4 +641,14 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
     std::cerr << "Journey reconstruction failed: Could not reconstruct initial "
                  "MUMO edge\n";
   }
+}
+
+bool tb_query_engine::is_start_location(query const& q,
+                                        location_idx_t const l) const {
+  bool res = false;
+  for (auto const& offset : q.start_) {
+    res = matches(tt_, q.start_match_mode_, offset.target(), l);
+    if (res) break;
+  }
+  return res;
 }
