@@ -13,9 +13,26 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               std::uint8_t const max_transfers,
                               unixtime_t const worst_time_at_dest,
                               pareto_set<journey>& results) {
+  assert(state_.start_locations_.size() == state_.start_times_.size());
+  for (unsigned start_idx = 0; start_idx < state_.start_locations_.size();
+       ++start_idx) {
+    earliest_arrival_query(start_time, max_transfers, worst_time_at_dest,
+                           results, start_idx);
+  }
+}
+
+void tb_query_engine::earliest_arrival_query(
+    unixtime_t const start_time,
+    std::uint8_t const max_transfers,
+    unixtime_t const worst_time_at_dest,
+    pareto_set<journey>& results,
+    unsigned start_idx) {
+
+  // start location
+  auto const start_location = state_.start_locations_[start_idx];
 
   // start day and time
-  auto const day_idx_mam = tt_.day_idx_mam(state_.start_time_);
+  auto const day_idx_mam = tt_.day_idx_mam(state_.start_times_[start_idx]);
   // start day
   auto const d = day_idx_mam.first;
   // start time
@@ -23,7 +40,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
 
 #ifndef NDEBUG
   TBDL << "execute | start_location: "
-       << tt_.locations_.names_.at(state_.start_location_).view()
+       << tt_.locations_.names_.at(start_location).view()
        << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
        << "\n";
 #endif
@@ -106,12 +123,11 @@ void tb_query_engine::execute(unixtime_t const start_time,
   // virtual reflexive footpath
 #ifndef NDEBUG
   TBDL << "Examining routes at start location: "
-       << tt_.locations_.names_.at(state_.start_location_).view() << "\n";
+       << tt_.locations_.names_.at(start_location).view() << "\n";
 #endif
-  create_q0_entry(footpath{state_.start_location_, duration_t{0U}});
+  create_q0_entry(footpath{start_location, duration_t{0U}});
   // iterate outgoing footpaths of source location
-  for (auto const fp_q :
-       tt_.locations_.footpaths_out_[state_.start_location_]) {
+  for (auto const fp_q : tt_.locations_.footpaths_out_[start_location]) {
 #ifndef NDEBUG
     TBDL << "Examining routes at location: "
          << tt_.locations_.names_.at(fp_q.target()).view()

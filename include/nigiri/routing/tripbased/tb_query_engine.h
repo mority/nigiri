@@ -126,14 +126,20 @@ struct tb_query_engine {
     TBDL << "add_start: " << tt_.locations_.names_.at(l).view() << ", "
          << dhhmm(unix_tt(tt_, t)) << "\n";
 #endif
-    state_.start_location_ = l;
-    state_.start_time_ = t;
+    state_.start_locations_.emplace_back(l);
+    state_.start_times_.emplace_back(t);
   }
 
   void execute(unixtime_t const start_time,
                std::uint8_t const max_transfers,
                unixtime_t const worst_time_at_dest,
                pareto_set<journey>& results);
+
+  void earliest_arrival_query(unixtime_t const start_time,
+                              std::uint8_t const max_transfers,
+                              unixtime_t const worst_time_at_dest,
+                              pareto_set<journey>& results,
+                              unsigned start_idx);
 
   void reconstruct(query const& q, journey& j) const;
 
