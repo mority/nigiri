@@ -242,7 +242,7 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
     for (stop_idx_t i = seg.get_stop_idx_start() + 1U;
          i <= seg.get_stop_idx_end(); ++i) {
 #ifndef NDEBUG
-      TBDL << "Processing transfers at stop idx = " << i << ": "
+      TBDL << "Processing transfers at stop " << i << ": "
            << tt_.locations_.names_
                   .at(stop{
                       tt_.route_location_seq_
@@ -276,8 +276,9 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                             transfer.get_passes_midnight();
 #ifndef NDEBUG
           TBDL << "Found a transfer to transport "
-               << transfer.get_transport_idx_to()
-               << " at its stop idx = " << transfer.stop_idx_to_ << ": "
+               << transfer.get_transport_idx_to() << ": "
+               << tt_.transport_name(transfer.get_transport_idx_to())
+               << " at its stop " << transfer.stop_idx_to_ << ": "
                << tt_.locations_.names_
                       .at(stop{tt_.route_location_seq_
                                    [tt_.transport_route_
