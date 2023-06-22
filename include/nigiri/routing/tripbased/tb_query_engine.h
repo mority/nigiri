@@ -139,6 +139,12 @@ struct tb_query_engine {
 
   void handle_start_footpath(day_idx_t const, duration_t const, footpath const);
 
+  void handle_segment(unixtime_t const start_time,
+                      unixtime_t const worst_time_at_dest,
+                      pareto_set<journey>& results,
+                      std::uint8_t const n,
+                      queue_idx_t const q_cur);
+
   void reconstruct(query const& q, journey& j) const;
 
   struct journey_end {

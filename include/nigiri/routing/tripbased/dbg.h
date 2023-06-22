@@ -32,4 +32,8 @@ static inline nigiri::duration_t unix_tt(nigiri::timetable const& tt,
   return nigiri::duration_t{day.v_ * 1440} + time;
 }
 
+static inline std::string unix_dhhmm(timetable const& tt, unixtime_t const u) {
+  return dhhmm(unix_tt(tt, u));
+}
+
 }  // namespace nigiri::routing::tripbased

@@ -14,7 +14,12 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               std::uint8_t const max_transfers,
                               unixtime_t const worst_time_at_dest,
                               pareto_set<journey>& results) {
-
+#ifndef NDEBUG
+  TBDL << "Executing with start_time: " << unix_dhhmm(tt_, start_time)
+       << ", max_transfers: " << std::to_string(max_transfers)
+       << ", wors_time_at_dest: " << unix_dhhmm(tt_, worst_time_at_dest)
+       << ", Initializing Q_0...\n";
+#endif
   // init Q_0
   for (auto const& qs : state_.query_starts_) {
     handle_start(qs);
@@ -31,147 +36,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
     // iterate trip segments in Q_n
     for (auto q_cur = state_.q_.start_[n]; q_cur != state_.q_.end_[n];
          ++q_cur) {
-      // the current transport segment
-      auto seg = state_.q_[q_cur];
-
-#ifndef NDEBUG
-      TBDL << "Examining segment: ";
-      state_.q_.print(std::cout, q_cur);
-#endif
-
-      // departure time at the start of the transport segment
-      auto const tau_dep_t_b_delta = tt_.event_mam(
-          seg.get_transport_idx(), seg.stop_idx_start_, event_type::kDep);
-      // the day index of the segment
-      auto const d_seg = seg.get_transport_day(base_).v_;
-      // departure time at start of current transport segment in minutes after
-      // midnight on the day of the query
-      auto const tau_d =
-          duration_t{(d_seg +
-                      static_cast<std::uint16_t>(tau_dep_t_b_delta.days()) -
-                      state_.base_.v_) *
-                     1440U} +
-          duration_t{tau_dep_t_b_delta.mam()};
-
-      // check if target location is reached from current transport segment
-      for (auto const& le : state_.l_) {
-        if (le.route_idx_ == tt_.transport_route_[seg.get_transport_idx()] &&
-            seg.stop_idx_start_ < le.stop_idx_) {
-          // the time it takes to travel on this transport segment
-          auto const travel_time_seg =
-              tt_.event_mam(seg.get_transport_idx(), le.stop_idx_,
-                            event_type::kArr) -
-              tau_dep_t_b_delta;
-          // the time at which the target location is reached by using the
-          // current transport segment
-          auto const t_cur = tt_.to_unixtime(
-              state_.base_, tau_d + travel_time_seg.as_duration() + le.time_);
-
-#ifndef NDEBUG
-          TBDL << "segment reaches a destination at "
-               << dhhmm(tau_d + travel_time_seg.as_duration() + le.time_)
-               << "\n";
-#endif
-          if (t_cur < state_.t_min_[n]) {
-            state_.t_min_[n] = t_cur;
-            // add journey without reconstructing yet
-            journey j{};
-            j.start_time_ = start_time;
-            j.dest_time_ = t_cur;
-            j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
-                          .location_idx();
-            j.transfers_ = n;
-            // add journey to pareto set (removes dominated entries)
-#ifndef NDEBUG
-            TBDL << "updating pareto set with new journey: ";
-            j.print(std::cout, tt_);
-            auto [non_dominated, begin, end] = results.add(std::move(j));
-            if (non_dominated) {
-              TBDL << "new journey ending with this segment is non-dominated\n";
-            } else {
-              TBDL << "new journey ending with this segment is dominated\n";
-            }
-#else
-            results.add(std::move(j));
-#endif
-          }
-        }
-      }
-
-      // the time it takes to travel to the next stop of the transport segment
-      auto const travel_time_next =
-          tt_.event_mam(seg.get_transport_idx(), seg.stop_idx_start_ + 1,
-                        event_type::kArr) -
-          tau_dep_t_b_delta;
-
-      // the unix time at the next stop of the transport segment
-      auto const unix_time_next =
-          tt_.to_unixtime(state_.base_, tau_d + travel_time_next.as_duration());
-
-      // transfer out of current transport segment?
-      if (unix_time_next < state_.t_min_[n] &&
-          unix_time_next < worst_time_at_dest) {
-#ifndef NDEBUG
-        TBDL << "Time at next stop of segment is viable\n";
-#endif
-
-        // iterate stops of the current transport segment
-        for (stop_idx_t i = seg.get_stop_idx_start() + 1U;
-             i <= seg.get_stop_idx_end(); ++i) {
-#ifndef NDEBUG
-          TBDL
-              << "Processing transfers at stop idx = " << i << ": "
-              << tt_.locations_.names_
-                     .at(stop{
-                         tt_.route_location_seq_
-                             [tt_.transport_route_[seg.get_transport_idx()]][i]}
-                             .location_idx())
-                     .view()
-              << "\n";
-#endif
-
-          // get transfers for this transport/stop
-          auto const& transfers =
-              state_.ts_.data_.at(seg.get_transport_idx().v_, i);
-          // iterate transfers from this stop
-          for (auto const& transfer : transfers) {
-            // bitset specifying the days on which the transfer is possible
-            // from the current transport segment
-            auto const& theta = tt_.bitfields_[transfer.get_bitfield_idx()];
-            // enqueue if transfer is possible
-            if (theta.test(d_seg)) {
-              // arrival time at start location of transfer
-              auto const tau_arr_t_i_delta =
-                  tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr);
-              // departure time at end location of transfer
-              auto const tau_dep_u_j_delta =
-                  tt_.event_mam(transfer.get_transport_idx_to(),
-                                transfer.stop_idx_to_, event_type::kDep);
-
-              auto const d_tr = seg.get_transport_day(base_) +
-                                day_idx_t{tau_arr_t_i_delta.days()} -
-                                day_idx_t{tau_dep_u_j_delta.days()} +
-                                transfer.get_passes_midnight();
-#ifndef NDEBUG
-              TBDL << "Found a transfer to transport "
-                   << transfer.get_transport_idx_to()
-                   << " at its stop idx = " << transfer.stop_idx_to_ << ": "
-                   << tt_.locations_.names_
-                          .at(stop{tt_.route_location_seq_
-                                       [tt_.transport_route_
-                                            [transfer.get_transport_idx_to()]]
-                                       [transfer.get_stop_idx_to()]}
-                                  .location_idx())
-                          .view()
-                   << "\n";
-#endif
-
-              state_.q_.enqueue(d_tr, transfer.get_transport_idx_to(),
-                                transfer.get_stop_idx_to(), n + 1U, q_cur);
-            }
-          }
-        }
-      }
+      handle_segment(start_time, worst_time_at_dest, results, n, q_cur);
     }
   }
 }
@@ -265,8 +130,8 @@ void tb_query_engine::handle_start_footpath(day_idx_t const d,
 #ifndef NDEBUG
             TBDL << "Attempting to enqueue a segment of transport " << t << ": "
                  << tt_.transport_name(t) << ", departing at "
-                 << dhhmm(duration_t{sigma.v_ * 1440U} +
-                          duration_t{tau_dep_t_i->mam()})
+                 << unix_dhhmm(
+                        tt_, tt_.to_unixtime(d_seg, tau_dep_t_i->as_duration()))
                  << "\n";
 #endif
             state_.q_.enqueue(d_seg, t, i, 0U, TRANSFERRED_FROM_NULL);
@@ -280,6 +145,151 @@ void tb_query_engine::handle_start_footpath(day_idx_t const d,
           } else {
             ++tau_dep_t_i;
           }
+        }
+      }
+    }
+  }
+}
+
+void tb_query_engine::handle_segment(unixtime_t const start_time,
+                                     unixtime_t const worst_time_at_dest,
+                                     pareto_set<journey>& results,
+                                     std::uint8_t const n,
+                                     queue_idx_t const q_cur) {
+  // the current transport segment
+  auto seg = state_.q_[q_cur];
+
+#ifndef NDEBUG
+  TBDL << "Examining segment: ";
+  state_.q_.print(std::cout, q_cur);
+#endif
+
+  // departure time at the start of the transport segment
+  auto const tau_dep_t_b_delta = tt_.event_mam(
+      seg.get_transport_idx(), seg.stop_idx_start_, event_type::kDep);
+  // the day index of the segment
+  auto const d_seg = seg.get_transport_day(base_).v_;
+  // departure time at start of current transport segment in minutes after
+  // midnight on the day of the query
+  auto const tau_d =
+      duration_t{(d_seg + static_cast<std::uint16_t>(tau_dep_t_b_delta.days()) -
+                  state_.base_.v_) *
+                 1440U} +
+      duration_t{tau_dep_t_b_delta.mam()};
+
+  // check if target location is reached from current transport segment
+  for (auto const& le : state_.l_) {
+    if (le.route_idx_ == tt_.transport_route_[seg.get_transport_idx()] &&
+        seg.stop_idx_start_ < le.stop_idx_) {
+      // the time it takes to travel on this transport segment
+      auto const travel_time_seg =
+          tt_.event_mam(seg.get_transport_idx(), le.stop_idx_,
+                        event_type::kArr) -
+          tau_dep_t_b_delta;
+      // the time at which the target location is reached by using the
+      // current transport segment
+      auto const t_cur = tt_.to_unixtime(
+          state_.base_, tau_d + travel_time_seg.as_duration() + le.time_);
+
+#ifndef NDEBUG
+      TBDL << "segment reaches a destination at "
+           << dhhmm(tau_d + travel_time_seg.as_duration() + le.time_) << "\n";
+#endif
+      if (t_cur < state_.t_min_[n]) {
+        state_.t_min_[n] = t_cur;
+        // add journey without reconstructing yet
+        journey j{};
+        j.start_time_ = start_time;
+        j.dest_time_ = t_cur;
+        j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
+                      .location_idx();
+        j.transfers_ = n;
+        // add journey to pareto set (removes dominated entries)
+#ifndef NDEBUG
+        TBDL << "updating pareto set with new journey: ";
+        j.print(std::cout, tt_);
+        auto [non_dominated, begin, end] = results.add(std::move(j));
+        if (non_dominated) {
+          TBDL << "new journey ending with this segment is non-dominated\n";
+        } else {
+          TBDL << "new journey ending with this segment is dominated\n";
+        }
+#else
+        results.add(std::move(j));
+#endif
+      }
+    }
+  }
+
+  // the time it takes to travel to the next stop of the transport segment
+  auto const travel_time_next =
+      tt_.event_mam(seg.get_transport_idx(), seg.stop_idx_start_ + 1,
+                    event_type::kArr) -
+      tau_dep_t_b_delta;
+
+  // the unix time at the next stop of the transport segment
+  auto const unix_time_next =
+      tt_.to_unixtime(state_.base_, tau_d + travel_time_next.as_duration());
+
+  // transfer out of current transport segment?
+  if (unix_time_next < state_.t_min_[n] &&
+      unix_time_next < worst_time_at_dest) {
+#ifndef NDEBUG
+    TBDL << "Time at next stop of segment is viable\n";
+#endif
+
+    // iterate stops of the current transport segment
+    for (stop_idx_t i = seg.get_stop_idx_start() + 1U;
+         i <= seg.get_stop_idx_end(); ++i) {
+#ifndef NDEBUG
+      TBDL << "Processing transfers at stop idx = " << i << ": "
+           << tt_.locations_.names_
+                  .at(stop{
+                      tt_.route_location_seq_
+                          [tt_.transport_route_[seg.get_transport_idx()]][i]}
+                          .location_idx())
+                  .view()
+           << "\n";
+#endif
+
+      // get transfers for this transport/stop
+      auto const& transfers =
+          state_.ts_.data_.at(seg.get_transport_idx().v_, i);
+      // iterate transfers from this stop
+      for (auto const& transfer : transfers) {
+        // bitset specifying the days on which the transfer is possible
+        // from the current transport segment
+        auto const& theta = tt_.bitfields_[transfer.get_bitfield_idx()];
+        // enqueue if transfer is possible
+        if (theta.test(d_seg)) {
+          // arrival time at start location of transfer
+          auto const tau_arr_t_i_delta =
+              tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr);
+          // departure time at end location of transfer
+          auto const tau_dep_u_j_delta =
+              tt_.event_mam(transfer.get_transport_idx_to(),
+                            transfer.stop_idx_to_, event_type::kDep);
+
+          auto const d_tr = seg.get_transport_day(base_) +
+                            day_idx_t{tau_arr_t_i_delta.days()} -
+                            day_idx_t{tau_dep_u_j_delta.days()} +
+                            transfer.get_passes_midnight();
+#ifndef NDEBUG
+          TBDL << "Found a transfer to transport "
+               << transfer.get_transport_idx_to()
+               << " at its stop idx = " << transfer.stop_idx_to_ << ": "
+               << tt_.locations_.names_
+                      .at(stop{tt_.route_location_seq_
+                                   [tt_.transport_route_
+                                        [transfer.get_transport_idx_to()]]
+                                   [transfer.get_stop_idx_to()]}
+                              .location_idx())
+                      .view()
+               << "\n";
+#endif
+
+          state_.q_.enqueue(d_tr, transfer.get_transport_idx_to(),
+                            transfer.get_stop_idx_to(), n + 1U, q_cur);
         }
       }
     }
