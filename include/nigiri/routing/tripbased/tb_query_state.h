@@ -26,6 +26,9 @@ struct l_entry {
 };
 
 struct query_start {
+  query_start(location_idx_t const l, unixtime_t const t)
+      : location_(l), time_(t) {}
+
   location_idx_t location_;
   unixtime_t time_;
 };
@@ -41,7 +44,7 @@ struct tb_query_state {
     q_.start_.reserve(kNumTransfersMax);
     q_.end_.reserve(kNumTransfersMax);
     q_.segments_.reserve(10000);
-    query_starts.reserve(20);
+    query_starts_.reserve(20);
   }
 
   // transfer set built by preprocessor
@@ -62,7 +65,7 @@ struct tb_query_state {
   // queues of transport segments
   queue q_;
 
-  std::vector<query_start> query_starts;
+  std::vector<query_start> query_starts_;
 };
 
 }  // namespace nigiri::routing::tripbased

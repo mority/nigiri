@@ -119,7 +119,7 @@ struct tb_query_engine {
     TBDL << "next_start_time\n";
 #endif
     state_.q_.reset();
-    state_.query_starts.clear();
+    state_.query_starts_.clear();
   }
 
   void add_start(location_idx_t const l, unixtime_t const t) {
@@ -127,7 +127,7 @@ struct tb_query_engine {
     TBDL << "add_start: " << tt_.locations_.names_.at(l).view() << ", "
          << dhhmm(unix_tt(tt_, t)) << "\n";
 #endif
-    state_.query_starts.emplace_back(l, t);
+    state_.query_starts_.emplace_back(l, t);
   }
 
   void execute(unixtime_t const start_time,

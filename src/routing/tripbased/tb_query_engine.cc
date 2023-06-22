@@ -16,7 +16,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               pareto_set<journey>& results) {
 
   // init Q_0
-  for (auto const& qs : state_.query_starts) {
+  for (auto const& qs : state_.query_starts_) {
     handle_start(qs);
   }
 
@@ -49,7 +49,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
       auto const tau_d =
           duration_t{(d_seg +
                       static_cast<std::uint16_t>(tau_dep_t_b_delta.days()) -
-                      state_.base_) *
+                      state_.base_.v_) *
                      1440U} +
           duration_t{tau_dep_t_b_delta.mam()};
 
@@ -65,7 +65,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
           // the time at which the target location is reached by using the
           // current transport segment
           auto const t_cur = tt_.to_unixtime(
-              d, tau_d + travel_time_seg.as_duration() + le.time_);
+              state_.base_, tau_d + travel_time_seg.as_duration() + le.time_);
 
 #ifndef NDEBUG
           TBDL << "segment reaches a destination at "
@@ -106,7 +106,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
 
       // the unix time at the next stop of the transport segment
       auto const unix_time_next =
-          tt_.to_unixtime(d, tau_d + travel_time_next.as_duration());
+          tt_.to_unixtime(state_.base_, tau_d + travel_time_next.as_duration());
 
       // transfer out of current transport segment?
       if (unix_time_next < state_.t_min_[n] &&
