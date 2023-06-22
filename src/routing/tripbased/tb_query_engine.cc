@@ -17,7 +17,7 @@ void tb_query_engine::execute(unixtime_t const start_time,
 #ifndef NDEBUG
   TBDL << "Executing with start_time: " << unix_dhhmm(tt_, start_time)
        << ", max_transfers: " << std::to_string(max_transfers)
-       << ", wors_time_at_dest: " << unix_dhhmm(tt_, worst_time_at_dest)
+       << ", worst_time_at_dest: " << unix_dhhmm(tt_, worst_time_at_dest)
        << ", Initializing Q_0...\n";
 #endif
   // init Q_0
