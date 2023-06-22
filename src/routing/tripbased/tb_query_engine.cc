@@ -14,24 +14,6 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               std::uint8_t const max_transfers,
                               unixtime_t const worst_time_at_dest,
                               pareto_set<journey>& results) {
-  assert(state_.start_locations_.size() == state_.start_times_.size());
-#ifndef NDEBUG
-  TBDL << "Executing earliest arrival queries, number of starts: "
-       << state_.start_locations_.size() << "\n";
-#endif
-  for (unsigned start_idx = 0; start_idx < state_.start_locations_.size();
-       ++start_idx) {
-    earliest_arrival_query(start_time, max_transfers, worst_time_at_dest,
-                           results, start_idx);
-  }
-}
-
-void tb_query_engine::earliest_arrival_query(
-    unixtime_t const start_time,
-    std::uint8_t const max_transfers,
-    unixtime_t const worst_time_at_dest,
-    pareto_set<journey>& results,
-    unsigned start_idx) {
 
   // start location
   auto const start_location = state_.start_locations_[start_idx];
