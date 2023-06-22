@@ -135,11 +135,9 @@ struct tb_query_engine {
                unixtime_t const worst_time_at_dest,
                pareto_set<journey>& results);
 
-  void earliest_arrival_query(unixtime_t const start_time,
-                              std::uint8_t const max_transfers,
-                              unixtime_t const worst_time_at_dest,
-                              pareto_set<journey>& results,
-                              unsigned start_idx);
+  void handle_start(query_start const&);
+
+  void handle_start_footpath(day_idx_t const, duration_t const, footpath const);
 
   void reconstruct(query const& q, journey& j) const;
 

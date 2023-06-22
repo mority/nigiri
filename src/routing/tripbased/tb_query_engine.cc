@@ -15,113 +15,9 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               unixtime_t const worst_time_at_dest,
                               pareto_set<journey>& results) {
 
-  // start location
-  auto const start_location = state_.start_locations_[start_idx];
-
-  // start day and time
-  auto const day_idx_mam = tt_.day_idx_mam(state_.start_times_[start_idx]);
-  // start day
-  auto const d = day_idx_mam.first;
-  // start time
-  auto const tau = day_idx_mam.second;
-
-#ifndef NDEBUG
-  TBDL << "earliest arrival query " << start_idx << " | start_location: "
-       << tt_.locations_.names_.at(start_location).view()
-       << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
-       << "\n";
-#endif
-
-  // fill Q_0
-  auto create_q0_entry = [&tau, this, &d](footpath const& fp) {
-    // arrival time after walking the footpath
-    auto const alpha = delta{tau + fp.duration()};
-
-    // iterate routes at target stop of footpath
-    for (auto const route_idx : tt_.location_routes_[fp.target()]) {
-#ifndef NDEBUG
-      TBDL << "Route " << route_idx << "\n";
-#endif
-      // iterate stop sequence of route, skip last stop
-      for (std::uint16_t i = 0U;
-           i < tt_.route_location_seq_[route_idx].size() - 1; ++i) {
-        auto const q =
-            stop{tt_.route_location_seq_[route_idx][i]}.location_idx();
-        if (q == fp.target()) {
-#ifndef NDEBUG
-          TBDL << "serves " << tt_.locations_.names_.at(fp.target()).view()
-               << " at stop idx = " << i << "\n";
-#endif
-          // departure times of this route at this q
-          auto const event_times =
-              tt_.event_times_at_stop(route_idx, i, event_type::kDep);
-          // iterator to departure time of connecting transport at this
-          // q
-          auto tau_dep_t_i = std::lower_bound(
-              event_times.begin(), event_times.end(), alpha,
-              [&](auto&& x, auto&& y) { return x.mam() < y.mam(); });
-          // shift amount due to walking the footpath
-          auto sigma = day_idx_t{alpha.days()};
-          // no departure found on the day of alpha
-          if (tau_dep_t_i == event_times.end()) {
-            // start looking at the following day
-            ++sigma;
-            tau_dep_t_i = event_times.begin();
-          }
-          // iterate departures until maximum waiting time is reached
-          while (sigma <= 1) {
-            // shift amount due to travel time of transport
-            auto const sigma_t = day_idx_t{tau_dep_t_i->days()};
-            // day index of the transport segment
-            auto const d_seg = d + sigma - sigma_t;
-            // offset of connecting transport in route_transport_ranges
-            auto const k = static_cast<std::size_t>(
-                std::distance(event_times.begin(), tau_dep_t_i));
-            // transport_idx_t of the connecting transport
-            auto const t = tt_.route_transport_ranges_[route_idx][k];
-            // bitfield of the connecting transport
-            auto const& beta_t = tt_.bitfields_[tt_.transport_traffic_days_[t]];
-
-            if (beta_t.test(d_seg.v_)) {
-              // enqueue segment if matching bit is found
-#ifndef NDEBUG
-              TBDL << "Attempting to enqueue a segment of transport " << t
-                   << ": " << tt_.transport_name(t) << ", departing at "
-                   << dhhmm(duration_t{sigma.v_ * 1440U} +
-                            duration_t{tau_dep_t_i->mam()})
-                   << "\n";
-#endif
-              state_.q_.enqueue(d_seg, t, i, 0U, TRANSFERRED_FROM_NULL);
-              break;
-            }
-            // passing midnight?
-            if (tau_dep_t_i + 1 == event_times.end()) {
-              ++sigma;
-              // start with the earliest transport on the next day
-              tau_dep_t_i = event_times.begin();
-            } else {
-              ++tau_dep_t_i;
-            }
-          }
-        }
-      }
-    }
-  };
-  // virtual reflexive footpath
-#ifndef NDEBUG
-  TBDL << "Examining routes at start location: "
-       << tt_.locations_.names_.at(start_location).view() << "\n";
-#endif
-  create_q0_entry(footpath{start_location, duration_t{0U}});
-  // iterate outgoing footpaths of source location
-  for (auto const fp_q : tt_.locations_.footpaths_out_[start_location]) {
-#ifndef NDEBUG
-    TBDL << "Examining routes at location: "
-         << tt_.locations_.names_.at(fp_q.target()).view()
-         << " reached after walking " << fp_q.duration() << " minutes"
-         << "\n";
-#endif
-    create_q0_entry(fp_q);
+  // init Q_0
+  for (auto const& qs : state_.query_starts) {
+    handle_start(qs);
   }
 
   // process all Q_n in ascending order, i.e., transport segments reached after
@@ -149,11 +45,11 @@ void tb_query_engine::execute(unixtime_t const start_time,
       // the day index of the segment
       auto const d_seg = seg.get_transport_day(base_).v_;
       // departure time at start of current transport segment in minutes after
-      // midnight on the day of this earliest arrival query
+      // midnight on the day of the query
       auto const tau_d =
           duration_t{(d_seg +
                       static_cast<std::uint16_t>(tau_dep_t_b_delta.days()) -
-                      d.v_) *
+                      state_.base_) *
                      1440U} +
           duration_t{tau_dep_t_b_delta.mam()};
 
@@ -273,6 +169,116 @@ void tb_query_engine::execute(unixtime_t const start_time,
               state_.q_.enqueue(d_tr, transfer.get_transport_idx_to(),
                                 transfer.get_stop_idx_to(), n + 1U, q_cur);
             }
+          }
+        }
+      }
+    }
+  }
+}
+
+void tb_query_engine::handle_start(query_start const& start) {
+
+  // start day and time
+  auto const day_idx_mam = tt_.day_idx_mam(start.time_);
+  // start day
+  auto const d = day_idx_mam.first;
+  // start time
+  auto const tau = day_idx_mam.second;
+
+#ifndef NDEBUG
+  TBDL << "earliest arrival query | start_location: "
+       << tt_.locations_.names_.at(start.location_).view()
+       << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
+       << "\n";
+#endif
+
+  // virtual reflexive footpath
+#ifndef NDEBUG
+  TBDL << "Examining routes at start location: "
+       << tt_.locations_.names_.at(start.location_).view() << "\n";
+#endif
+  handle_start_footpath(d, tau, footpath{start.location_, duration_t{0U}});
+  // iterate outgoing footpaths of source location
+  for (auto const fp : tt_.locations_.footpaths_out_[start.location_]) {
+#ifndef NDEBUG
+    TBDL << "Examining routes at location: "
+         << tt_.locations_.names_.at(fp.target()).view()
+         << " reached after walking " << fp.duration() << " minutes"
+         << "\n";
+#endif
+    handle_start_footpath(d, tau, fp);
+  }
+}
+
+void tb_query_engine::handle_start_footpath(day_idx_t const d,
+                                            duration_t const tau,
+                                            footpath const fp) {
+  // arrival time after walking the footpath
+  auto const alpha = delta{tau + fp.duration()};
+
+  // iterate routes at target stop of footpath
+  for (auto const route_idx : tt_.location_routes_[fp.target()]) {
+#ifndef NDEBUG
+    TBDL << "Route " << route_idx << "\n";
+#endif
+    // iterate stop sequence of route, skip last stop
+    for (std::uint16_t i = 0U;
+         i < tt_.route_location_seq_[route_idx].size() - 1; ++i) {
+      auto const q = stop{tt_.route_location_seq_[route_idx][i]}.location_idx();
+      if (q == fp.target()) {
+#ifndef NDEBUG
+        TBDL << "serves " << tt_.locations_.names_.at(fp.target()).view()
+             << " at stop idx = " << i << "\n";
+#endif
+        // departure times of this route at this q
+        auto const event_times =
+            tt_.event_times_at_stop(route_idx, i, event_type::kDep);
+        // iterator to departure time of connecting transport at this
+        // q
+        auto tau_dep_t_i = std::lower_bound(
+            event_times.begin(), event_times.end(), alpha,
+            [&](auto&& x, auto&& y) { return x.mam() < y.mam(); });
+        // shift amount due to walking the footpath
+        auto sigma = day_idx_t{alpha.days()};
+        // no departure found on the day of alpha
+        if (tau_dep_t_i == event_times.end()) {
+          // start looking at the following day
+          ++sigma;
+          tau_dep_t_i = event_times.begin();
+        }
+        // iterate departures until maximum waiting time is reached
+        while (sigma <= 1) {
+          // shift amount due to travel time of transport
+          auto const sigma_t = day_idx_t{tau_dep_t_i->days()};
+          // day index of the transport segment
+          auto const d_seg = d + sigma - sigma_t;
+          // offset of connecting transport in route_transport_ranges
+          auto const k = static_cast<std::size_t>(
+              std::distance(event_times.begin(), tau_dep_t_i));
+          // transport_idx_t of the connecting transport
+          auto const t = tt_.route_transport_ranges_[route_idx][k];
+          // bitfield of the connecting transport
+          auto const& beta_t = tt_.bitfields_[tt_.transport_traffic_days_[t]];
+
+          if (beta_t.test(d_seg.v_)) {
+            // enqueue segment if matching bit is found
+#ifndef NDEBUG
+            TBDL << "Attempting to enqueue a segment of transport " << t << ": "
+                 << tt_.transport_name(t) << ", departing at "
+                 << dhhmm(duration_t{sigma.v_ * 1440U} +
+                          duration_t{tau_dep_t_i->mam()})
+                 << "\n";
+#endif
+            state_.q_.enqueue(d_seg, t, i, 0U, TRANSFERRED_FROM_NULL);
+            break;
+          }
+          // passing midnight?
+          if (tau_dep_t_i + 1 == event_times.end()) {
+            ++sigma;
+            // start with the earliest transport on the next day
+            tau_dep_t_i = event_times.begin();
+          } else {
+            ++tau_dep_t_i;
           }
         }
       }
