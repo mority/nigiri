@@ -1,4 +1,5 @@
 #include "nigiri/routing/tripbased/transport_segment.h"
+#include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/timetable.h"
 
 using namespace nigiri;
@@ -11,18 +12,15 @@ void transport_segment::print(std::ostream& out, timetable const& tt) const {
   out << "transport " << get_transport_idx() << ": "
       << tt.transport_name(get_transport_idx()) << " from stop "
       << stop_idx_start_ << ": "
-      << tt.locations_.names_
-             .at(stop{tt.route_location_seq_
-                          [tt.transport_route_[get_transport_idx()]]
-                          [stop_idx_start_]}
-                     .location_idx())
-             .view()
+      << location_name(tt, stop{tt.route_location_seq_
+                                    [tt.transport_route_[get_transport_idx()]]
+                                    [stop_idx_start_]}
+                               .location_idx())
       << " to stop " << stop_idx_end_ << ": "
-      << tt.locations_.names_
-             .at(stop{
-                 tt.route_location_seq_
-                     [tt.transport_route_[get_transport_idx()]][stop_idx_end_]}
-                     .location_idx())
-             .view()
+      << location_name(
+             tt,
+             stop{tt.route_location_seq_
+                      [tt.transport_route_[get_transport_idx()]][stop_idx_end_]}
+                 .location_idx())
       << ", transferred_from: " << transferred_from_str << "\n";
 }

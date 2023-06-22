@@ -36,4 +36,14 @@ static inline std::string unix_dhhmm(timetable const& tt, unixtime_t const u) {
   return dhhmm(unix_tt(tt, u));
 }
 
+static inline std::string location_name(timetable const& tt,
+                                        location_idx_t const l) {
+  auto const parent = tt.locations_.get(l).parent_;
+  if (parent.v_ < tt.locations_.names_.size()) {
+    return std::string{tt.locations_.names_.at(parent).view()};
+  } else {
+    return std::string{tt.locations_.names_.at(l).view()};
+  }
+}
+
 }  // namespace nigiri::routing::tripbased

@@ -133,7 +133,7 @@ void tb_query_engine::handle_start(query_start const& start) {
 
 #ifndef NDEBUG
   TBDL << "handle_start | start_location: "
-       << tt_.locations_.names_.at(start.location_).view()
+       << location_name(tt_, start.location_)
        << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
        << "\n";
 #endif
@@ -141,14 +141,13 @@ void tb_query_engine::handle_start(query_start const& start) {
   // virtual reflexive footpath
 #ifndef NDEBUG
   TBDL << "Examining routes at start location: "
-       << tt_.locations_.names_.at(start.location_).view() << "\n";
+       << location_name(tt_, start.location_) << "\n";
 #endif
   handle_start_footpath(d, tau, footpath{start.location_, duration_t{0U}});
   // iterate outgoing footpaths of source location
   for (auto const fp : tt_.locations_.footpaths_out_[start.location_]) {
 #ifndef NDEBUG
-    TBDL << "Examining routes at location: "
-         << tt_.locations_.names_.at(fp.target()).view()
+    TBDL << "Examining routes at location: " << location_name(tt_, fp.target())
          << " reached after walking " << fp.duration() << " minutes"
          << "\n";
 #endif
@@ -173,7 +172,7 @@ void tb_query_engine::handle_start_footpath(day_idx_t const d,
       auto const q = stop{tt_.route_location_seq_[route_idx][i]}.location_idx();
       if (q == fp.target()) {
 #ifndef NDEBUG
-        TBDL << "serves " << tt_.locations_.names_.at(fp.target()).view()
+        TBDL << "serves " << location_name(tt_, fp.target())
              << " at stop idx = " << i << "\n";
 #endif
         // departure times of this route at this q
