@@ -10,6 +10,87 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
+tb_query_engine::tb_query_engine(timetable const& tt,
+                                 rt_timetable const* rtt,
+                                 tb_query_state& state,
+                                 std::vector<bool>& is_dest,
+                                 std::vector<std::uint16_t>& dist_to_dest,
+                                 std::vector<std::uint16_t>& lb,
+                                 day_idx_t const base)
+    : tt_{tt},
+      rtt_{rtt},
+      state_{state},
+      is_dest_{is_dest},
+      dist_to_dest_{dist_to_dest},
+      lb_{lb},
+      base_{base} {
+
+  // init l_, i.e., routes that reach the destination at certain stop idx
+  if (dist_to_dest.empty()) {
+    // create l_entries for station-to-station query
+    for (location_idx_t dest{0U}; dest != location_idx_t{is_dest_.size()};
+         ++dest) {
+      if (is_dest_[dest.v_]) {
+        // fill l_
+        auto create_l_entry = [this](footpath const& fp) {
+          // iterate routes serving source of footpath
+          for (auto const route_idx : tt_.location_routes_[fp.target()]) {
+            // iterate stop sequence of route
+            for (std::uint16_t stop_idx{1U};
+                 stop_idx < tt_.route_location_seq_[route_idx].size();
+                 ++stop_idx) {
+              auto const location_idx =
+                  stop{tt_.route_location_seq_[route_idx][stop_idx]}
+                      .location_idx();
+              if (location_idx == fp.target_) {
+                state_.l_.emplace_back(route_idx, stop_idx, fp.duration());
+              }
+            }
+          }
+        };
+        // virtual reflexive incoming footpath
+        create_l_entry(footpath{dest, duration_t{0U}});
+        // iterate incoming footpaths of target location
+        for (auto const fp : tt_.locations_.footpaths_in_[dest]) {
+          create_l_entry(fp);
+        }
+      }
+    }
+  } else {
+    // create l_entries for coord-to-coord query
+    for (location_idx_t dest{0U}; dest != location_idx_t{dist_to_dest.size()};
+         ++dest) {
+      if (dist_to_dest[dest.v_] != std::numeric_limits<std::uint16_t>::max()) {
+        // fill l_
+        auto create_l_entry = [this, &dest](footpath const& fp) {
+          // iterate routes serving source of footpath
+          for (auto const route_idx : tt_.location_routes_[fp.target()]) {
+            // iterate stop sequence of route
+            for (std::uint16_t stop_idx{1U};
+                 stop_idx < tt_.route_location_seq_[route_idx].size();
+                 ++stop_idx) {
+              auto const location_idx =
+                  stop{tt_.route_location_seq_[route_idx][stop_idx]}
+                      .location_idx();
+              if (location_idx == fp.target_) {
+                state_.l_.emplace_back(
+                    route_idx, stop_idx,
+                    fp.duration() + duration_t{dist_to_dest_[dest.v_]});
+              }
+            }
+          }
+        };
+        // virtual reflexive incoming footpath
+        create_l_entry(footpath{dest, duration_t{0U}});
+        // iterate incoming footpaths of target location
+        for (auto const fp : tt_.locations_.footpaths_in_[dest]) {
+          create_l_entry(fp);
+        }
+      }
+    }
+  }
+}
+
 void tb_query_engine::execute(unixtime_t const start_time,
                               std::uint8_t const max_transfers,
                               unixtime_t const worst_time_at_dest,
