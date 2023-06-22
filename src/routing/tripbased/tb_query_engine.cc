@@ -261,7 +261,8 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
   // check if target location is reached from current transport segment
   for (auto const& le : state_.l_) {
     if (le.route_idx_ == tt_.transport_route_[seg.get_transport_idx()] &&
-        seg.stop_idx_start_ < le.stop_idx_) {
+        seg.stop_idx_start_ < le.stop_idx_ &&
+        le.stop_idx_ <= seg.stop_idx_end_) {
       // the time it takes to travel on this transport segment
       auto const travel_time_seg =
           tt_.event_mam(seg.get_transport_idx(), le.stop_idx_,
@@ -454,7 +455,8 @@ tb_query_engine::reconstruct_journey_end(query const& q,
     // find matching entry in l_
     for (auto const& le : state_.l_) {
       // check if route and stop indices match
-      if (le.route_idx_ == route_idx && seg.stop_idx_start_ < le.stop_idx_) {
+      if (le.route_idx_ == route_idx && seg.stop_idx_start_ < le.stop_idx_ &&
+          le.stop_idx_ <= seg.stop_idx_end_) {
         // transport day of the segment
         auto const transport_day = seg.get_transport_day(base_);
         // transport time at destination
