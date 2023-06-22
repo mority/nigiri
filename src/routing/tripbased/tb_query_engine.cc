@@ -324,12 +324,11 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
          i <= seg.get_stop_idx_end(); ++i) {
 #ifndef NDEBUG
       TBDL << "Processing transfers at stop " << i << ": "
-           << tt_.locations_.names_
-                  .at(stop{
-                      tt_.route_location_seq_
-                          [tt_.transport_route_[seg.get_transport_idx()]][i]}
-                          .location_idx())
-                  .view()
+           << location_name(
+                  tt_,
+                  stop{tt_.route_location_seq_
+                           [tt_.transport_route_[seg.get_transport_idx()]][i]}
+                      .location_idx())
            << "\n";
 #endif
 
@@ -360,13 +359,12 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                << transfer.get_transport_idx_to() << ": "
                << tt_.transport_name(transfer.get_transport_idx_to())
                << " at its stop " << transfer.stop_idx_to_ << ": "
-               << tt_.locations_.names_
-                      .at(stop{tt_.route_location_seq_
-                                   [tt_.transport_route_
-                                        [transfer.get_transport_idx_to()]]
-                                   [transfer.get_stop_idx_to()]}
-                              .location_idx())
-                      .view()
+               << location_name(tt_,
+                                stop{tt_.route_location_seq_
+                                         [tt_.transport_route_
+                                              [transfer.get_transport_idx_to()]]
+                                         [transfer.get_stop_idx_to()]}
+                                    .location_idx())
                << "\n";
 #endif
 
