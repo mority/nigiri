@@ -132,7 +132,7 @@ void tb_query_engine::handle_start(query_start const& start) {
   auto const tau = day_idx_mam.second;
 
 #ifndef NDEBUG
-  TBDL << "earliest arrival query | start_location: "
+  TBDL << "handle_start | start_location: "
        << tt_.locations_.names_.at(start.location_).view()
        << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
        << "\n";
