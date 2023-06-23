@@ -434,6 +434,10 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
 
   // reverse order of journey legs
   std::reverse(j.legs_.begin(), j.legs_.end());
+#ifndef NDEBUG
+  TBDL << "Completed reconstruction of journey: ";
+  j.print(std::cout, tt_, nullptr, true);
+#endif
 }
 
 std::optional<tb_query_engine::journey_end>
@@ -518,6 +522,9 @@ void tb_query_engine::add_final_footpath(query const& q,
                                          journey_end const& je) const {
 
   if (q.dest_match_mode_ == location_match_mode::kIntermodal) {
+#ifndef NDEBUG
+    TBDL << "Adding final footpath, destination match mode: intermodal\n";
+#endif
     // add MUMO to END in case of intermodal routing
     for (auto const& offset : q.destination_) {
       // find offset for last location
@@ -525,6 +532,10 @@ void tb_query_engine::add_final_footpath(query const& q,
         j.add(journey::leg{direction::kForward, je.last_location_, j.dest_,
                            j.dest_time_ - offset.duration(), j.dest_time_,
                            offset});
+#ifndef NDEBUG
+        TBDL << "Adding final multi-modal leg:\n";
+        j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
+#endif
         break;
       }
     }
@@ -537,17 +548,29 @@ void tb_query_engine::add_final_footpath(query const& q,
           j.add(journey::leg{direction::kForward, je.le_location_,
                              je.last_location_, fp_time_start, fp_time_end,
                              fp});
+#ifndef NDEBUG
+          TBDL << "Adding final footpath to a destination:\n";
+          j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
+#endif
           break;
         }
       }
     }
   } else {
     // to station routing
+#ifndef NDEBUG
+    TBDL << "Adding final footpath, destination match mode: not intermodal\n";
+#endif
     if (matches(tt_, q.dest_match_mode_, je.le_location_, je.last_location_)) {
       // add footpath with duration = 0 if destination is reached directly
       footpath const fp{je.last_location_, duration_t{0}};
       j.add(journey::leg{direction::kForward, je.last_location_,
                          je.last_location_, j.dest_time_, j.dest_time_, fp});
+#ifndef NDEBUG
+      TBDL << "Directly reaches a destination, adding reflexive footpath with "
+              "zero duration:\n";
+      j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
+#endif
     } else {
       // add footpath between location of l_entry and destination
       for (auto const fp : tt_.locations_.footpaths_out_[je.le_location_]) {
@@ -555,6 +578,10 @@ void tb_query_engine::add_final_footpath(query const& q,
           j.add(journey::leg{direction::kForward, je.le_location_,
                              je.last_location_, j.dest_time_ - fp.duration(),
                              j.dest_time_, fp});
+#ifndef NDEBUG
+          TBDL << "Adding final footpath to a destination:\n";
+          j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
+#endif
           break;
         }
       }
@@ -589,6 +616,10 @@ void tb_query_engine::add_segment_leg(journey& j,
                          rt::run{transport{seg.get_transport_idx(),
                                            seg.get_transport_day(base_)}},
                          seg.get_stop_idx_start(), seg.get_stop_idx_end()}});
+#ifndef NDEBUG
+  TBDL << "Adding a leg for a transport segment:\n";
+  j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
+#endif
 }
 
 std::optional<unsigned> tb_query_engine::reconstruct_transfer(
@@ -655,6 +686,10 @@ std::optional<unsigned> tb_query_engine::reconstruct_transfer(
         j.add(journey::leg{direction::kForward, exit_location_idx,
                            target_location_idx, fp_time_start, fp_time_end,
                            fp_transfer.value()});
+#ifndef NDEBUG
+        TBDL << "Adding a leg for a transfer:\n";
+        j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
+#endif
 
         // return the stop idx at which the segment is exited
         return stop_idx_exit;
@@ -686,9 +721,16 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
                        j.legs_.back().from_,
                        j.legs_.back().dep_time_ - fp_initial->duration(),
                        j.legs_.back().dep_time_, fp_initial.value()});
+#ifndef NDEBUG
+    TBDL << "Adding an initial footpath:\n";
+    j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
+#endif
   }
 
   if (q.start_match_mode_ == location_match_mode::kIntermodal) {
+#ifndef NDEBUG
+    TBDL << "Start match mode: intermodal\n";
+#endif
     for (auto const& offset : q.start_) {
       // add MUMO from START to first journey leg
       if (offset.target() == j.legs_.back().from_) {
@@ -698,6 +740,10 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
                            get_special_station(special_station::kStart),
                            offset.target(), mumo_start_unix,
                            j.legs_.back().dep_time_, offset});
+#ifndef NDEBUG
+        TBDL << "Adding an initial multi-modal leg:\n";
+        j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
+#endif
         return;
       }
     }
