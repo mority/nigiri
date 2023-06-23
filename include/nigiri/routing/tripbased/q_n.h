@@ -8,9 +8,9 @@ namespace nigiri::routing::tripbased {
 
 using queue_idx_t = std::uint32_t;
 
-struct queue {
-  queue() = delete;
-  explicit queue(reached& r, day_idx_t const base) : r_(r), base_(base) {}
+struct q_n {
+  q_n() = delete;
+  explicit q_n(reached& r, day_idx_t const base) : r_(r), base_(base) {}
 
   void reset();
 

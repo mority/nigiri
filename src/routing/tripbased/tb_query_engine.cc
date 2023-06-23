@@ -43,7 +43,8 @@ tb_query_engine::tb_query_engine(timetable const& tt,
                   stop{tt_.route_location_seq_[route_idx][stop_idx]}
                       .location_idx();
               if (location_idx == fp.target_) {
-                state_.l_.emplace_back(route_idx, stop_idx, fp.duration());
+                state_.route_dest_.emplace_back(route_idx, stop_idx,
+                                                fp.duration());
               }
             }
           }
@@ -73,7 +74,7 @@ tb_query_engine::tb_query_engine(timetable const& tt,
                   stop{tt_.route_location_seq_[route_idx][stop_idx]}
                       .location_idx();
               if (location_idx == fp.target_) {
-                state_.l_.emplace_back(
+                state_.route_dest_.emplace_back(
                     route_idx, stop_idx,
                     fp.duration() + duration_t{dist_to_dest_[dest.v_]});
               }
@@ -258,7 +259,7 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
       duration_t{tau_dep_t_b_delta.mam()};
 
   // check if target location is reached from current transport segment
-  for (auto const& le : state_.l_) {
+  for (auto const& le : state_.route_dest_) {
     if (le.route_idx_ == tt_.transport_route_[seg.get_transport_idx()] &&
         seg.stop_idx_start_ < le.stop_idx_ &&
         le.stop_idx_ <= seg.stop_idx_end_) {
@@ -454,7 +455,7 @@ tb_query_engine::reconstruct_journey_end(query const& q,
     auto const route_idx = tt_.transport_route_[seg.get_transport_idx()];
 
     // find matching entry in l_
-    for (auto const& le : state_.l_) {
+    for (auto const& le : state_.route_dest_) {
       // check if route and stop indices match
       if (le.route_idx_ == route_idx && seg.stop_idx_start_ < le.stop_idx_ &&
           le.stop_idx_ <= seg.stop_idx_end_) {

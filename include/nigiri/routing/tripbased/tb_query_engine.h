@@ -78,7 +78,7 @@ private:
 
   struct journey_end {
     journey_end(queue_idx_t const seg_idx,
-                l_entry const& le,
+                route_dest const& le,
                 location_idx_t const le_location,
                 location_idx_t const last_location)
         : seg_idx_(seg_idx),
@@ -89,7 +89,7 @@ private:
     // the last transport segment of the journey
     queue_idx_t seg_idx_;
     // the l_entry for the destination of the journey
-    l_entry le_;
+    route_dest le_;
     // the location idx of the l_entry
     location_idx_t le_location_;
     // the reconstructed destination of the journey

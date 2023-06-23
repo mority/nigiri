@@ -1,11 +1,11 @@
-#include "nigiri/routing/tripbased/queue.h"
 #include "nigiri/routing/tripbased/dbg.h"
+#include "nigiri/routing/tripbased/q_n.h"
 #include "nigiri/routing/tripbased/transport_segment.h"
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-void queue::reset() {
+void q_n::reset() {
 #ifndef NDEBUG
   TBDL << "Resetting transport segment queue\n";
 #endif
@@ -16,11 +16,11 @@ void queue::reset() {
   segments_.clear();
 }
 
-void queue::enqueue(day_idx_t const transport_day,
-                    transport_idx_t const transport_idx,
-                    std::uint16_t const stop_idx,
-                    std::uint16_t const n_transfers,
-                    std::uint32_t const transferred_from) {
+void q_n::enqueue(day_idx_t const transport_day,
+                  transport_idx_t const transport_idx,
+                  std::uint16_t const stop_idx,
+                  std::uint16_t const n_transfers,
+                  std::uint32_t const transferred_from) {
   assert(segments_.size() < std::numeric_limits<queue_idx_t>::max());
 
   // compute transport segment index
@@ -53,7 +53,7 @@ void queue::enqueue(day_idx_t const transport_day,
   }
 }
 
-void queue::print(std::ostream& out, queue_idx_t const q_idx) {
+void q_n::print(std::ostream& out, queue_idx_t const q_idx) {
   out << "q_idx: " << std::to_string(q_idx) << ", segment of ";
   segments_[q_idx].print(out, r_.tt_);
 }

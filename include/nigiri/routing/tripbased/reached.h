@@ -37,7 +37,6 @@ struct reached {
 
   // reached stops per route
   std::vector<pareto_set<reached_entry>> data_;
-  // mutable_fws_multimap<transport_idx_t, reached_entry> data_{};
 };
 
 }  // namespace nigiri::routing::tripbased
