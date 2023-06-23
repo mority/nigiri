@@ -1,7 +1,7 @@
 #pragma once
 
 #include "nigiri/routing/tripbased/bits.h"
-#include "nigiri/routing/tripbased/queue.h"
+#include "nigiri/routing/tripbased/q_n.h"
 #include "nigiri/routing/tripbased/reached.h"
 #include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "nigiri/types.h"
@@ -13,8 +13,8 @@ struct timetable;
 namespace nigiri::routing::tripbased {
 
 // a route that reaches the destination
-struct l_entry {
-  l_entry(route_idx_t route_idx, std::uint16_t stop_idx, duration_t time)
+struct route_dest {
+  route_dest(route_idx_t route_idx, std::uint16_t stop_idx, duration_t time)
       : route_idx_(route_idx), stop_idx_(stop_idx), time_(time) {}
   // the route index of the route that reaches the target location
   route_idx_t route_idx_;
@@ -39,12 +39,18 @@ struct tb_query_state {
                  transfer_set const& ts,
                  day_idx_t const base)
       : ts_{ts}, base_{base}, r_{tt}, q_{r_, base} {
-    l_.reserve(128);
+    route_dest_.reserve(128);
     t_min_.resize(kNumTransfersMax, unixtime_t::max());
     q_.start_.reserve(kNumTransfersMax);
     q_.end_.reserve(kNumTransfersMax);
     q_.segments_.reserve(10000);
     query_starts_.reserve(20);
+  }
+
+  void new_query_reset() {
+    route_dest_.clear();
+    std::fill(t_min_.begin(), t_min_.end(), unixtime_t::max());
+    r_.reset();
   }
 
   // transfer set built by preprocessor
@@ -54,7 +60,7 @@ struct tb_query_state {
   day_idx_t const base_;
 
   // routes that reach the target stop
-  std::vector<l_entry> l_;
+  std::vector<route_dest> route_dest_;
 
   // reached stops per transport
   reached r_;
@@ -63,7 +69,7 @@ struct tb_query_state {
   std::vector<unixtime_t> t_min_;
 
   // queues of transport segments
-  queue q_;
+  q_n q_;
 
   std::vector<query_start> query_starts_;
 };
