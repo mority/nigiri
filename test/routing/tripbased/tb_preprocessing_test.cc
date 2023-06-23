@@ -247,13 +247,13 @@ TEST(earliest_times, random) {
   std::mt19937 gen(rd());
   std::uniform_int_distribution<> li_dist(0, li_max);
   std::uniform_int_distribution<> time_dist(0, time_max);
-  std::uniform_int_distribution<unsigned long> bf_block_dist(
-      0, std::numeric_limits<unsigned long>::max());
+  std::uniform_int_distribution<std::uint64_t> bf_block_dist(
+      0, std::numeric_limits<std::uint64_t>::max());
 
   // fill
   for (auto i = 0U; i < num_updates; ++i) {
     bitfield bf;
-    for (auto j = 0U; j < bf.num_blocks; ++j) {
+    for (auto j = 0U; j < bitfield::num_blocks; ++j) {
       bf.blocks_[j] = bf_block_dist(gen);
     }
     ets.update(location_idx_t{li_dist(gen)}, duration_t{time_dist(gen)}, bf);

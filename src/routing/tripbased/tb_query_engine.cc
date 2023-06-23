@@ -522,13 +522,9 @@ void tb_query_engine::add_final_footpath(query const& q,
     for (auto const& offset : q.destination_) {
       // find offset for last location
       if (offset.target() == je.last_location_) {
-        journey::leg leg_mumo_end{direction::kForward,
-                                  je.last_location_,
-                                  j.dest_,
-                                  j.dest_time_ - offset.duration(),
-                                  j.dest_time_,
-                                  offset};
-        j.add(std::move(leg_mumo_end));
+        j.add(journey::leg{direction::kForward, je.last_location_, j.dest_,
+                           j.dest_time_ - offset.duration(), j.dest_time_,
+                           offset});
         break;
       }
     }
@@ -538,10 +534,9 @@ void tb_query_engine::add_final_footpath(query const& q,
         if (fp.target() == je.last_location_) {
           unixtime_t const fp_time_end = j.legs_.back().dep_time_;
           unixtime_t const fp_time_start = fp_time_end - fp.duration();
-          journey::leg leg_fp{direction::kForward, je.le_location_,
-                              je.last_location_,   fp_time_start,
-                              fp_time_end,         fp};
-          j.add(std::move(leg_fp));
+          j.add(journey::leg{direction::kForward, je.le_location_,
+                             je.last_location_, fp_time_start, fp_time_end,
+                             fp});
           break;
         }
       }
@@ -551,18 +546,15 @@ void tb_query_engine::add_final_footpath(query const& q,
     if (matches(tt_, q.dest_match_mode_, je.le_location_, je.last_location_)) {
       // add footpath with duration = 0 if destination is reached directly
       footpath const fp{je.last_location_, duration_t{0}};
-      journey::leg leg_fp{direction::kForward, je.last_location_,
-                          je.last_location_,   j.dest_time_,
-                          j.dest_time_,        fp};
-      j.add(std::move(leg_fp));
+      j.add(journey::leg{direction::kForward, je.last_location_,
+                         je.last_location_, j.dest_time_, j.dest_time_, fp});
     } else {
       // add footpath between location of l_entry and destination
       for (auto const fp : tt_.locations_.footpaths_out_[je.le_location_]) {
         if (fp.target() == je.last_location_) {
-          journey::leg leg_fp{direction::kForward, je.le_location_,
-                              je.last_location_,   j.dest_time_ - fp.duration(),
-                              j.dest_time_,        fp};
-          j.add(std::move(leg_fp));
+          j.add(journey::leg{direction::kForward, je.le_location_,
+                             je.last_location_, j.dest_time_ - fp.duration(),
+                             j.dest_time_, fp});
           break;
         }
       }
@@ -592,12 +584,11 @@ void tb_query_engine::add_segment_leg(journey& j,
                       tt_.event_mam(seg.get_transport_idx(), seg.stop_idx_end_,
                                     event_type::kArr)
                           .as_duration());
-  transport const t{seg.get_transport_idx(), seg.get_transport_day(base_)};
-  rt::frun const r{tt_, nullptr, t};
-  journey::run_enter_exit const ree{r, seg.get_stop_idx_start(),
-                                    seg.get_stop_idx_end()};
-  journey::leg leg_seg{direction::kForward, from, to, dep_time, arr_time, ree};
-  j.add(std::move(leg_seg));
+  j.add(journey::leg{direction::kForward, from, to, dep_time, arr_time,
+                     journey::run_enter_exit{
+                         rt::run{transport{seg.get_transport_idx(),
+                                           seg.get_transport_day(base_)}},
+                         seg.get_stop_idx_start(), seg.get_stop_idx_end()}});
 }
 
 std::optional<unsigned> tb_query_engine::reconstruct_transfer(
@@ -661,10 +652,9 @@ std::optional<unsigned> tb_query_engine::reconstruct_transfer(
                                           stop_idx_exit, event_type::kArr)
                                 .as_duration());
         auto const fp_time_end = fp_time_start + fp_transfer->duration();
-        journey::leg leg_fp{direction::kForward, exit_location_idx,
-                            target_location_idx, fp_time_start,
-                            fp_time_end,         fp_transfer.value()};
-        j.add(std::move(leg_fp));
+        j.add(journey::leg{direction::kForward, exit_location_idx,
+                           target_location_idx, fp_time_start, fp_time_end,
+                           fp_transfer.value()});
 
         // return the stop idx at which the segment is exited
         return stop_idx_exit;
@@ -692,13 +682,10 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
                    "footpath\n";
       return;
     }
-    journey::leg leg_fp{direction::kForward,
-                        fp_initial->target(),
-                        j.legs_.back().from_,
-                        j.legs_.back().dep_time_ - fp_initial->duration(),
-                        j.legs_.back().dep_time_,
-                        fp_initial.value()};
-    j.add(std::move(leg_fp));
+    j.add(journey::leg{direction::kForward, fp_initial->target(),
+                       j.legs_.back().from_,
+                       j.legs_.back().dep_time_ - fp_initial->duration(),
+                       j.legs_.back().dep_time_, fp_initial.value()});
   }
 
   if (q.start_match_mode_ == location_match_mode::kIntermodal) {
@@ -707,13 +694,10 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
       if (offset.target() == j.legs_.back().from_) {
         unixtime_t const mumo_start_unix{j.legs_.back().dep_time_ -
                                          offset.duration()};
-        journey::leg l_mumo_start{direction::kForward,
-                                  get_special_station(special_station::kStart),
-                                  offset.target(),
-                                  mumo_start_unix,
-                                  j.legs_.back().dep_time_,
-                                  offset};
-        j.add(std::move(l_mumo_start));
+        j.add(journey::leg{direction::kForward,
+                           get_special_station(special_station::kStart),
+                           offset.target(), mumo_start_unix,
+                           j.legs_.back().dep_time_, offset});
         return;
       }
     }
@@ -727,7 +711,9 @@ bool tb_query_engine::is_start_location(query const& q,
   bool res = false;
   for (auto const& offset : q.start_) {
     res = matches(tt_, q.start_match_mode_, offset.target(), l);
-    if (res) break;
+    if (res) {
+      break;
+    }
   }
   return res;
 }

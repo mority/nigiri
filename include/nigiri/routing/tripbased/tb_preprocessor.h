@@ -23,7 +23,7 @@ struct tb_preprocessor {
 
     explicit earliest_times(tb_preprocessor& tbp) : tbp_(tbp) {}
 
-    bool update(location_idx_t li_new, duration_t time_new, bitfield const& bf);
+    bool update(location_idx_t, duration_t, bitfield const&);
 
     auto size() const noexcept { return location_idx_times_.size(); }
 

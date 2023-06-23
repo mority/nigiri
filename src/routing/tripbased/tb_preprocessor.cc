@@ -123,11 +123,10 @@ void tb_preprocessor::build(transfer_set& ts) {
       ets_arr_.clear();
       ets_ch_.clear();
       // reverse iteration
-      for (stop_idx_t i = static_cast<stop_idx_t>(stop_seq_t.size() - 1U);
-           i != 0U; --i) {
+      for (auto i = static_cast<stop_idx_t>(stop_seq_t.size() - 1U); i != 0U;
+           --i) {
 #else
-      for (auto i = static_cast<std::uint16_t>(1U); i != stop_seq_t.size();
-           ++i) {
+      for (auto i = static_cast<stop_idx_t>(1U); i != stop_seq_t.size(); ++i) {
 #endif
         // skip stop if exiting is not allowed
         if (!stop{stop_seq_t[i]}.out_allowed()) {
