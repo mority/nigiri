@@ -380,8 +380,8 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
 void tb_query_engine::reconstruct(query const& q, journey& j) const {
 #ifndef NDEBUG
   TBDL << "Beginning reconstruction of journey: ";
-#endif
   j.print(std::cout, tt_, nullptr, true);
+#endif
 
   // find journey end
   auto je = reconstruct_journey_end(q, j);
