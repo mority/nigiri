@@ -20,63 +20,36 @@ bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
 }
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-bool tb_preprocessor::earliest_times::update(location_idx_t location_idx,
+void tb_preprocessor::earliest_times::update(location_idx_t location,
                                              duration_t time_new,
-                                             bitfield const& bf) {
-  // bitfield of the update
-  bf_new_ = bf;
-
-  // iterator to first entry that has no active days, overwrite with new entry
-  // instead
-  unsigned overwrite_spot =
-      static_cast<unsigned>(location_idx_times_[location_idx].size());
-
-  // iterate entries for this location
-  for (auto i{0U}; i < location_idx_times_[location_idx].size(); ++i) {
-    // the earliest time entry we are currently examining
-    auto& et_cur = location_idx_times_[location_idx][i];
-    if (bf_new_.none()) {
-      // all bits of new entry were set to zero, new entry does not improve
-      // upon any times
-      return false;
-    } else if (et_cur.bf_.any()) {
-      if (time_new < et_cur.time_) {
-        // new time is better than current time, update bit set of current
-        // time
-        et_cur.bf_ &= ~bf_new_;
-      } else if (time_new == et_cur.time_) {
-        // entry for this time already exists
-        if ((bf_new_ & ~et_cur.bf_).none()) {
-          // all bits of bf_new already covered
-          return false;
-        } else {
-          // new entry absorbs old entry
-          bf_new_ |= et_cur.bf_;
-          et_cur.bf_ = bitfield{"0"};
-        }
-      } else {
-        // new time is worse than current time, update bit set of new time
-        bf_new_ &= ~et_cur.bf_;
-      }
-    }
-    // we remember the first invalid entry as an overwrite spot for the new
-    // entry
-    if (overwrite_spot == location_idx_times_[location_idx].size() &&
-        et_cur.bf_.none()) {
-      overwrite_spot = i;
-    }
+                                             bitfield const& bf,
+                                             bitfield* impr) {
+  // grow times_ if all allocated slots are in use
+  if (times_.size() == location_slot_.size()) {
+    grow();
   }
 
-  if (bf_new_.any()) {
-    if (overwrite_spot == location_idx_times_[location_idx].size()) {
-      location_idx_times_[location_idx].emplace_back(time_new, bf_new_);
-    } else {
-      location_idx_times_[location_idx][overwrite_spot].time_ = time_new;
-      location_idx_times_[location_idx][overwrite_spot].bf_ = bf_new_;
+  if (location_slot_.contains(location)) {
+    auto const slot = location_slot_[location];
+    for (std::uint32_t day = 0U; day != kMaxDays; ++day) {
+      if (bf.test(day) && time_new < times_[slot][day]) {
+        times_[slot][day] = time_new;
+        if (impr) {
+          impr->set(day);
+        }
+      }
     }
-    return true;
   } else {
-    return false;
+    auto const slot = location_slot_.size();
+    location_slot_[location] = slot;
+    for (std::uint32_t day = 0U; day != kMaxDays; ++day) {
+      if (bf.test(day)) {
+        times_[slot][day] = time_new;
+      }
+    }
+    if (impr) {
+      *impr |= bf;
+    }
   }
 }
 #endif
@@ -93,8 +66,8 @@ void tb_preprocessor::build(transfer_set& ts) {
     auto const timer = scoped_timer("trip-based preprocessing: transfer set");
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-    earliest_times ets_arr_(*this);
-    earliest_times ets_ch_(*this);
+    earliest_times ets_arr_;
+    earliest_times ets_ch_;
 #endif
 
     // the transfers per stop of the transport currently examined
@@ -103,6 +76,16 @@ void tb_preprocessor::build(transfer_set& ts) {
     for (auto& inner_vec : transfers) {
       inner_vec.reserve(64);
     }
+
+    // days of transport that still require a connection
+    bitfield omega;
+
+    // active days of current transfer
+    bitfield theta;
+
+    // days on which the transfer constitutes an
+    // improvement
+    bitfield impr;
 
     // iterate over all trips of the timetable
     for (transport_idx_t t{0U}; t != tt_.transport_traffic_days_.size(); ++t) {
@@ -121,8 +104,8 @@ void tb_preprocessor::build(transfer_set& ts) {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
       // clear earliest times
-      ets_arr_.clear();
-      ets_ch_.clear();
+      ets_arr_.reset();
+      ets_ch_.reset();
       // reverse iteration
       for (auto i = static_cast<stop_idx_t>(stop_seq_t.size() - 1U); i != 0U;
            --i) {
@@ -153,19 +136,22 @@ void tb_preprocessor::build(transfer_set& ts) {
         // the bitfield of the transport we are transferring from
         auto const& beta_t = tt_.bitfields_[tt_.transport_traffic_days_[t]];
         // init the earliest times data structure
-        ets_arr_.update(p_t_i, tau_arr_t_i, beta_t);
+        ets_arr_.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
         for (auto const& fp : tt_.locations_.footpaths_out_[p_t_i]) {
-          ets_arr_.update(fp.target(), tau_arr_t_i + fp.duration(), beta_t);
-          ets_ch_.update(fp.target(), tau_arr_t_i + fp.duration(), beta_t);
+          ets_arr_.update(fp.target(), tau_arr_t_i + fp.duration(), beta_t,
+                          nullptr);
+          ets_ch_.update(fp.target(), tau_arr_t_i + fp.duration(), beta_t,
+                         nullptr);
         }
 #endif
 
         auto handle_fp = [&sigma_t, this, &t, &i, &route_t, &transfers, &alpha
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                           ,
-                          &tau_arr_t_i, &ets_arr_, &ets_ch_
+                          &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr
 #endif
-        ](footpath const& fp) {
+                          ,
+                          &omega, &theta](footpath const& fp) {
           // q: location index of destination of footpath
           auto const q = fp.target();
 
@@ -212,10 +198,7 @@ void tb_preprocessor::build(transfer_set& ts) {
                 }
 
                 // days of t that still require connection
-                bitfield omega = tt_.bitfields_[tt_.transport_traffic_days_[t]];
-
-                // active days of current transfer
-                bitfield theta;
+                omega = tt_.bitfields_[tt_.transport_traffic_days_[t]];
 
                 // check if any bit in omega is set to 1 and maximum waiting
                 // time not exceeded
@@ -323,41 +306,31 @@ void tb_preprocessor::build(transfer_set& ts) {
                       if (!check_uturn()) {
 #endif
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-                        auto const check_impr = [&alpha, &tau_dep_alpha_u_j, &j,
-                                                 this, &route_u, &u,
-                                                 &tau_dep_u_j, &theta,
-                                                 &ets_arr_, &ets_ch_,
-                                                 &tau_arr_t_i]() {
-                          bool impr = false;
-                          auto const tau_dep_t_u_j =
-                              tau_arr_t_i + (tau_dep_alpha_u_j - alpha);
-                          for (stop_idx_t l = j + 1U;
-                               l != tt_.route_location_seq_[route_u].size();
-                               ++l) {
-                            auto const tau_arr_t_u_l =
-                                tau_dep_t_u_j +
-                                (tt_.event_mam(u, l, event_type::kArr)
-                                     .as_duration() -
-                                 tau_dep_u_j->as_duration());
-                            auto const p_u_l =
-                                stop{tt_.route_location_seq_[route_u][l]}
-                                    .location_idx();
-                            auto const ets_arr_res =
-                                ets_arr_.update(p_u_l, tau_arr_t_u_l, theta);
-                            impr = impr || ets_arr_res;
-                            for (auto const& fp_r :
-                                 tt_.locations_.footpaths_out_[p_u_l]) {
-                              auto const eta = tau_arr_t_u_l + fp_r.duration();
-                              auto const ets_arr_fp_res =
-                                  ets_arr_.update(fp_r.target(), eta, theta);
-                              auto const ets_ch_fp_res =
-                                  ets_ch_.update(fp_r.target(), eta, theta);
-                              impr = impr || ets_arr_fp_res || ets_ch_fp_res;
-                            }
+                        impr.reset();
+                        auto const tau_dep_t_u_j =
+                            tau_arr_t_i + (tau_dep_alpha_u_j - alpha);
+                        for (stop_idx_t l = j + 1U;
+                             l != tt_.route_location_seq_[route_u].size();
+                             ++l) {
+                          auto const tau_arr_t_u_l =
+                              tau_dep_t_u_j +
+                              (tt_.event_mam(u, l, event_type::kArr)
+                                   .as_duration() -
+                               tau_dep_u_j->as_duration());
+                          auto const p_u_l =
+                              stop{tt_.route_location_seq_[route_u][l]}
+                                  .location_idx();
+                          ets_arr_.update(p_u_l, tau_arr_t_u_l, theta, &impr);
+                          for (auto const& fp_r :
+                               tt_.locations_.footpaths_out_[p_u_l]) {
+                            auto const eta = tau_arr_t_u_l + fp_r.duration();
+                            ets_arr_.update(fp_r.target(), eta, theta, &impr);
+                            ets_ch_.update(fp_r.target(), eta, theta, &impr);
                           }
-                          return impr;
-                        };
-                        if (check_impr()) {
+                        }
+
+                        std::swap(theta, impr);
+                        if (theta.any()) {
 #endif
                           // the bitfield index of the bitfield of the
                           // transfer

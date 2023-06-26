@@ -3,6 +3,7 @@
 #include "boost/functional/hash.hpp"
 #include "nigiri/timetable.h"
 #include <filesystem>
+#include <vector>
 #include "bits.h"
 #include "transfer.h"
 #include "transfer_set.h"
@@ -15,24 +16,52 @@ namespace nigiri::routing::tripbased {
 struct tb_preprocessor {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
+  //  struct earliest_times {
+  //    struct earliest_time {
+  //      duration_t time_{};
+  //      bitfield bf_{};
+  //    };
+  //
+  //    explicit earliest_times(tb_preprocessor& tbp) : tbp_(tbp) {}
+  //
+  //    bool update(location_idx_t, duration_t, bitfield const&);
+  //
+  //    auto size() const noexcept { return location_idx_times_.size(); }
+  //
+  //    void clear() noexcept { location_idx_times_.clear(); }
+  //
+  //    tb_preprocessor& tbp_;
+  //    // temp for get_create_bfi
+  //    bitfield bf_new_;
+  //    mutable_fws_multimap<location_idx_t, earliest_time>
+  //    location_idx_times_{};
+  //  };
+
   struct earliest_times {
-    struct earliest_time {
-      duration_t time_{};
-      bitfield bf_{};
-    };
 
-    explicit earliest_times(tb_preprocessor& tbp) : tbp_(tbp) {}
+    explicit earliest_times() {
+      location_slot_.reserve(100);
+      grow();
+    }
 
-    bool update(location_idx_t, duration_t, bitfield const&);
+    void update(location_idx_t, duration_t, bitfield const& bf, bitfield* impr);
 
-    auto size() const noexcept { return location_idx_times_.size(); }
+    void grow() {
+      std::vector<duration_t> const init_vec(kMaxDays, duration_t::max());
+      for (auto l = 0U; l != 100; ++l) {
+        times_.emplace_back(init_vec);
+      }
+    }
 
-    void clear() noexcept { location_idx_times_.clear(); }
+    void reset() {
+      for (std::uint32_t slot = 0U; slot != location_slot_.size(); ++slot) {
+        std::fill(times_[slot].begin(), times_[slot].end(), duration_t::max());
+      }
+      location_slot_.clear();
+    }
 
-    tb_preprocessor& tbp_;
-    // temp for get_create_bfi
-    bitfield bf_new_;
-    mutable_fws_multimap<location_idx_t, earliest_time> location_idx_times_{};
+    std::unordered_map<location_idx_t, std::size_t> location_slot_;
+    std::vector<std::vector<duration_t>> times_;
   };
 #endif
 

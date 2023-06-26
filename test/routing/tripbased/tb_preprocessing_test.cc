@@ -44,248 +44,248 @@ TEST(tripbased, get_or_create_bfi) {
   EXPECT_EQ(bf1, tt.bitfields_[bfi1_exp]);
 }
 
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-TEST(earliest_times, basic) {
-  // init
-  timetable tt;
-  tb_preprocessor tbp{tt};
-  tb_preprocessor::earliest_times ets{tbp};
-
-  // update empty
-  location_idx_t const li_23{23U};
-  duration_t const time_42{42U};
-  bitfield const bf_111{"111"};
-  ets.update(li_23, time_42, bf_111);
-
-  ASSERT_EQ(24, ets.size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
-
-  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
-
-  // update end
-  location_idx_t const li_66{66U};
-  duration_t const time_77{77U};
-  bitfield const bf_101{"101"};
-  ets.update(li_66, time_77, bf_101);
-
-  ASSERT_EQ(67, ets.size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
-  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
-  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
-
-  // update inner
-  location_idx_t const li_55{55U};
-  duration_t const time_88{88U};
-  bitfield const bf_110{"110"};
-  ets.update(li_55, time_88, bf_110);
-
-  ASSERT_EQ(67, ets.size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_55].size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
-  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
-  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_110, ets.location_idx_times_[li_55][0].bf_);
-  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
-
-  // update existing, addition, no overwrite
-  duration_t const time_87{87U};
-  bitfield const bf_010{"010"};
-  ets.update(li_55, time_87, bf_010);
-  bitfield const bf_100{"100"};
-
-  ASSERT_EQ(67, ets.size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
-  ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
-  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
-  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
-  EXPECT_EQ(time_87, ets.location_idx_times_[li_55][1].time_);
-  EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
-  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
-
-  // update existing, overwrite
-  duration_t const time_86{86U};
-  ets.update(li_55, time_86, bf_010);
-
-  ASSERT_EQ(67, ets.size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
-  ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
-  EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
-  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
-  EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
-  EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
-  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
-
-  // update existing, overwrite
-  duration_t const time_41{41U};
-  ets.update(li_23, time_41, bf_111);
-
-  ASSERT_EQ(67, ets.size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
-  ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
-  EXPECT_EQ(time_41, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
-  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
-  EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
-  EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
-  EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
-
-  // update existing, overwrite
-  duration_t const time_76{76U};
-  ets.update(li_66, time_76, bf_111);
-
-  ASSERT_EQ(67, ets.size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
-  ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
-  ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
-  EXPECT_EQ(time_41, ets.location_idx_times_[li_23][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
-  EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
-  EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
-  EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
-  EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
-  EXPECT_EQ(time_76, ets.location_idx_times_[li_66][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li_66][0].bf_);
-}
-
-TEST(earliest_times, same_time_more_bits) {
-  // init
-  timetable tt;
-  tb_preprocessor tbp{tt};
-  tb_preprocessor::earliest_times ets{tbp};
-
-  location_idx_t const li{23U};
-  duration_t const time{42U};
-  bitfield const bf_010{"010"};
-  bitfield const bf_111{"111"};
-
-  ets.update(li, time, bf_010);
-  ASSERT_EQ(1, ets.location_idx_times_[li].size());
-  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_010, ets.location_idx_times_[li][0].bf_);
-
-  ets.update(li, time, bf_111);
-  ASSERT_EQ(1, ets.location_idx_times_[li].size());
-  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
-}
-
-TEST(earliest_times, same_time_less_bits) {
-  // init
-  timetable tt;
-  tb_preprocessor tbp{tt};
-  tb_preprocessor::earliest_times ets{tbp};
-
-  location_idx_t const li{23U};
-  duration_t const time{42U};
-  bitfield const bf_111{"111"};
-  bitfield const bf_101{"101"};
-
-  ets.update(li, time, bf_111);
-  ASSERT_EQ(1, ets.location_idx_times_[li].size());
-  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
-
-  ets.update(li, time, bf_101);
-  ASSERT_EQ(1, ets.location_idx_times_[li].size());
-  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
-}
-
-TEST(earliest_times, same_time_other_bits) {
-  // init
-  timetable tt;
-  tb_preprocessor tbp{tt};
-  tb_preprocessor::earliest_times ets{tbp};
-
-  location_idx_t const li{23U};
-  duration_t const time{42U};
-  bitfield const bf_010{"010"};
-  bitfield const bf_101{"101"};
-  bitfield const bf_111{"111"};
-
-  ets.update(li, time, bf_010);
-  ASSERT_EQ(1, ets.location_idx_times_[li].size());
-  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_010, ets.location_idx_times_[li][0].bf_);
-
-  ets.update(li, time, bf_101);
-  ASSERT_EQ(1, ets.location_idx_times_[li].size());
-  EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
-  EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
-}
-
-TEST(earliest_times, random) {
-  // init
-  timetable tt;
-  tb_preprocessor tbp{tt};
-  tb_preprocessor::earliest_times ets{tbp};
-
-  // fill params
-  auto const num_updates = 100000U;
-  auto const li_max = 100U;
-  auto const time_max = 1440U;
-
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> li_dist(0, li_max);
-  std::uniform_int_distribution<> time_dist(0, time_max);
-  std::uniform_int_distribution<std::uint64_t> bf_block_dist(
-      0, std::numeric_limits<std::uint64_t>::max());
-
-  // fill
-  for (auto i = 0U; i < num_updates; ++i) {
-    bitfield bf;
-    for (auto j = 0U; j < bitfield::num_blocks; ++j) {
-      bf.blocks_[j] = bf_block_dist(gen);
-    }
-    ets.update(location_idx_t{li_dist(gen)}, duration_t{time_dist(gen)}, bf);
-  }
-
-  // check each time is unique per location
-  // and bitsets are disjoint per location
-  ASSERT_TRUE(0 < ets.size());
-  unsigned num_entries{0U};
-  std::set<duration_t> time_set;
-  bitfield bf_or;
-  for (auto const times : ets.location_idx_times_) {
-    time_set.clear();
-    bf_or = bitfield{"0"};
-    for (auto const& et : times) {
-      // if it has at least one active day it must be the only entry for this
-      // time
-      if (et.bf_.any()) {
-        EXPECT_EQ(time_set.end(), time_set.find(et.time_));
-        time_set.emplace(et.time_);
-      }
-      EXPECT_TRUE((bf_or & et.bf_).none());
-      bf_or |= et.bf_;
-      ++num_entries;
-    }
-  }
-
-  std::cout << "After performing " << num_updates
-            << " random updates, the earliest times data structure has "
-            << num_entries << " entries.\n";
-}
-#endif
+// #ifdef TB_PREPRO_TRANSFER_REDUCTION
+// TEST(earliest_times, basic) {
+//   // init
+//   timetable tt;
+//   tb_preprocessor tbp{tt};
+//   tb_preprocessor::earliest_times ets{tbp};
+//
+//   // update empty
+//   location_idx_t const li_23{23U};
+//   duration_t const time_42{42U};
+//   bitfield const bf_111{"111"};
+//   ets.update(li_23, time_42, bf_111);
+//
+//   ASSERT_EQ(24, ets.size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+//
+//   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
+//
+//   // update end
+//   location_idx_t const li_66{66U};
+//   duration_t const time_77{77U};
+//   bitfield const bf_101{"101"};
+//   ets.update(li_66, time_77, bf_101);
+//
+//   ASSERT_EQ(67, ets.size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+//   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
+//   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+//   EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
+//
+//   // update inner
+//   location_idx_t const li_55{55U};
+//   duration_t const time_88{88U};
+//   bitfield const bf_110{"110"};
+//   ets.update(li_55, time_88, bf_110);
+//
+//   ASSERT_EQ(67, ets.size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_55].size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+//   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
+//   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+//   EXPECT_EQ(bf_110, ets.location_idx_times_[li_55][0].bf_);
+//   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+//   EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
+//
+//   // update existing, addition, no overwrite
+//   duration_t const time_87{87U};
+//   bitfield const bf_010{"010"};
+//   ets.update(li_55, time_87, bf_010);
+//   bitfield const bf_100{"100"};
+//
+//   ASSERT_EQ(67, ets.size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+//   ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+//   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
+//   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+//   EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
+//   EXPECT_EQ(time_87, ets.location_idx_times_[li_55][1].time_);
+//   EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
+//   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+//   EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
+//
+//   // update existing, overwrite
+//   duration_t const time_86{86U};
+//   ets.update(li_55, time_86, bf_010);
+//
+//   ASSERT_EQ(67, ets.size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+//   ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+//   EXPECT_EQ(time_42, ets.location_idx_times_[li_23][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
+//   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+//   EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
+//   EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
+//   EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
+//   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+//   EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
+//
+//   // update existing, overwrite
+//   duration_t const time_41{41U};
+//   ets.update(li_23, time_41, bf_111);
+//
+//   ASSERT_EQ(67, ets.size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+//   ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+//   EXPECT_EQ(time_41, ets.location_idx_times_[li_23][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
+//   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+//   EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
+//   EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
+//   EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
+//   EXPECT_EQ(time_77, ets.location_idx_times_[li_66][0].time_);
+//   EXPECT_EQ(bf_101, ets.location_idx_times_[li_66][0].bf_);
+//
+//   // update existing, overwrite
+//   duration_t const time_76{76U};
+//   ets.update(li_66, time_76, bf_111);
+//
+//   ASSERT_EQ(67, ets.size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_23].size());
+//   ASSERT_EQ(2, ets.location_idx_times_[li_55].size());
+//   ASSERT_EQ(1, ets.location_idx_times_[li_66].size());
+//   EXPECT_EQ(time_41, ets.location_idx_times_[li_23][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li_23][0].bf_);
+//   EXPECT_EQ(time_88, ets.location_idx_times_[li_55][0].time_);
+//   EXPECT_EQ(bf_100, ets.location_idx_times_[li_55][0].bf_);
+//   EXPECT_EQ(time_86, ets.location_idx_times_[li_55][1].time_);
+//   EXPECT_EQ(bf_010, ets.location_idx_times_[li_55][1].bf_);
+//   EXPECT_EQ(time_76, ets.location_idx_times_[li_66][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li_66][0].bf_);
+// }
+//
+// TEST(earliest_times, same_time_more_bits) {
+//   // init
+//   timetable tt;
+//   tb_preprocessor tbp{tt};
+//   tb_preprocessor::earliest_times ets{tbp};
+//
+//   location_idx_t const li{23U};
+//   duration_t const time{42U};
+//   bitfield const bf_010{"010"};
+//   bitfield const bf_111{"111"};
+//
+//   ets.update(li, time, bf_010);
+//   ASSERT_EQ(1, ets.location_idx_times_[li].size());
+//   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+//   EXPECT_EQ(bf_010, ets.location_idx_times_[li][0].bf_);
+//
+//   ets.update(li, time, bf_111);
+//   ASSERT_EQ(1, ets.location_idx_times_[li].size());
+//   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
+// }
+//
+// TEST(earliest_times, same_time_less_bits) {
+//   // init
+//   timetable tt;
+//   tb_preprocessor tbp{tt};
+//   tb_preprocessor::earliest_times ets{tbp};
+//
+//   location_idx_t const li{23U};
+//   duration_t const time{42U};
+//   bitfield const bf_111{"111"};
+//   bitfield const bf_101{"101"};
+//
+//   ets.update(li, time, bf_111);
+//   ASSERT_EQ(1, ets.location_idx_times_[li].size());
+//   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
+//
+//   ets.update(li, time, bf_101);
+//   ASSERT_EQ(1, ets.location_idx_times_[li].size());
+//   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
+// }
+//
+// TEST(earliest_times, same_time_other_bits) {
+//   // init
+//   timetable tt;
+//   tb_preprocessor tbp{tt};
+//   tb_preprocessor::earliest_times ets{tbp};
+//
+//   location_idx_t const li{23U};
+//   duration_t const time{42U};
+//   bitfield const bf_010{"010"};
+//   bitfield const bf_101{"101"};
+//   bitfield const bf_111{"111"};
+//
+//   ets.update(li, time, bf_010);
+//   ASSERT_EQ(1, ets.location_idx_times_[li].size());
+//   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+//   EXPECT_EQ(bf_010, ets.location_idx_times_[li][0].bf_);
+//
+//   ets.update(li, time, bf_101);
+//   ASSERT_EQ(1, ets.location_idx_times_[li].size());
+//   EXPECT_EQ(time, ets.location_idx_times_[li][0].time_);
+//   EXPECT_EQ(bf_111, ets.location_idx_times_[li][0].bf_);
+// }
+//
+// TEST(earliest_times, random) {
+//   // init
+//   timetable tt;
+//   tb_preprocessor tbp{tt};
+//   tb_preprocessor::earliest_times ets{tbp};
+//
+//   // fill params
+//   auto const num_updates = 100000U;
+//   auto const li_max = 100U;
+//   auto const time_max = 1440U;
+//
+//   std::random_device rd;
+//   std::mt19937 gen(rd());
+//   std::uniform_int_distribution<> li_dist(0, li_max);
+//   std::uniform_int_distribution<> time_dist(0, time_max);
+//   std::uniform_int_distribution<std::uint64_t> bf_block_dist(
+//       0, std::numeric_limits<std::uint64_t>::max());
+//
+//   // fill
+//   for (auto i = 0U; i < num_updates; ++i) {
+//     bitfield bf;
+//     for (auto j = 0U; j < bitfield::num_blocks; ++j) {
+//       bf.blocks_[j] = bf_block_dist(gen);
+//     }
+//     ets.update(location_idx_t{li_dist(gen)}, duration_t{time_dist(gen)}, bf);
+//   }
+//
+//   // check each time is unique per location
+//   // and bitsets are disjoint per location
+//   ASSERT_TRUE(0 < ets.size());
+//   unsigned num_entries{0U};
+//   std::set<duration_t> time_set;
+//   bitfield bf_or;
+//   for (auto const times : ets.location_idx_times_) {
+//     time_set.clear();
+//     bf_or = bitfield{"0"};
+//     for (auto const& et : times) {
+//       // if it has at least one active day it must be the only entry for this
+//       // time
+//       if (et.bf_.any()) {
+//         EXPECT_EQ(time_set.end(), time_set.find(et.time_));
+//         time_set.emplace(et.time_);
+//       }
+//       EXPECT_TRUE((bf_or & et.bf_).none());
+//       bf_or |= et.bf_;
+//       ++num_entries;
+//     }
+//   }
+//
+//   std::cout << "After performing " << num_updates
+//             << " random updates, the earliest times data structure has "
+//             << num_entries << " entries.\n";
+// }
+// #endif
 
 TEST(build_transfer_set, no_transfer) {
   // load timetable
