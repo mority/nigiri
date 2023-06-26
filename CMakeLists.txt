@@ -98,4 +98,12 @@ add_executable(nigiri-test ${nigiri-test-files})
 target_link_libraries(nigiri-test nigiri gtest ianatzdb-res nigiri-generated)
 target_compile_options(nigiri-test PRIVATE ${nigiri-compile-options})
 
-add_link_options("-fuse-ld=mold")
+# -- PERFORMANCE --
+file(GLOB_RECURSE aachen_files tripbased_performance/aachen.cc)
+add_executable(aachen ${aachen_files})
+target_link_libraries(aachen PRIVATE nigiri)
+target_compile_features(aachen PUBLIC cxx_std_23)
+file(GLOB_RECURSE berlin_files tripbased_performance/berlin.cc)
+add_executable(berlin ${berlin_files})
+target_link_libraries(berlin PRIVATE nigiri)
+target_compile_features(berlin PUBLIC cxx_std_23)
