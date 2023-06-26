@@ -120,6 +120,7 @@ TEST(earliest_arrival_query, same_day_transfer) {
   // load timetable
   timetable tt;
   tt.date_range_ = gtfs_full_period();
+  register_special_stations(tt);
   constexpr auto const src = source_idx_t{0U};
   load_timetable(loader_config{0, "Etc/UTC"}, src, same_day_transfer_files(),
                  tt);
@@ -161,6 +162,7 @@ TEST(earliest_arrival_query, early_train) {
   // load timetable
   timetable tt;
   tt.date_range_ = gtfs_full_period();
+  register_special_stations(tt);
   constexpr auto const src = source_idx_t{0U};
   load_timetable(loader_config{0, "Etc/UTC"}, src, early_train_files(), tt);
   finalize(tt);
@@ -203,6 +205,7 @@ TEST(earliest_arrival_query, earlier_stop_transfer) {
   // load timetable
   timetable tt;
   tt.date_range_ = gtfs_full_period();
+  register_special_stations(tt);
   constexpr auto const src = source_idx_t{0U};
   load_timetable(loader_config{0, "Etc/UTC"}, src,
                  earlier_stop_transfer_files(), tt);
@@ -225,6 +228,7 @@ TEST(earliest_arrival_query, no_journey_possible) {
   // load timetable
   timetable tt;
   tt.date_range_ = gtfs_full_period();
+  register_special_stations(tt);
   constexpr auto const src = source_idx_t{0U};
   load_timetable(loader_config{0, "Etc/UTC"}, src,
                  earlier_stop_transfer_files(), tt);
@@ -259,6 +263,7 @@ TEST(earliest_arrival_query, files_abc) {
   constexpr auto const src = source_idx_t{0U};
   timetable tt;
   tt.date_range_ = full_period();
+  register_special_stations(tt);
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
@@ -316,6 +321,7 @@ TEST(profile_query, files_abc) {
   constexpr auto const src = source_idx_t{0U};
   timetable tt;
   tt.date_range_ = full_period();
+  register_special_stations(tt);
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
