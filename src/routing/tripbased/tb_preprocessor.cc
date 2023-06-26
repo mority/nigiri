@@ -86,6 +86,7 @@ void tb_preprocessor::build(transfer_set& ts) {
   // progress tracker
   auto progress_tracker = utl::get_active_progress_tracker();
   progress_tracker->status("Building Transfer Set")
+      .reset_bounds()
       .in_high(tt_.transport_traffic_days_.size());
 
   {
