@@ -48,7 +48,7 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
             // spot
             overwrite_spot = i;
           }
-        } else if (time_new >= times_[location][i].time_) {
+        } else {
           // new time is greater or equal
           // remove active days from new time that are already active in the
           // existing entry
