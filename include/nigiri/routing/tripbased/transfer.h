@@ -6,6 +6,15 @@
 namespace nigiri::routing::tripbased {
 
 struct transfer {
+  transfer(std::uint32_t bitfield_idx,
+           std::uint32_t const& transport_idx_to,
+           std::uint16_t const& stop_idx_to,
+           std::uint16_t const& passes_midnight)
+      : bitfield_idx_(bitfield_idx),
+        transport_idx_to_(transport_idx_to),
+        stop_idx_to_(stop_idx_to),
+        passes_midnight_(passes_midnight) {}
+
   std::uint64_t value() const {
     return *reinterpret_cast<std::uint64_t const*>(this);
   }
@@ -56,5 +65,28 @@ inline void serialize(Ctx&, transfer const*, cista::offset_t const) {}
 
 template <typename Ctx>
 inline void deserialize(Ctx const&, transfer*) {}
+
+struct expanded_transfer {
+  expanded_transfer(bitfield const& bf,
+                    std::uint32_t const& transport_idx_to,
+                    std::uint16_t const& stop_idx_to,
+                    std::uint16_t const& passes_midnight)
+      : bf_(bf),
+        transport_idx_to_(transport_idx_to),
+        stop_idx_to_(stop_idx_to),
+        passes_midnight_(passes_midnight) {}
+
+  // the days on which the transfer can take place
+  bitfield bf_;
+
+  // the transport that is the target of the transfer
+  std::uint32_t transport_idx_to_;
+
+  // the stop index of the target transport
+  std::uint16_t stop_idx_to_;
+
+  // bit: 1 -> the transfer passes midnight
+  std::uint16_t passes_midnight_;
+};
 
 }  // namespace nigiri::routing::tripbased

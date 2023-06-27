@@ -16,27 +16,6 @@ namespace nigiri::routing::tripbased {
 struct tb_preprocessor {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  //  struct earliest_times {
-  //    struct earliest_time {
-  //      duration_t time_{};
-  //      bitfield bf_{};
-  //    };
-  //
-  //    explicit earliest_times(tb_preprocessor& tbp) : tbp_(tbp) {}
-  //
-  //    bool update(location_idx_t, duration_t, bitfield const&);
-  //
-  //    auto size() const noexcept { return location_idx_times_.size(); }
-  //
-  //    void clear() noexcept { location_idx_times_.clear(); }
-  //
-  //    tb_preprocessor& tbp_;
-  //    // temp for get_create_bfi
-  //    bitfield bf_new_;
-  //    mutable_fws_multimap<location_idx_t, earliest_time>
-  //    location_idx_times_{};
-  //  };
-
   struct earliest_times {
     struct earliest_time {
       duration_t time_;
@@ -52,7 +31,6 @@ struct tb_preprocessor {
   };
 #endif
 
-  //  preprocessor() = delete;
   explicit tb_preprocessor(timetable& tt,
                            duration_t transfer_time_max = duration_t{1440U})
       : tt_(tt), transfer_time_max_(transfer_time_max) {
@@ -89,6 +67,8 @@ struct tb_preprocessor {
         }
       }
 
+      reduced_transfers_.resize(route_max_length_);
+
       // init bitfields hashmap with bitfields that are already used by the
       // timetable
       for (bitfield_idx_t bfi{0U}; bfi < tt_.bitfields_.size();
@@ -110,6 +90,14 @@ struct tb_preprocessor {
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
 
+  void reduce(std::vector<std::vector<expanded_transfer>>&);
+
+  void clear_reduced_transfers(std::size_t pos) noexcept {
+    for (std::size_t i = 0U; i != pos; ++i) {
+      reduced_transfers_[i].clear();
+    }
+  }
+
   // map a bitfield to its bitfield_idx
   // init with bitfields of timetable
   hash_map<bitfield, bitfield_idx_t> bitfield_to_bitfield_idx_{};
@@ -128,6 +116,8 @@ struct tb_preprocessor {
 
   // the number of transfers found
   unsigned n_transfers_ = 0U;
+
+  std::vector<std::vector<transfer>> reduced_transfers_;
 };
 
 static inline void build_transfer_set(timetable& tt, transfer_set& ts) {
