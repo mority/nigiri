@@ -45,10 +45,10 @@ struct tb_preprocessor {
 
     void update(location_idx_t, duration_t, bitfield const& bf, bitfield* impr);
 
-    void reset() { times_.clear(); }
+    void reset() noexcept { times_.clear(); }
 
     bitfield bf_new_;
-    std::multimap<location_idx_t, earliest_time> times_;
+    mutable_fws_multimap<location_idx_t, earliest_time> times_;
   };
 #endif
 

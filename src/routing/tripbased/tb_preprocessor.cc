@@ -25,52 +25,59 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
                                              bitfield const& bf,
                                              bitfield* impr) {
 
-  auto equal_range = times_.equal_range(location);
-  if (equal_range.first != equal_range.second) {
+  if (times_[location].size() != 0) {
     // bitfield is manipulated during update process
     bf_new_ = bf;
     // position of entry with an equal time
-    auto same_time_it = times_.end();
-    // iterator of entries for this location
-    auto et = equal_range.first;
+    auto same_time_spot = static_cast<unsigned>(times_[location].size());
+    // position of entry with no active days
+    auto overwrite_spot = static_cast<unsigned>(times_[location].size());
     // compare to existing entries of this location
-    while (et != equal_range.second) {
+    for (auto i{0U}; i != times_[location].size(); ++i) {
       if (bf_new_.none()) {
         // all bits of new entry were set to zero, new entry does not improve
         // upon any times
         return;
-      } else if (time_new < et->second.time_) {
-        // new time is better than existing time, update bit set of existing
-        // time
-        et->second.bf_ &= ~bf_new_;
-        if (et->second.bf_.none()) {
-          // existing entry has no active days left -> remove it
-          et = times_.erase(et);
-        } else {
-          ++et;
+      } else if (times_[location][i].bf_.any()) {
+        if (time_new < times_[location][i].time_) {
+          // new time is better than existing time, update bit set of existing
+          // time
+          times_[location][i].bf_ &= ~bf_new_;
+          if (times_[location][i].bf_.none()) {
+            // existing entry has no active days left -> remember as overwrite
+            // spot
+            overwrite_spot = i;
+          }
+        } else if (time_new >= times_[location][i].time_) {
+          // new time is greater or equal
+          // remove active days from new time that are already active in the
+          // existing entry
+          bf_new_ &= ~times_[location][i].bf_;
+          if (time_new == times_[location][i].time_) {
+            // remember this position to add active days of new time after
+            // comparison to existing entries
+            same_time_spot = i;
+          }
         }
-      } else if (time_new >= et->second.time_) {
-        // new time is greater or equal
-        // remove active days from new time that are already active in the
-        // existing entry
-        bf_new_ &= ~et->second.bf_;
-        if (time_new == et->second.time_) {
-          // remember this position to add active days of new time after
-          // comparison to existing entries
-          same_time_it = et;
-        }
-        ++et;
+      } else {
+        // existing entry has no active days -> remember as overwrite spot
+        overwrite_spot = i;
       }
     }
+    // after comparison to existing entries
     if (bf_new_.any()) {
       // new time has at least one active day after comparison
-      if (same_time_it != times_.end()) {
+      if (same_time_spot != times_[location].size()) {
         // entry for this time already exists -> add active days of new time to
         // it
-        same_time_it->second.bf_ |= bf_new_;
+        times_[location][same_time_spot].bf_ |= bf_new_;
+      } else if (overwrite_spot != times_[location].size()) {
+        // overwrite spot was found -> use for new entry
+        times_[location][overwrite_spot].time_ = time_new;
+        times_[location][overwrite_spot].bf_ = bf_new_;
       } else {
         // no entry for this time exists yet
-        times_.emplace_hint(et, location, earliest_time{time_new, bf_new_});
+        times_[location].emplace_back(time_new, bf_new_);
       }
       // add improvements to impr
       if (impr != nullptr) {
@@ -79,7 +86,7 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
     }
   } else {
     // add first entry for this location
-    times_.emplace(location, earliest_time{time_new, bf});
+    times_[location].emplace_back(time_new, bf);
     // improvement on all active days of the given bitfield
     if (impr != nullptr) {
       *impr |= bf;
