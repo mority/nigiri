@@ -29,52 +29,48 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
     // bitfield is manipulated during update process
     bf_new_ = bf;
     // position of entry with an equal time
-    auto same_time_spot = static_cast<unsigned>(times_[location].size());
-    // position of entry with no active days
-    auto overwrite_spot = static_cast<unsigned>(times_[location].size());
+    auto same_time_spot = times_[location].end();
     // compare to existing entries of this location
-    for (auto i{0U}; i != times_[location].size(); ++i) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+    for (auto it = times_[location].begin(); it != times_[location].end();) {
+#pragma clang diagnostic pop
       if (bf_new_.none()) {
         // all bits of new entry were set to zero, new entry does not improve
         // upon any times
         return;
-      } else if (times_[location][i].bf_.any()) {
-        if (time_new < times_[location][i].time_) {
+      } else if (it->bf_.any()) {
+        if (time_new < it->time_) {
           // new time is better than existing time, update bit set of existing
           // time
-          times_[location][i].bf_ &= ~bf_new_;
-          if (times_[location][i].bf_.none()) {
-            // existing entry has no active days left -> remember as overwrite
-            // spot
-            overwrite_spot = i;
+          it->bf_ &= ~bf_new_;
+          if (it->bf_.none()) {
+            // existing entry has no active days left -> erase
+            it = times_[location].erase(it);
+          } else {
+            ++it;
           }
-        } else if (time_new >= times_[location][i].time_) {
+        } else if (time_new >= it->time_) {
           // new time is greater or equal
           // remove active days from new time that are already active in the
           // existing entry
-          bf_new_ &= ~times_[location][i].bf_;
-          if (time_new == times_[location][i].time_) {
+          bf_new_ &= ~it->bf_;
+          if (time_new == it->time_) {
             // remember this position to add active days of new time after
             // comparison to existing entries
-            same_time_spot = i;
+            same_time_spot = it;
           }
+          ++it;
         }
-      } else {
-        // existing entry has no active days -> remember as overwrite spot
-        overwrite_spot = i;
       }
     }
     // after comparison to existing entries
     if (bf_new_.any()) {
       // new time has at least one active day after comparison
-      if (same_time_spot != times_[location].size()) {
+      if (same_time_spot != times_[location].end()) {
         // entry for this time already exists -> add active days of new time to
         // it
-        times_[location][same_time_spot].bf_ |= bf_new_;
-      } else if (overwrite_spot != times_[location].size()) {
-        // overwrite spot was found -> use for new entry
-        times_[location][overwrite_spot].time_ = time_new;
-        times_[location][overwrite_spot].bf_ = bf_new_;
+        same_time_spot->bf_ |= bf_new_;
       } else {
         // no entry for this time exists yet
         times_[location].emplace_back(time_new, bf_new_);
