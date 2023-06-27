@@ -38,30 +38,17 @@ struct tb_preprocessor {
   //  };
 
   struct earliest_times {
-
-    explicit earliest_times() {
-      location_slot_.reserve(100);
-      grow();
-    }
+    struct earliest_time {
+      duration_t time_;
+      bitfield bf_;
+    };
 
     void update(location_idx_t, duration_t, bitfield const& bf, bitfield* impr);
 
-    void grow() {
-      std::vector<duration_t> const init_vec(kMaxDays, duration_t::max());
-      for (auto l = 0U; l != 100; ++l) {
-        times_.emplace_back(init_vec);
-      }
-    }
+    void reset() { times_.clear(); }
 
-    void reset() {
-      for (std::uint32_t slot = 0U; slot != location_slot_.size(); ++slot) {
-        std::fill(times_[slot].begin(), times_[slot].end(), duration_t::max());
-      }
-      location_slot_.clear();
-    }
-
-    std::unordered_map<location_idx_t, std::size_t> location_slot_;
-    std::vector<std::vector<duration_t>> times_;
+    bitfield bf_new_;
+    std::multimap<location_idx_t, earliest_time> times_;
   };
 #endif
 

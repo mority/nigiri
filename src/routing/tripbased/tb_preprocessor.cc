@@ -24,30 +24,64 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
                                              duration_t time_new,
                                              bitfield const& bf,
                                              bitfield* impr) {
-  // grow times_ if all allocated slots are in use
-  if (times_.size() == location_slot_.size()) {
-    grow();
-  }
 
-  if (location_slot_.contains(location)) {
-    auto const slot = location_slot_[location];
-    for (std::uint32_t day = 0U; day != kMaxDays; ++day) {
-      if (bf.test(day) && time_new < times_[slot][day]) {
-        times_[slot][day] = time_new;
-        if (impr) {
-          impr->set(day);
+  auto equal_range = times_.equal_range(location);
+  if (equal_range.first != equal_range.second) {
+    // bitfield is manipulated during update process
+    bf_new_ = bf;
+    // position of entry with an equal time
+    auto same_time_it = times_.end();
+    // iterator of entries for this location
+    auto et = equal_range.first;
+    // compare to existing entries of this location
+    while (et != equal_range.second) {
+      if (bf_new_.none()) {
+        // all bits of new entry were set to zero, new entry does not improve
+        // upon any times
+        return;
+      } else if (time_new < et->second.time_) {
+        // new time is better than existing time, update bit set of existing
+        // time
+        et->second.bf_ &= ~bf_new_;
+        if (et->second.bf_.none()) {
+          // existing entry has no active days left -> remove it
+          et = times_.erase(et);
+        } else {
+          ++et;
         }
+      } else if (time_new >= et->second.time_) {
+        // new time is greater or equal
+        // remove active days from new time that are already active in the
+        // existing entry
+        bf_new_ &= ~et->second.bf_;
+        if (time_new == et->second.time_) {
+          // remember this position to add active days of new time after
+          // comparison to existing entries
+          same_time_it = et;
+        }
+        ++et;
+      }
+    }
+    if (bf_new_.any()) {
+      // new time has at least one active day after comparison
+      if (same_time_it != times_.end()) {
+        // entry for this time already exists -> add active days of new time to
+        // it
+        same_time_it->second.bf_ |= bf_new_;
+      } else {
+        // no entry for this time exists yet
+        times_.emplace_hint(et, location, earliest_time{time_new, bf_new_});
+      }
+      // add improvements to impr
+      if (impr != nullptr) {
+        *impr |= bf_new_;
       }
     }
   } else {
-    auto const slot = location_slot_.size();
-    location_slot_[location] = slot;
-    for (std::uint32_t day = 0U; day != kMaxDays; ++day) {
-      if (bf.test(day)) {
-        times_[slot][day] = time_new;
-      }
-    }
-    if (impr) {
+    // add first entry for this location
+    times_.emplace(location, earliest_time{time_new, bf});
+    // improvement on all active days of the given bitfield
+    if (impr != nullptr) {
       *impr |= bf;
     }
   }
