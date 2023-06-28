@@ -107,9 +107,9 @@ void tb_preprocessor::build(transfer_set& ts) {
       .reset_bounds()
       .in_high(num_threads);
 
-  // part files for assembly
-  std::vector<std::filesystem::path> part_files;
-  part_files.reserve(num_threads);
+  // parts for assembly
+  std::vector<expanded_transfer_set> parts;
+  parts.resize(num_threads);
 
   std::vector<std::thread> threads;
   threads.reserve(num_threads);
@@ -117,14 +117,13 @@ void tb_preprocessor::build(transfer_set& ts) {
   auto const chunk_size = tt_.transport_traffic_days_.size() / num_threads;
 
   for (std::uint32_t thread_idx = 0U; thread_idx != num_threads; ++thread_idx) {
-    part_files.emplace_back("ts_part." + std::to_string(thread_idx));
     auto const start = chunk_size * thread_idx;
     auto end = start + chunk_size;
     if (thread_idx + 1 == num_threads) {
       end = tt_.transport_traffic_days_.size();
     }
-    threads.emplace_back(build_part, part_files[thread_idx], tt_, start, end,
-                         transfer_time_max_, route_max_length_);
+    threads.emplace_back(build_part, std::ref(parts[thread_idx]), tt_, start,
+                         end, transfer_time_max_, route_max_length_);
   }
 
   std::vector<std::vector<transfer>> transfers_per_transport;
@@ -135,21 +134,15 @@ void tb_preprocessor::build(transfer_set& ts) {
     // wait for thread to finish
     threads[thread_idx].join();
 
-    // load part file of thread
-    cista::wrapped<expanded_transfer_set> ts_part =
-        expanded_transfer_set::read(cista::memory_holder{
-            cista::file{part_files[thread_idx].string().c_str(), "r"}
-                .content()});
-
     // iterate transports in part file
-    for (std::uint32_t t = 0U; t != ts_part->data_.size(); ++t) {
+    for (std::uint32_t t = 0U; t != parts[thread_idx].data_.size(); ++t) {
 
       // stop index
       std::uint64_t s = 0U;
 
       // deduplicate bitfields
-      for (; s != ts_part->data_.size(t); ++s) {
-        for (auto const& exp_transfer : ts_part->data_.at(t, s)) {
+      for (; s != parts[thread_idx].data_.size(t); ++s) {
+        for (auto const& exp_transfer : parts[thread_idx].data_.at(t, s)) {
           transfers_per_transport[s].emplace_back(
               get_or_create_bfi(exp_transfer.bf_).v_,
               exp_transfer.transport_idx_to_.v_, exp_transfer.stop_idx_to_,
@@ -162,9 +155,6 @@ void tb_preprocessor::build(transfer_set& ts) {
       ts.data_.emplace_back(it_range{
           transfers_per_transport.cbegin(),
           transfers_per_transport.cbegin() + static_cast<std::int64_t>(s)});
-
-      // delete part file
-      std::filesystem::remove(part_files[thread_idx]);
 
       // clean up helper vector
       for (std::uint64_t clean_s = 0U; clean_s != s; ++clean_s) {
@@ -185,7 +175,7 @@ void tb_preprocessor::build(transfer_set& ts) {
   ts.ready_ = true;
 }
 
-void tb_preprocessor::build_part(std::filesystem::path part_file,
+void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
                                  timetable const& tt_,
                                  std::uint32_t const start,
                                  std::uint32_t const end,
@@ -196,9 +186,6 @@ void tb_preprocessor::build_part(std::filesystem::path part_file,
   earliest_times ets_arr_;
   earliest_times ets_ch_;
 #endif
-
-  // partial transfer set of expanded transfers
-  expanded_transfer_set ts_part;
 
   std::vector<std::vector<expanded_transfer>> transfers_per_transport;
   transfers_per_transport.resize(route_max_length);
@@ -504,7 +491,4 @@ void tb_preprocessor::build_part(std::filesystem::path part_file,
       transfers_per_transport[s].clear();
     }
   }
-
-  // write found transfers to part file
-  ts_part.write(part_file);
 }
