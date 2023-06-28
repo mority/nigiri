@@ -88,6 +88,7 @@ struct tb_preprocessor {
   void build(transfer_set& ts);
 
   static void build_part(expanded_transfer_set& ts_part,
+                         bool& ready,
                          timetable const&,
                          std::uint32_t const start,
                          std::uint32_t const end,

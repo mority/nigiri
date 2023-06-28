@@ -100,6 +100,7 @@ void tb_preprocessor::build(transfer_set& ts) {
   auto num_threads = std::thread::hardware_concurrency();
   auto const num_transports = tt_.transport_traffic_days_.size();
   num_threads = num_threads > num_transports ? num_transports : num_threads;
+  auto const chunk_size = tt_.transport_traffic_days_.size() / num_threads;
 
   // progress tracker
   auto progress_tracker = utl::get_active_progress_tracker();
@@ -107,75 +108,102 @@ void tb_preprocessor::build(transfer_set& ts) {
       .reset_bounds()
       .in_high(num_threads);
 
-  // parts for assembly
-  std::vector<expanded_transfer_set> parts;
+  // parts with deduplicated bitfields
+  std::vector<std::vector<std::vector<std::vector<transfer>>>> parts;
   parts.resize(num_threads);
 
-  std::vector<std::thread> threads;
-  threads.reserve(num_threads);
-
-  auto const chunk_size = tt_.transport_traffic_days_.size() / num_threads;
-
-  for (std::uint32_t thread_idx = 0U; thread_idx != num_threads; ++thread_idx) {
-    auto const start = chunk_size * thread_idx;
-    auto end = start + chunk_size;
-    if (thread_idx + 1 == num_threads) {
-      end = tt_.transport_traffic_days_.size();
+  {
+    // expanded parts for assembly
+    std::vector<std::vector<std::vector<std::vector<expanded_transfer>>>>
+        expanded_parts;
+    expanded_parts.resize(num_threads);
+    for (auto& part : expanded_parts) {
+      part.reserve(chunk_size);
     }
-    threads.emplace_back(build_part, std::ref(parts[thread_idx]), tt_, start,
-                         end, transfer_time_max_, route_max_length_);
-  }
 
-  std::vector<std::vector<transfer>> transfers_per_transport;
-  transfers_per_transport.resize(route_max_length_);
+    std::vector<std::thread> threads;
+    threads.reserve(num_threads);
 
-  for (std::uint32_t thread_idx = 0U; thread_idx != num_threads; ++thread_idx) {
+    // thread status
+    std::vector<bool> ready(num_threads, false);
+    std::vector<bool> processed(num_threads, false);
 
-    // wait for thread to finish
-    threads[thread_idx].join();
+    for (std::uint32_t thread_idx = 0U; thread_idx != num_threads;
+         ++thread_idx) {
+      auto const start = chunk_size * thread_idx;
+      auto end = start + chunk_size;
+      if (thread_idx + 1 == num_threads) {
+        end = tt_.transport_traffic_days_.size();
+      }
+      threads.emplace_back(build_part, std::ref(expanded_parts[thread_idx]),
+                           ready[thread_idx], tt_, start, end,
+                           transfer_time_max_, route_max_length_);
+    }
 
-    // iterate transports in part file
-    for (std::uint32_t t = 0U; t != parts[thread_idx].data_.size(); ++t) {
+    unsigned num_finished = 0U;
+    for (std::uint32_t thread_idx = 0U; num_finished != num_threads;
+         thread_idx = (thread_idx + 1U) % num_threads) {
+      if (!ready[thread_idx] || processed[thread_idx]) {
+        // sleep here maybe
+        continue;
+      }
 
-      // stop index
-      std::uint64_t s = 0U;
+      // wait for thread to finish
+      threads[thread_idx].join();
 
-      // deduplicate bitfields
-      for (; s != parts[thread_idx].data_.size(t); ++s) {
-        for (auto const& exp_transfer : parts[thread_idx].data_.at(t, s)) {
-          transfers_per_transport[s].emplace_back(
-              get_or_create_bfi(exp_transfer.bf_).v_,
-              exp_transfer.transport_idx_to_.v_, exp_transfer.stop_idx_to_,
-              exp_transfer.passes_midnight_);
-          ++n_transfers_;
+      // resize for incoming number of transports
+      parts[thread_idx].resize(expanded_parts[thread_idx].size());
+
+      // iterate transports in part file
+      for (std::uint32_t t = 0U; t != expanded_parts[thread_idx].size(); ++t) {
+        // resize for incoming number of stops
+        parts[thread_idx][t].resize(expanded_parts[thread_idx][t].size());
+
+        // deduplicate bitfields
+        for (std::uint64_t s = 0U; s != expanded_parts[thread_idx][t].size();
+             ++s) {
+          // reserve space for incoming number of transfers
+          parts[thread_idx][t][s].reserve(
+              expanded_parts[thread_idx][t][s].size());
+
+          for (auto const& exp_transfer : expanded_parts[thread_idx][t][s]) {
+            parts[thread_idx][t][s].emplace_back(
+                get_or_create_bfi(exp_transfer.bf_).v_,
+                exp_transfer.transport_idx_to_.v_, exp_transfer.stop_idx_to_,
+                exp_transfer.passes_midnight_);
+            ++n_transfers_;
+          }
         }
-      }
 
-      // add transfers to transfer set
-      ts.data_.emplace_back(it_range{
-          transfers_per_transport.cbegin(),
-          transfers_per_transport.cbegin() + static_cast<std::int64_t>(s)});
-
-      // clean up helper vector
-      for (std::uint64_t clean_s = 0U; clean_s != s; ++clean_s) {
-        transfers_per_transport[clean_s].clear();
+        processed[thread_idx] = true;
+        ++num_finished;
+        progress_tracker->increment();
       }
     }
 
-    progress_tracker->increment();
-  }
-  std::cout << "Found " << n_transfers_ << " transfers, occupying "
-            << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
+    // assemble deduplicated parts
+    for (auto const& part : parts) {
+      for (auto const& transport : part) {
+        ts.data_.emplace_back(it_range{
+            transport.cbegin(),
+            transport.cbegin() + static_cast<std::int64_t>(transport.size())});
+      }
+    }
 
-  ts.tt_hash_ = hash_tt(tt_);
-  ts.num_el_con_ = num_el_con_;
-  ts.route_max_length_ = route_max_length_;
-  ts.transfer_time_max_ = transfer_time_max_;
-  ts.n_transfers_ = n_transfers_;
-  ts.ready_ = true;
+    std::cout << "Found " << n_transfers_ << " transfers, occupying "
+              << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
+
+    ts.tt_hash_ = hash_tt(tt_);
+    ts.num_el_con_ = num_el_con_;
+    ts.route_max_length_ = route_max_length_;
+    ts.transfer_time_max_ = transfer_time_max_;
+    ts.n_transfers_ = n_transfers_;
+    ts.ready_ = true;
+  }
 }
 
 void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
+                                 bool& ready,
                                  timetable const& tt_,
                                  std::uint32_t const start,
                                  std::uint32_t const end,
@@ -491,4 +519,6 @@ void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
       transfers_per_transport[s].clear();
     }
   }
+
+  ready = true;
 }
