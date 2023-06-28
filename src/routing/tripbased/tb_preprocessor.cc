@@ -119,7 +119,7 @@ void tb_preprocessor::build(transfer_set& ts) {
 }
 
 void tb_preprocessor::build_part(std::filesystem::path part_file,
-                                 timetable const&,
+                                 timetable const& tt_,
                                  std::uint32_t const start,
                                  std::uint32_t const end,
                                  std::size_t const route_max_length_,
@@ -129,12 +129,11 @@ void tb_preprocessor::build_part(std::filesystem::path part_file,
   earliest_times ets_ch_;
 #endif
 
-  // the transfers per stop of the transport currently examined
-  std::vector<std::vector<transfer>> transfers;
-  transfers.resize(route_max_length_);
-  for (auto& inner_vec : transfers) {
-    inner_vec.reserve(64);
-  }
+  // partial transfer set of expanded transfers
+  expanded_transfer_set transfers;
+
+  // the index of the transport within this thread
+  unsigned thread_transport_idx = 0U;
 
   // days of transport that still require a connection
   bitfield omega;
@@ -146,20 +145,14 @@ void tb_preprocessor::build_part(std::filesystem::path part_file,
   // improvement
   bitfield impr;
 
-  // iterate over all trips of the timetable
-  for (transport_idx_t t{0U}; t != tt_.transport_traffic_days_.size(); ++t) {
+  // iterate over transports assigned to this thread
+  for (transport_idx_t t{start}; t != end; ++t) {
 
     // route index of the current transport
     auto const route_t = tt_.transport_route_[t];
 
     // the stops of the current transport
     auto const stop_seq_t = tt_.route_location_seq_[route_t];
-
-    // only clear the inner vector of transfers to prevent reallocation
-    // only clear what we will be using during this iteration
-    for (auto pos = 1U; pos < stop_seq_t.size(); ++pos) {
-      transfers[pos].clear();
-    }
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
     // clear earliest times
@@ -210,7 +203,8 @@ void tb_preprocessor::build_part(std::filesystem::path part_file,
                         &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr
 #endif
                         ,
-                        &omega, &theta](footpath const& fp) {
+                        &omega, &theta, &transfer_time_max_,
+                        &thread_transport_idx](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
 
@@ -323,9 +317,9 @@ void tb_preprocessor::build_part(std::filesystem::path part_file,
                     omega &= ~theta;
 
 #ifdef TB_PREPRO_UTURN_REMOVAL
-                    auto const check_uturn = [&j, this, &route_u, &i, &route_t,
+                    auto const check_uturn = [&j, &route_u, &i, &route_t,
                                               &tau_dep_alpha_u_j, &u, &alpha,
-                                              &t]() {
+                                              &t, &tt_]() {
                       // check if next stop for u and previous stop for
                       // t exists
                       if (j + 1 < tt_.route_location_seq_[route_u].size() &&
@@ -388,14 +382,10 @@ void tb_preprocessor::build_part(std::filesystem::path part_file,
                       std::swap(theta, impr);
                       if (theta.any()) {
 #endif
-                        // the bitfield index of the bitfield of the
-                        // transfer
-                        auto const theta_idx = get_or_create_bfi(theta);
                         // add transfer to transfers of this transport
-                        transfers[i].emplace_back(
-                            transfer{theta_idx.v_, u.v_, j,
-                                     static_cast<std::uint64_t>(sigma)});
-                        ++n_transfers_;
+                        transfers[thread_transport_idx][i].emplace_back(
+                            theta, u, j, sigma);
+
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                       }
 #endif
@@ -432,11 +422,10 @@ void tb_preprocessor::build_part(std::filesystem::path part_file,
       }
     }
 
-    // add transfers of this transport to the transfer set
-    ts.data_.emplace_back(it_range{
-        transfers.cbegin(),
-        transfers.cbegin() + static_cast<std::int64_t>(stop_seq_t.size())});
+    ++thread_transport_idx;
   }
+
+  // write found transfers to part file
 }
 
 }  // namespace nigiri::routing::tripbased
