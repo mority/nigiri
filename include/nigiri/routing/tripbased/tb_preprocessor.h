@@ -16,27 +16,6 @@ namespace nigiri::routing::tripbased {
 struct tb_preprocessor {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  //  struct earliest_times {
-  //    struct earliest_time {
-  //      duration_t time_{};
-  //      bitfield bf_{};
-  //    };
-  //
-  //    explicit earliest_times(tb_preprocessor& tbp) : tbp_(tbp) {}
-  //
-  //    bool update(location_idx_t, duration_t, bitfield const&);
-  //
-  //    auto size() const noexcept { return location_idx_times_.size(); }
-  //
-  //    void clear() noexcept { location_idx_times_.clear(); }
-  //
-  //    tb_preprocessor& tbp_;
-  //    // temp for get_create_bfi
-  //    bitfield bf_new_;
-  //    mutable_fws_multimap<location_idx_t, earliest_time>
-  //    location_idx_times_{};
-  //  };
-
   struct earliest_times {
     struct earliest_time {
       duration_t time_;
@@ -106,6 +85,13 @@ struct tb_preprocessor {
   }
 
   void build(transfer_set& ts);
+
+  static void build_part(std::filesystem::path,
+                         timetable const&,
+                         std::uint32_t const start,
+                         std::uint32_t const end,
+                         std::size_t const route_max_length_,
+                         duration_t const transfer_time_max_);
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
