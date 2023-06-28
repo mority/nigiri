@@ -97,20 +97,15 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
 #endif
 
 void tb_preprocessor::build(transfer_set& ts) {
-
-  // progress tracker
-  //  auto progress_tracker = utl::get_active_progress_tracker();
-  //  progress_tracker->status("Building Transfer Set")
-  //      .reset_bounds()
-  //      .in_high(tt_.transport_traffic_days_.size());
-
   auto num_threads = std::thread::hardware_concurrency();
   auto const num_transports = tt_.transport_traffic_days_.size();
-  std::cerr << "num_threads = " << std::to_string(num_threads) << "\n";
-  std::cerr << "num_transports = "
-            << std::to_string(tt_.transport_traffic_days_.size()) << "\n";
-
   num_threads = num_threads > num_transports ? num_transports : num_threads;
+
+  // progress tracker
+  auto progress_tracker = utl::get_active_progress_tracker();
+  progress_tracker->status("Building Transfer Set")
+      .reset_bounds()
+      .in_high(num_threads);
 
   // part files for assembly
   std::vector<std::filesystem::path> part_files;
@@ -121,8 +116,6 @@ void tb_preprocessor::build(transfer_set& ts) {
 
   auto const chunk_size = tt_.transport_traffic_days_.size() / num_threads;
 
-  std::cerr << "chunk_size = " << std::to_string(chunk_size) << "\n";
-
   for (std::uint32_t thread_idx = 0U; thread_idx != num_threads; ++thread_idx) {
     part_files.emplace_back("ts_part." + std::to_string(thread_idx));
     auto const start = chunk_size * thread_idx;
@@ -130,16 +123,14 @@ void tb_preprocessor::build(transfer_set& ts) {
     if (thread_idx + 1 == num_threads) {
       end = tt_.transport_traffic_days_.size();
     }
-    threads.emplace_back(build_part, thread_idx, part_files[thread_idx], tt_,
-                         start, end, transfer_time_max_, route_max_length_);
+    threads.emplace_back(build_part, part_files[thread_idx], tt_, start, end,
+                         transfer_time_max_, route_max_length_);
   }
 
   std::vector<std::vector<transfer>> transfers_per_transport;
   transfers_per_transport.resize(route_max_length_);
 
   for (std::uint32_t thread_idx = 0U; thread_idx != num_threads; ++thread_idx) {
-    std::cerr << "Waiting for thread " << std::to_string(thread_idx)
-              << " to finish\n";
 
     // wait for thread to finish
     threads[thread_idx].join();
@@ -181,28 +172,25 @@ void tb_preprocessor::build(transfer_set& ts) {
       }
     }
 
-    std::cout << "Found " << n_transfers_ << " transfers, occupying "
-              << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
-
-    ts.tt_hash_ = hash_tt(tt_);
-    ts.num_el_con_ = num_el_con_;
-    ts.route_max_length_ = route_max_length_;
-    ts.transfer_time_max_ = transfer_time_max_;
-    ts.n_transfers_ = n_transfers_;
-    ts.ready_ = true;
+    progress_tracker->increment();
   }
+  std::cout << "Found " << n_transfers_ << " transfers, occupying "
+            << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
+
+  ts.tt_hash_ = hash_tt(tt_);
+  ts.num_el_con_ = num_el_con_;
+  ts.route_max_length_ = route_max_length_;
+  ts.transfer_time_max_ = transfer_time_max_;
+  ts.n_transfers_ = n_transfers_;
+  ts.ready_ = true;
 }
 
-void tb_preprocessor::build_part(std::uint32_t thread_idx,
-                                 std::filesystem::path part_file,
+void tb_preprocessor::build_part(std::filesystem::path part_file,
                                  timetable const& tt_,
                                  std::uint32_t const start,
                                  std::uint32_t const end,
                                  duration_t const transfer_time_max_,
                                  std::uint32_t const route_max_length) {
-  std::cerr << "thread " << thread_idx << ": processing transports "
-            << std::to_string(start) << " to " << std::to_string(end - 1)
-            << "\n";
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   earliest_times ets_arr_;

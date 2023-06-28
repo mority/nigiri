@@ -7,8 +7,8 @@ namespace nigiri::routing::tripbased::performance {
 
 constexpr interval<std::chrono::sys_days> aachen_period() {
   using namespace date;
-  constexpr auto const from = (2021_y / March / 01).operator sys_days();
-  constexpr auto const to = (2021_y / March / 07).operator sys_days();
+  constexpr auto const from = (2020_y / December / 14).operator sys_days();
+  constexpr auto const to = (2021_y / December / 11).operator sys_days();
   return {from, to};
 }
 

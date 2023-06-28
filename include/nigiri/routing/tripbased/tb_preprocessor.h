@@ -86,8 +86,7 @@ struct tb_preprocessor {
 
   void build(transfer_set& ts);
 
-  static void build_part(std::uint32_t thread_idx,
-                         std::filesystem::path,
+  static void build_part(std::filesystem::path,
                          timetable const&,
                          std::uint32_t const start,
                          std::uint32_t const end,
