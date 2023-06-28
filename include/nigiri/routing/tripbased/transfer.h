@@ -6,6 +6,15 @@
 namespace nigiri::routing::tripbased {
 
 struct transfer {
+  transfer(std::uint32_t const& bf_idx,
+           std::uint32_t const& transport_idx_to,
+           std::uint16_t const& stop_idx_to,
+           std::uint16_t const& passes_midnight)
+      : bitfield_idx_(bf_idx),
+        transport_idx_to_(transport_idx_to),
+        stop_idx_to_(stop_idx_to),
+        passes_midnight_(passes_midnight) {}
+
   std::uint64_t value() const {
     return *reinterpret_cast<std::uint64_t const*>(this);
   }

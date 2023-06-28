@@ -6,9 +6,6 @@
 
 namespace nigiri::routing::tripbased {
 
-constexpr auto const kMode =
-    cista::mode::WITH_INTEGRITY | cista::mode::WITH_STATIC_VERSION;
-
 struct transfer_set {
   auto at(std::uint32_t const transport_idx,
           std::uint32_t const stop_idx) const {

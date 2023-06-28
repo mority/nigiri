@@ -6,9 +6,6 @@
 
 namespace nigiri::routing::tripbased {
 
-constexpr auto const kMode =
-    cista::mode::WITH_INTEGRITY | cista::mode::WITH_STATIC_VERSION;
-
 struct expanded_transfer_set {
 
   void write(cista::memory_holder&) const;
@@ -18,7 +15,7 @@ struct expanded_transfer_set {
   std::size_t hash();
 
   // the transfer set
-  std::vector<std::vector<std::vector<expanded_transfer>>> data_;
+  nvec<std::uint32_t, expanded_transfer, 2> data_;
 };
 
 }  // namespace nigiri::routing::tripbased

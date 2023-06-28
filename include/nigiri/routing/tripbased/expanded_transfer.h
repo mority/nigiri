@@ -21,4 +21,17 @@ struct expanded_transfer {
   std::uint16_t passes_midnight_;
 };
 
+template <std::size_t NMaxTypes>
+constexpr auto static_type_hash(expanded_transfer const*,
+                                cista::hash_data<NMaxTypes> h) noexcept {
+  return h.combine(
+      cista::hash("nigiri::routing::tripbased::expanded_transfer"));
+}
+
+template <typename Ctx>
+inline void serialize(Ctx&, expanded_transfer const*, cista::offset_t const) {}
+
+template <typename Ctx>
+inline void deserialize(Ctx const&, expanded_transfer*) {}
+
 }  // namespace nigiri::routing::tripbased

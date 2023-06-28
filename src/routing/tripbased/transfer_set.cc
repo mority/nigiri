@@ -5,6 +5,9 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
+constexpr auto const kMode =
+    cista::mode::WITH_INTEGRITY | cista::mode::WITH_STATIC_VERSION;
+
 void transfer_set::write(cista::memory_holder& mem) const {
   std::visit(utl::overloaded{[&](cista::buf<cista::mmap>& writer) {
                                cista::serialize<kMode>(writer, *this);

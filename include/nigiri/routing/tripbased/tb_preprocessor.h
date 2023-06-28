@@ -86,12 +86,13 @@ struct tb_preprocessor {
 
   void build(transfer_set& ts);
 
-  static void build_part(std::filesystem::path,
+  static void build_part(std::uint32_t thread_idx,
+                         std::filesystem::path,
                          timetable const&,
                          std::uint32_t const start,
                          std::uint32_t const end,
-                         std::size_t const route_max_length_,
-                         duration_t const transfer_time_max_);
+                         duration_t const transfer_time_max_,
+                         std::uint32_t const route_max_length);
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
