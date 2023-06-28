@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <vector>
 #include "bits.h"
-#include "expanded_transfer_set.h"
 #include "transfer.h"
 #include "transfer_set.h"
 
@@ -13,6 +12,8 @@
 #define TB_PREPRO_TRANSFER_REDUCTION
 
 namespace nigiri::routing::tripbased {
+
+struct expanded_transfer;
 
 struct tb_preprocessor {
 
@@ -87,13 +88,13 @@ struct tb_preprocessor {
 
   void build(transfer_set& ts);
 
-  static void build_part(expanded_transfer_set& ts_part,
-                         bool& ready,
-                         timetable const&,
-                         std::uint32_t const start,
-                         std::uint32_t const end,
-                         duration_t const transfer_time_max_,
-                         std::uint32_t const route_max_length);
+  static void build_part(
+      std::vector<std::vector<std::vector<expanded_transfer>>>& ts_part,
+      unsigned& ready,
+      timetable const&,
+      std::uint32_t const start,
+      std::uint32_t const end,
+      duration_t const transfer_time_max_);
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);

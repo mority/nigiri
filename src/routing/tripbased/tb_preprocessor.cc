@@ -2,15 +2,17 @@
 #include "utl/progress_tracker.h"
 
 #include "nigiri/logging.h"
-#include "nigiri/routing/tripbased/expanded_transfer_set.h"
+#include "nigiri/routing/tripbased/expanded_transfer.h"
 #include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "nigiri/stop.h"
 #include "nigiri/types.h"
 
+#include <chrono>
 #include <thread>
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
+using namespace std::chrono_literals;
 
 bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
   return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&bf, this]() {
@@ -117,15 +119,12 @@ void tb_preprocessor::build(transfer_set& ts) {
     std::vector<std::vector<std::vector<std::vector<expanded_transfer>>>>
         expanded_parts;
     expanded_parts.resize(num_threads);
-    for (auto& part : expanded_parts) {
-      part.reserve(chunk_size);
-    }
 
     std::vector<std::thread> threads;
     threads.reserve(num_threads);
 
     // thread status
-    std::vector<bool> ready(num_threads, false);
+    std::vector<unsigned> ready(num_threads, 0);
     std::vector<bool> processed(num_threads, false);
 
     for (std::uint32_t thread_idx = 0U; thread_idx != num_threads;
@@ -136,15 +135,14 @@ void tb_preprocessor::build(transfer_set& ts) {
         end = tt_.transport_traffic_days_.size();
       }
       threads.emplace_back(build_part, std::ref(expanded_parts[thread_idx]),
-                           ready[thread_idx], tt_, start, end,
-                           transfer_time_max_, route_max_length_);
+                           std::ref(ready[thread_idx]), tt_, start, end,
+                           transfer_time_max_);
     }
 
     unsigned num_finished = 0U;
     for (std::uint32_t thread_idx = 0U; num_finished != num_threads;
          thread_idx = (thread_idx + 1U) % num_threads) {
-      if (!ready[thread_idx] || processed[thread_idx]) {
-        // sleep here maybe
+      if (ready[thread_idx] == 0 || processed[thread_idx]) {
         continue;
       }
 
@@ -174,11 +172,11 @@ void tb_preprocessor::build(transfer_set& ts) {
             ++n_transfers_;
           }
         }
-
-        processed[thread_idx] = true;
-        ++num_finished;
-        progress_tracker->increment();
       }
+
+      processed[thread_idx] = true;
+      ++num_finished;
+      progress_tracker->increment();
     }
 
     // assemble deduplicated parts
@@ -202,21 +200,18 @@ void tb_preprocessor::build(transfer_set& ts) {
   }
 }
 
-void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
-                                 bool& ready,
-                                 timetable const& tt_,
-                                 std::uint32_t const start,
-                                 std::uint32_t const end,
-                                 duration_t const transfer_time_max_,
-                                 std::uint32_t const route_max_length) {
+void tb_preprocessor::build_part(
+    std::vector<std::vector<std::vector<expanded_transfer>>>& ts_part,
+    unsigned& ready,
+    timetable const& tt_,
+    std::uint32_t const start,
+    std::uint32_t const end,
+    duration_t const transfer_time_max_) {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   earliest_times ets_arr_;
   earliest_times ets_ch_;
 #endif
-
-  std::vector<std::vector<expanded_transfer>> transfers_per_transport;
-  transfers_per_transport.resize(route_max_length);
 
   // days of transport that still require a connection
   bitfield omega;
@@ -230,6 +225,9 @@ void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
   bitfield impr;
 #endif
 
+  // resize for number of transports of this thread
+  ts_part.resize(end - start);
+
   // iterate over transports assigned to this thread
   for (transport_idx_t t{start}; t != end; ++t) {
 
@@ -238,6 +236,9 @@ void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
 
     // the stops of the current transport
     auto const stop_seq_t = tt_.route_location_seq_[route_t];
+
+    // resize for number of stops of this transport
+    ts_part[t.v_ - start].resize(stop_seq_t.size());
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
     // clear earliest times
@@ -282,15 +283,14 @@ void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
       }
 #endif
 
-      auto handle_fp = [&sigma_t, &tt_, &t, &i, &route_t,
-                        &transfers_per_transport, &alpha
+      auto handle_fp = [&sigma_t, &tt_, &t, &i, &route_t, &alpha
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                         ,
                         &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr
 #endif
                         ,
-                        &omega, &theta,
-                        &transfer_time_max_](footpath const& fp) {
+                        &omega, &theta, &transfer_time_max_, &start,
+                        &ts_part](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
 
@@ -469,8 +469,8 @@ void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
                       if (theta.any()) {
 #endif
                         // add transfer to transfers of this transport
-                        transfers_per_transport[i].emplace_back(theta, u, j,
-                                                                sigma);
+                        ts_part[t.v_ - start][i].emplace_back(theta, u, j,
+                                                              sigma);
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                       }
@@ -507,18 +507,7 @@ void tb_preprocessor::build_part(expanded_transfer_set& ts_part,
         handle_fp(fp_q);
       }
     }
-
-    // add transfers of this transport to the transfer set
-    ts_part.data_.emplace_back(
-        it_range{transfers_per_transport.cbegin(),
-                 transfers_per_transport.cbegin() +
-                     static_cast<std::int64_t>(stop_seq_t.size())});
-
-    // clean up helper vector
-    for (std::uint32_t s = 0U; s != stop_seq_t.size(); ++s) {
-      transfers_per_transport[s].clear();
-    }
   }
 
-  ready = true;
+  ready = 1;
 }
