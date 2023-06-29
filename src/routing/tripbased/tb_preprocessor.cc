@@ -8,6 +8,8 @@
 #include "nigiri/types.h"
 
 #include <chrono>
+#include <forward_list>
+#include <mutex>
 #include <thread>
 
 using namespace nigiri;
@@ -99,105 +101,104 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
 #endif
 
 void tb_preprocessor::build(transfer_set& ts) {
-  auto num_threads = std::thread::hardware_concurrency();
   auto const num_transports = tt_.transport_traffic_days_.size();
-  num_threads = num_threads > num_transports ? num_transports : num_threads;
-  auto const chunk_size = tt_.transport_traffic_days_.size() / num_threads;
+  auto const num_threads = std::thread::hardware_concurrency();
 
   // progress tracker
   auto progress_tracker = utl::get_active_progress_tracker();
   progress_tracker->status("Building Transfer Set")
       .reset_bounds()
-      .in_high(num_threads);
+      .in_high(num_transports);
 
-  // parts with deduplicated bitfields
-  std::vector<std::vector<std::vector<std::vector<transfer>>>> parts;
-  parts.resize(num_threads);
+  // next transport idx for which to compute transfers
+  unsigned next_transfers = 0U;
+  std::mutex next_transfers_mutex;
 
-  {
-    // expanded parts for assembly
-    std::vector<std::vector<std::vector<std::vector<expanded_transfer>>>>
-        expanded_parts;
-    expanded_parts.resize(num_threads);
+  // pair.first: first transport idx in this partial transfer set, pair.second:
+  // partial expanded transfer set
+  std::forward_list<
+      std::pair<transport_idx_t,
+                std::vector<std::vector<std::vector<expanded_transfer>>>>>
+      parts;
+  std::mutex parts_mutex;
 
-    std::vector<std::thread> threads;
-    threads.reserve(num_threads);
-
-    // thread status
-    std::vector<unsigned> ready(num_threads, 0);
-    std::vector<bool> processed(num_threads, false);
-
-    for (std::uint32_t thread_idx = 0U; thread_idx != num_threads;
-         ++thread_idx) {
-      auto const start = chunk_size * thread_idx;
-      auto end = start + chunk_size;
-      if (thread_idx + 1 == num_threads) {
-        end = tt_.transport_traffic_days_.size();
-      }
-      threads.emplace_back(build_part, std::ref(expanded_parts[thread_idx]),
-                           std::ref(ready[thread_idx]), tt_, start, end,
-                           transfer_time_max_);
-    }
-
-    unsigned num_finished = 0U;
-    for (std::uint32_t thread_idx = 0U; num_finished != num_threads;
-         thread_idx = (thread_idx + 1U) % num_threads) {
-      if (ready[thread_idx] == 0 || processed[thread_idx]) {
-        continue;
-      }
-
-      // wait for thread to finish
-      threads[thread_idx].join();
-
-      // resize for incoming number of transports
-      parts[thread_idx].resize(expanded_parts[thread_idx].size());
-
-      // iterate transports in part file
-      for (std::uint32_t t = 0U; t != expanded_parts[thread_idx].size(); ++t) {
-        // resize for incoming number of stops
-        parts[thread_idx][t].resize(expanded_parts[thread_idx][t].size());
-
-        // deduplicate bitfields
-        for (std::uint64_t s = 0U; s != expanded_parts[thread_idx][t].size();
-             ++s) {
-          // reserve space for incoming number of transfers
-          parts[thread_idx][t][s].reserve(
-              expanded_parts[thread_idx][t][s].size());
-
-          for (auto const& exp_transfer : expanded_parts[thread_idx][t][s]) {
-            parts[thread_idx][t][s].emplace_back(
-                get_or_create_bfi(exp_transfer.bf_).v_,
-                exp_transfer.transport_idx_to_.v_, exp_transfer.stop_idx_to_,
-                exp_transfer.passes_midnight_);
-            ++n_transfers_;
-          }
-        }
-      }
-
-      processed[thread_idx] = true;
-      ++num_finished;
-      progress_tracker->increment();
-    }
-
-    // assemble deduplicated parts
-    for (auto const& part : parts) {
-      for (auto const& transport : part) {
-        ts.data_.emplace_back(it_range{
-            transport.cbegin(),
-            transport.cbegin() + static_cast<std::int64_t>(transport.size())});
-      }
-    }
-
-    std::cout << "Found " << n_transfers_ << " transfers, occupying "
-              << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
-
-    ts.tt_hash_ = hash_tt(tt_);
-    ts.num_el_con_ = num_el_con_;
-    ts.route_max_length_ = route_max_length_;
-    ts.transfer_time_max_ = transfer_time_max_;
-    ts.n_transfers_ = n_transfers_;
-    ts.ready_ = true;
+  // start threads
+  for (unsigned i = 0; i != num_threads; ++i) {
+    std::thread t(build_part, );
+    t.detach();
   }
+
+  std::vector<std::vector<transfer>> transfers_per_transport;
+  transfers_per_transport.resize(route_max_length_);
+
+  // next transport idx for which to deduplicate bitfields
+  unsigned next_deduplicate = 0U;
+  // processed parts that can be removed
+  std::vector<transport_idx_t> to_remove;
+  to_remove.reserve(100);
+  while (next_deduplicate != num_transports) {
+
+    // check if next part is ready
+    for (auto& part : parts) {
+      if (part.first == next_deduplicate) {
+        // deduplicate each transport in this part
+        for (auto const& t : part.second) {
+
+          // deduplicate
+          for (unsigned s = 0U; s != t.size(); ++s) {
+            for (auto const& exp_transfer : t[s]) {
+              transfers_per_transport[s].emplace_back(
+                  get_or_create_bfi(exp_transfer.bf_).v_,
+                  exp_transfer.transport_idx_to_.v_, exp_transfer.stop_idx_to_,
+                  exp_transfer.passes_midnight_);
+              ++n_transfers_;
+            }
+          }
+
+          // add transfers of this transport to transfer set
+          ts.data_.emplace_back(it_range{
+              transfers_per_transport.cbegin(),
+              transfers_per_transport.cbegin() +
+                  static_cast<std::int64_t>(transfers_per_transport.size())});
+
+          // clean up
+          for (unsigned s = 0U; s != t.size(); ++s) {
+            transfers_per_transport[s].clear();
+          }
+
+          ++next_deduplicate;
+        }
+
+        progress_tracker->increment(part.second.size());
+        to_remove.emplace_back(part.first);
+      }
+    }
+
+    // remove processed parts
+    if (50 < to_remove.size()) {
+      std::lock_guard<std::mutex> const lock(parts_mutex);
+      while (!to_remove.empty()) {
+        parts.remove_if(
+            [&to_remove](
+                std::pair<
+                    transport_idx_t,
+                    std::vector<std::vector<std::vector<expanded_transfer>>>>
+                    part) { return part.first == to_remove.back(); });
+        to_remove.pop_back();
+      }
+    }
+  }
+
+  std::cout << "Found " << n_transfers_ << " transfers, occupying "
+            << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
+
+  ts.tt_hash_ = hash_tt(tt_);
+  ts.num_el_con_ = num_el_con_;
+  ts.route_max_length_ = route_max_length_;
+  ts.transfer_time_max_ = transfer_time_max_;
+  ts.n_transfers_ = n_transfers_;
+  ts.ready_ = true;
+}
 }
 
 void tb_preprocessor::build_part(
