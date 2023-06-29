@@ -1,8 +1,10 @@
 #pragma once
 
 #include "boost/functional/hash.hpp"
+#include "nigiri/routing/tripbased/expanded_transfer.h"
 #include "nigiri/timetable.h"
 #include <filesystem>
+#include <list>
 #include <vector>
 #include "bits.h"
 #include "transfer.h"
@@ -12,6 +14,11 @@
 #define TB_PREPRO_TRANSFER_REDUCTION
 
 namespace nigiri::routing::tripbased {
+
+using part_t =
+    std::pair<std::uint32_t,
+              std::vector<std::vector<std::vector<expanded_transfer>>>>;
+using queue_t = std::list<part_t>;
 
 struct expanded_transfer;
 
@@ -88,13 +95,7 @@ struct tb_preprocessor {
 
   void build(transfer_set& ts);
 
-  static void build_part(
-      std::vector<std::vector<std::vector<expanded_transfer>>>& ts_part,
-      unsigned& ready,
-      timetable const&,
-      std::uint32_t const start,
-      std::uint32_t const end,
-      duration_t const transfer_time_max_);
+  static void build_part(tb_preprocessor* const);
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
@@ -117,6 +118,17 @@ struct tb_preprocessor {
 
   // the number of transfers found
   unsigned n_transfers_ = 0U;
+
+  // next transport idx for which to compute transfers
+  std::uint32_t next_transport_ = 0U;
+  std::mutex next_transport_mutex_;
+
+  // pair.first: first transport idx in this partial transfer set, pair.second:
+  // partial expanded transfer set
+  queue_t parts_;
+  std::mutex parts_mutex_;
+
+  std::uint32_t const chunk_size_ = 100U;
 };
 
 static inline void build_transfer_set(timetable& tt, transfer_set& ts) {
