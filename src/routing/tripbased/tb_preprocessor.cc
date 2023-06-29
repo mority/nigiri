@@ -121,7 +121,7 @@ void tb_preprocessor::build(transfer_set& ts) {
   // next transport idx for which to deduplicate bitfields
   std::uint32_t next_deduplicate = 0U;
   while (next_deduplicate != num_transports) {
-    std::this_thread::sleep_for(10ms);
+    std::this_thread::sleep_for(1000ms);
 
     // check if next part is ready
     for (auto part = parts_.begin(); part != parts_.end();) {
