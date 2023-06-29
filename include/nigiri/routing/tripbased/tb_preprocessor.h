@@ -16,8 +16,7 @@
 namespace nigiri::routing::tripbased {
 
 using part_t =
-    std::pair<std::uint32_t,
-              std::vector<std::vector<std::vector<expanded_transfer>>>>;
+    std::pair<std::uint32_t, std::vector<std::vector<expanded_transfer>>>;
 using queue_t = std::list<part_t>;
 
 struct expanded_transfer;
@@ -127,8 +126,6 @@ struct tb_preprocessor {
   // partial expanded transfer set
   queue_t parts_;
   std::mutex parts_mutex_;
-
-  std::uint32_t const chunk_size_ = 100U;
 };
 
 static inline void build_transfer_set(timetable& tt, transfer_set& ts) {
