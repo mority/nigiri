@@ -108,10 +108,11 @@ void tb_preprocessor::build(transfer_set& ts) {
       .reset_bounds()
       .in_high(num_transports);
 
+  std::vector<std::thread> threads;
+
   // start worker threads
   for (unsigned i = 0; i != num_threads; ++i) {
-    std::thread t(build_part, this);
-    t.detach();
+    threads.emplace_back(build_part, this);
   }
 
   std::vector<std::vector<transfer>> transfers_per_transport;
@@ -119,10 +120,8 @@ void tb_preprocessor::build(transfer_set& ts) {
 
   // next transport idx for which to deduplicate bitfields
   std::uint32_t next_deduplicate = 0U;
-  // processed parts that can be removed
-  std::vector<std::uint32_t> to_remove;
-  to_remove.reserve(100);
   while (next_deduplicate != num_transports) {
+    std::this_thread::sleep_for(200ms);
 
     // check if next part is ready
     for (auto part = parts_.begin(); part != parts_.end();) {
@@ -155,11 +154,16 @@ void tb_preprocessor::build(transfer_set& ts) {
 
         // remove processed part
         std::lock_guard<std::mutex> const lock(parts_mutex_);
-        parts_.erase(part);
+        part = parts_.erase(part);
       } else {
         ++part;
       }
     }
+  }
+
+  // join worker threads
+  for (auto& t : threads) {
+    t.join();
   }
 
   std::cout << "Found " << n_transfers_ << " transfers, occupying "
@@ -199,15 +203,15 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
     // get next transport indices to process
     {
       std::lock_guard<std::mutex> const lock(pp->next_transport_mutex_);
-      if (pp->next_transport_ == pp->tt_.transport_traffic_days_.size()) {
-        break;
-      } else {
-        start = pp->next_transport_;
-        end = start + pp->chunk_size_ > pp->tt_.transport_traffic_days_.size()
-                  ? pp->tt_.transport_traffic_days_.size()
-                  : start + pp->chunk_size_;
-        pp->next_transport_ = end;
-      }
+      start = pp->next_transport_;
+      end = start + pp->chunk_size_ > pp->tt_.transport_traffic_days_.size()
+                ? pp->tt_.transport_traffic_days_.size()
+                : start + pp->chunk_size_;
+      pp->next_transport_ = end;
+    }
+
+    if (start == pp->tt_.transport_traffic_days_.size()) {
+      break;
     }
 
     // init a new part
