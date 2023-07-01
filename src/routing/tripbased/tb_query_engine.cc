@@ -42,9 +42,9 @@ tb_query_engine::tb_query_engine(timetable const& tt,
               auto const location_idx =
                   stop{tt_.route_location_seq_[route_idx][stop_idx]}
                       .location_idx();
-              if (location_idx == fp.target_) {
+              if (location_idx == fp.target()) {
                 state_.route_dest_.emplace_back(route_idx, stop_idx,
-                                                fp.duration());
+                                                fp.duration().count());
               }
             }
           }
@@ -73,10 +73,10 @@ tb_query_engine::tb_query_engine(timetable const& tt,
               auto const location_idx =
                   stop{tt_.route_location_seq_[route_idx][stop_idx]}
                       .location_idx();
-              if (location_idx == fp.target_) {
+              if (location_idx == fp.target()) {
                 state_.route_dest_.emplace_back(
                     route_idx, stop_idx,
-                    fp.duration() + duration_t{dist_to_dest_[dest.v_]});
+                    fp.duration().count() + dist_to_dest_[dest.v_]);
               }
             }
           }
@@ -128,15 +128,14 @@ void tb_query_engine::handle_start(query_start const& start) {
   // start day and time
   auto const day_idx_mam = tt_.day_idx_mam(start.time_);
   // start day
-  auto const d = day_idx_mam.first;
+  std::int32_t const d = day_idx_mam.first.v_;
   // start time
-  auto const tau = day_idx_mam.second;
+  std::int32_t const tau = day_idx_mam.second.count();
 
 #ifndef NDEBUG
   TBDL << "handle_start | start_location: "
        << location_name(tt_, start.location_)
-       << " | start_time: " << dhhmm(duration_t{d.v_ * 1440 + tau.count()})
-       << "\n";
+       << " | start_time: " << dhhmm(d * 1440 + tau) << "\n";
 #endif
 
   // virtual reflexive footpath
@@ -156,11 +155,13 @@ void tb_query_engine::handle_start(query_start const& start) {
   }
 }
 
-void tb_query_engine::handle_start_footpath(day_idx_t const d,
-                                            duration_t const tau,
+void tb_query_engine::handle_start_footpath(std::int32_t const d,
+                                            std::int32_t const tau,
                                             footpath const fp) {
   // arrival time after walking the footpath
-  auto const alpha = delta{tau + fp.duration()};
+  auto const alpha = tau + fp.duration().count();
+  auto const alpha_d = alpha / 1440;
+  auto const alpha_tod = alpha % 1440;
 
   // iterate routes at target stop of footpath
   for (auto const route_idx : tt_.location_routes_[fp.target()]) {
@@ -181,11 +182,11 @@ void tb_query_engine::handle_start_footpath(day_idx_t const d,
             tt_.event_times_at_stop(route_idx, i, event_type::kDep);
         // iterator to departure time of connecting transport at this
         // q
-        auto tau_dep_t_i = std::lower_bound(
-            event_times.begin(), event_times.end(), alpha,
-            [&](auto&& x, auto&& y) { return x.mam() < y.mam(); });
+        auto tau_dep_t_i =
+            std::lower_bound(event_times.begin(), event_times.end(), alpha_tod,
+                             [&](auto&& x, auto&& y) { return x.mam() < y; });
         // shift amount due to walking the footpath
-        auto sigma = day_idx_t{alpha.days()};
+        auto sigma = alpha_d;
         // no departure found on the day of alpha
         if (tau_dep_t_i == event_times.end()) {
           // start looking at the following day
@@ -195,7 +196,7 @@ void tb_query_engine::handle_start_footpath(day_idx_t const d,
         // iterate departures until maximum waiting time is reached
         while (sigma <= 1) {
           // shift amount due to travel time of transport
-          auto const sigma_t = day_idx_t{tau_dep_t_i->days()};
+          std::int32_t const sigma_t = tau_dep_t_i->days();
           // day index of the transport segment
           auto const d_seg = d + sigma - sigma_t;
           // offset of connecting transport in route_transport_ranges
@@ -206,16 +207,17 @@ void tb_query_engine::handle_start_footpath(day_idx_t const d,
           // bitfield of the connecting transport
           auto const& beta_t = tt_.bitfields_[tt_.transport_traffic_days_[t]];
 
-          if (beta_t.test(d_seg.v_)) {
+          if (beta_t.test(static_cast<std::size_t>(d_seg))) {
             // enqueue segment if matching bit is found
 #ifndef NDEBUG
             TBDL << "Attempting to enqueue a segment of transport " << t << ": "
                  << tt_.transport_name(t) << ", departing at "
-                 << unix_dhhmm(
-                        tt_, tt_.to_unixtime(d_seg, tau_dep_t_i->as_duration()))
+                 << unix_dhhmm(tt_, tt_.to_unixtime(day_idx_t{d_seg},
+                                                    tau_dep_t_i->as_duration()))
                  << "\n";
 #endif
-            state_.q_.enqueue(d_seg, t, i, 0U, TRANSFERRED_FROM_NULL);
+            state_.q_.enqueue(static_cast<std::uint16_t>(d_seg), t, i, 0U,
+                              TRANSFERRED_FROM_NULL);
             break;
           }
           // passing midnight?
@@ -246,17 +248,24 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
 #endif
 
   // departure time at the start of the transport segment
-  auto const tau_dep_t_b_delta = tt_.event_mam(
-      seg.get_transport_idx(), seg.stop_idx_start_, event_type::kDep);
+  auto const tau_dep_t_b = tt_.event_mam(seg.get_transport_idx(),
+                                         seg.stop_idx_start_, event_type::kDep)
+                               .count();
+  auto const tau_dep_t_b_d =
+      tt_.event_mam(seg.get_transport_idx(), seg.stop_idx_start_,
+                    event_type::kDep)
+          .days();
+  auto const tau_dep_t_b_tod =
+      tt_.event_mam(seg.get_transport_idx(), seg.stop_idx_start_,
+                    event_type::kDep)
+          .mam();
+
   // the day index of the segment
-  auto const d_seg = seg.get_transport_day(base_).v_;
+  std::int32_t const d_seg = seg.get_transport_day(base_).v_;
   // departure time at start of current transport segment in minutes after
   // midnight on the day of the query
   auto const tau_d =
-      duration_t{(d_seg + static_cast<std::uint16_t>(tau_dep_t_b_delta.days()) -
-                  state_.base_.v_) *
-                 1440U} +
-      duration_t{tau_dep_t_b_delta.mam()};
+      (d_seg + tau_dep_t_b_d - state_.base_.v_) * 1440 + tau_dep_t_b_tod;
 
   // check if target location is reached from current transport segment
   for (auto const& le : state_.route_dest_) {
@@ -265,17 +274,18 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
         le.stop_idx_ <= seg.stop_idx_end_) {
       // the time it takes to travel on this transport segment
       auto const travel_time_seg =
-          tt_.event_mam(seg.get_transport_idx(), le.stop_idx_,
-                        event_type::kArr) -
-          tau_dep_t_b_delta;
+          tt_.event_mam(seg.get_transport_idx(), le.stop_idx_, event_type::kArr)
+              .count() -
+          tau_dep_t_b;
       // the time at which the target location is reached by using the
       // current transport segment
       auto const t_cur = tt_.to_unixtime(
-          state_.base_, tau_d + travel_time_seg.as_duration() + le.time_);
+          state_.base_,
+          minutes_after_midnight_t{tau_d + travel_time_seg + le.time_});
 
 #ifndef NDEBUG
       TBDL << "segment reaches a destination at "
-           << dhhmm(tau_d + travel_time_seg.as_duration() + le.time_) << "\n";
+           << dhhmm(tau_d + travel_time_seg + le.time_) << "\n";
 #endif
       if (t_cur < state_.t_min_[n]) {
         state_.t_min_[n] = t_cur;
@@ -306,12 +316,13 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
   // the time it takes to travel to the next stop of the transport segment
   auto const travel_time_next =
       tt_.event_mam(seg.get_transport_idx(), seg.stop_idx_start_ + 1,
-                    event_type::kArr) -
-      tau_dep_t_b_delta;
+                    event_type::kArr)
+          .count() -
+      tau_dep_t_b;
 
   // the unix time at the next stop of the transport segment
-  auto const unix_time_next =
-      tt_.to_unixtime(state_.base_, tau_d + travel_time_next.as_duration());
+  auto const unix_time_next = tt_.to_unixtime(
+      state_.base_, minutes_after_midnight_t{tau_d + travel_time_next});
 
   // transfer out of current transport segment?
   if (unix_time_next < state_.t_min_[n] &&
@@ -342,19 +353,20 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
         // from the current transport segment
         auto const& theta = tt_.bitfields_[transfer.get_bitfield_idx()];
         // enqueue if transfer is possible
-        if (theta.test(d_seg)) {
+        if (theta.test(static_cast<std::size_t>(d_seg))) {
           // arrival time at start location of transfer
-          auto const tau_arr_t_i_delta =
-              tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr);
+          auto const tau_arr_t_i =
+              tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr)
+                  .count();
           // departure time at end location of transfer
-          auto const tau_dep_u_j_delta =
+          auto const tau_dep_u_j =
               tt_.event_mam(transfer.get_transport_idx_to(),
-                            transfer.stop_idx_to_, event_type::kDep);
+                            transfer.stop_idx_to_, event_type::kDep)
+                  .count();
 
-          auto const d_tr = seg.get_transport_day(base_) +
-                            day_idx_t{tau_arr_t_i_delta.days()} -
-                            day_idx_t{tau_dep_u_j_delta.days()} +
-                            transfer.get_passes_midnight();
+          auto const d_tr = seg.get_transport_day(base_).v_ +
+                            tau_arr_t_i / 1440 - tau_dep_u_j / 1440 +
+                            transfer.passes_midnight_;
 #ifndef NDEBUG
           TBDL << "Found a transfer to transport "
                << transfer.get_transport_idx_to() << ": "
@@ -369,7 +381,8 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                << "\n";
 #endif
 
-          state_.q_.enqueue(d_tr, transfer.get_transport_idx_to(),
+          state_.q_.enqueue(static_cast<std::uint16_t>(d_tr),
+                            transfer.get_transport_idx_to(),
                             transfer.get_stop_idx_to(), n + 1U, q_cur);
         }
       }
@@ -465,11 +478,14 @@ tb_query_engine::reconstruct_journey_end(query const& q,
         auto const transport_time =
             tt_.event_mam(seg.get_transport_idx(), le.stop_idx_,
                           event_type::kArr)
-                .as_duration() +
+                .count() +
             le.time_;
+        // day at destination
+        auto const day_at_dest =
+            transport_day + static_cast<std::uint16_t>(transport_time / 1440);
         // unix_time of segment at destination
-        auto const seg_unix_dest =
-            tt_.to_unixtime(transport_day, transport_time);
+        auto const seg_unix_dest = tt_.to_unixtime(
+            day_at_dest, minutes_after_midnight_t{transport_time % 1440});
         // check if time at destination matches
         if (seg_unix_dest == j.dest_time_) {
           // the location specified by the l_entry
@@ -479,7 +495,7 @@ tb_query_engine::reconstruct_journey_end(query const& q,
 
           // to station
           if (q.dest_match_mode_ != location_match_mode::kIntermodal) {
-            if (le.time_ == duration_t{0} && is_dest_[le_location_idx.v_]) {
+            if (le.time_ == 0 && is_dest_[le_location_idx.v_]) {
               // either the location of the l_entry is itself a destination
               return journey_end{q_cur, le, le_location_idx, le_location_idx};
             } else {
@@ -487,14 +503,15 @@ tb_query_engine::reconstruct_journey_end(query const& q,
               // destination
               for (auto const& fp :
                    tt_.locations_.footpaths_out_[le_location_idx]) {
-                if (fp.duration() == le.time_ && is_dest_[fp.target().v_]) {
+                if (fp.duration().count() == le.time_ &&
+                    is_dest_[fp.target().v_]) {
                   return journey_end{q_cur, le, le_location_idx, fp.target()};
                 }
               }
             }
             // to intermodal
           } else {
-            if (le.time_ == duration_t{dist_to_dest_[le_location_idx.v_]}) {
+            if (le.time_ == dist_to_dest_[le_location_idx.v_]) {
               // either the location of the l_entry itself has matching
               // dist_to_dest
               return journey_end{q_cur, le, le_location_idx, le_location_idx};
@@ -503,7 +520,7 @@ tb_query_engine::reconstruct_journey_end(query const& q,
               // dist_to_dest of footpath target match the time of the l_entry
               for (auto const& fp :
                    tt_.locations_.footpaths_out_[le_location_idx]) {
-                if (fp.duration() + duration_t{dist_to_dest_[fp.target().v_]} ==
+                if (fp.duration().count() + dist_to_dest_[fp.target().v_] ==
                     le.time_) {
                   return journey_end{q_cur, le, le_location_idx, fp.target()};
                 }

@@ -25,12 +25,21 @@ struct tb_preprocessor {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   struct earliest_times {
+
     struct earliest_time {
-      duration_t time_;
+      earliest_time() : time_{0U} {}
+      earliest_time(std::int32_t time, bitfield bf) : time_(time), bf_(bf) {}
+
+      std::int32_t time_;
       bitfield bf_;
     };
 
-    void update(location_idx_t, duration_t, bitfield const& bf, bitfield* impr);
+    void init(location_idx_t, std::int32_t time_new, bitfield const&);
+
+    void update(location_idx_t,
+                std::int32_t time_new,
+                bitfield const& bf,
+                bitfield& impr);
 
     void reset() noexcept { times_.clear(); }
 
@@ -40,8 +49,7 @@ struct tb_preprocessor {
 #endif
 
   //  preprocessor() = delete;
-  explicit tb_preprocessor(timetable& tt,
-                           duration_t transfer_time_max = duration_t{1440U})
+  explicit tb_preprocessor(timetable& tt, std::int32_t transfer_time_max = 1400)
       : tt_(tt), transfer_time_max_(transfer_time_max) {
     {
       auto const timer = scoped_timer("trip-based preprocessing: init");
@@ -113,7 +121,7 @@ struct tb_preprocessor {
   std::size_t route_max_length_ = 0U;
 
   // max. look-ahead
-  duration_t const transfer_time_max_;
+  std::int32_t const transfer_time_max_;
 
   // the number of transfers found
   unsigned n_transfers_ = 0U;

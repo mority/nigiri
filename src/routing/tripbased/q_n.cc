@@ -1,5 +1,5 @@
-#include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/q_n.h"
+#include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/transport_segment.h"
 
 using namespace nigiri;
@@ -16,7 +16,7 @@ void q_n::reset() {
   segments_.clear();
 }
 
-void q_n::enqueue(day_idx_t const transport_day,
+void q_n::enqueue(std::uint16_t const transport_day,
                   transport_idx_t const transport_idx,
                   std::uint16_t const stop_idx,
                   std::uint16_t const n_transfers,
@@ -25,7 +25,7 @@ void q_n::enqueue(day_idx_t const transport_day,
 
   // compute transport segment index
   auto const transport_segment_idx =
-      embed_day_offset(base_, transport_day, transport_idx);
+      embed_day_offset(base_.v_, transport_day, transport_idx);
 
   // look-up the earliest stop index reached
   auto const r_query_res = r_.query(transport_segment_idx, n_transfers);

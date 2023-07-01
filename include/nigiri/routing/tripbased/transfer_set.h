@@ -25,7 +25,7 @@ struct transfer_set {
   // length of the longest route in the timetable
   std::size_t route_max_length_ = 0U;
   // max. transfer time used during preprocessing
-  duration_t transfer_time_max_{0U};
+  std::int32_t transfer_time_max_ = 0;
   // the number of transfers found
   unsigned n_transfers_ = 0U;
   // if building successfully finished

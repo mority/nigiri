@@ -8,28 +8,28 @@
 
 namespace nigiri::routing::tripbased {
 
-static inline std::string dhhmm(nigiri::duration_t const& d) {
-  nigiri::duration_t rem = d;
+static inline std::string dhhmm(std::int32_t const& d) {
+  auto rem = d;
   unsigned days = 0;
-  while (rem >= nigiri::duration_t{1440}) {
-    rem -= nigiri::duration_t{1440};
+  while (rem >= 1440) {
+    rem -= 1440;
     ++days;
   }
   unsigned hours = 0;
-  while (rem >= nigiri::duration_t{60}) {
-    rem -= nigiri::duration_t{60};
+  while (rem >= 60) {
+    rem -= 60;
     ++hours;
   }
   std::string result = std::to_string(days) + "d" +
                        fmt::format("{:0>2}", hours) +
-                       fmt::format("{:0>2}", rem.count()) + "h";
+                       fmt::format("{:0>2}", rem) + "h";
   return result;
 }
 
-static inline nigiri::duration_t unix_tt(nigiri::timetable const& tt,
-                                         nigiri::unixtime_t const& u) {
+static inline std::int32_t unix_tt(nigiri::timetable const& tt,
+                                   nigiri::unixtime_t const& u) {
   auto const [day, time] = tt.day_idx_mam(u);
-  return nigiri::duration_t{day.v_ * 1440} + time;
+  return day.v_ * 1440 + time.count();
 }
 
 static inline std::string unix_dhhmm(timetable const& tt, unixtime_t const u) {

@@ -68,7 +68,9 @@ struct tb_query_engine {
 private:
   void handle_start(query_start const&);
 
-  void handle_start_footpath(day_idx_t const, duration_t const, footpath const);
+  void handle_start_footpath(std::int32_t const,
+                             std::int32_t const,
+                             footpath const);
 
   void handle_segment(unixtime_t const start_time,
                       unixtime_t const worst_time_at_dest,

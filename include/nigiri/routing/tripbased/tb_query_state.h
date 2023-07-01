@@ -14,15 +14,15 @@ namespace nigiri::routing::tripbased {
 
 // a route that reaches the destination
 struct route_dest {
-  route_dest(route_idx_t route_idx, std::uint16_t stop_idx, duration_t time)
+  route_dest(route_idx_t route_idx, std::uint16_t stop_idx, std::uint16_t time)
       : route_idx_(route_idx), stop_idx_(stop_idx), time_(time) {}
   // the route index of the route that reaches the target location
   route_idx_t route_idx_;
   // the stop index at which the route reaches the target location
   std::uint16_t stop_idx_;
-  // the time it takes after exiting the route until the target location is
+  // the time in it takes after exiting the route until the target location is
   // reached
-  duration_t time_;
+  std::uint16_t time_;
 };
 
 struct query_start {

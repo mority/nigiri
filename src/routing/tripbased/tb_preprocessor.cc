@@ -23,77 +23,67 @@ bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
 }
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-void tb_preprocessor::earliest_times::update(location_idx_t location,
-                                             duration_t time_new,
-                                             bitfield const& bf,
-                                             bitfield* impr) {
+void tb_preprocessor::earliest_times::init(location_idx_t location,
+                                           std::int32_t time_new,
+                                           bitfield const& bf) {
+  times_[location].emplace_back(time_new, bf);
+}
 
-  if (times_[location].size() != 0) {
-    // bitfield is manipulated during update process
-    bf_new_ = bf;
-    // position of entry with an equal time
-    auto same_time_spot = static_cast<unsigned>(times_[location].size());
-    // position of entry with no active days
-    auto overwrite_spot = static_cast<unsigned>(times_[location].size());
-    // compare to existing entries of this location
-    for (auto i{0U}; i != times_[location].size(); ++i) {
-      if (bf_new_.none()) {
-        // all bits of new entry were set to zero, new entry does not improve
-        // upon any times
-        return;
-      } else if (times_[location][i].bf_.any()) {
-        if (time_new < times_[location][i].time_) {
-          // new time is better than existing time, update bit set of existing
-          // time
-          times_[location][i].bf_ &= ~bf_new_;
-          if (times_[location][i].bf_.none()) {
-            // existing entry has no active days left -> remember as overwrite
-            // spot
-            overwrite_spot = i;
-          }
-        } else {
-          // new time is greater or equal
-          // remove active days from new time that are already active in the
-          // existing entry
-          bf_new_ &= ~times_[location][i].bf_;
-          if (time_new == times_[location][i].time_) {
-            // remember this position to add active days of new time after
-            // comparison to existing entries
-            same_time_spot = i;
-          }
-        }
-      } else {
-        // existing entry has no active days -> remember as overwrite spot
-        overwrite_spot = i;
+void tb_preprocessor::earliest_times::update(location_idx_t location,
+                                             std::int32_t time_new,
+                                             bitfield const& bf,
+                                             bitfield& impr) {
+  // bitfield is manipulated during update process
+  bf_new_ = bf;
+  // position of entry with an equal time
+  std::optional<std::uint32_t> same_time_spot = std::nullopt;
+  // position of entry with no active days
+  std::optional<std::uint32_t> overwrite_spot = std::nullopt;
+  // compare to existing entries of this location
+  for (auto i{0U}; i != times_[location].size(); ++i) {
+    if (bf_new_.none()) {
+      // all bits of new entry were set to zero, new entry does not improve
+      // upon any times
+      return;
+    }
+    if (time_new < times_[location][i].time_) {
+      // new time is better than existing time, update bit set of existing
+      // time
+      times_[location][i].bf_ &= ~bf_new_;
+    } else {
+      // new time is greater or equal
+      // remove active days from new time that are already active in the
+      // existing entry
+      bf_new_ &= ~times_[location][i].bf_;
+      if (time_new == times_[location][i].time_) {
+        // remember this position to add active days of new time after
+        // comparison to existing entries
+        same_time_spot = i;
       }
     }
-    // after comparison to existing entries
-    if (bf_new_.any()) {
-      // new time has at least one active day after comparison
-      if (same_time_spot != times_[location].size()) {
-        // entry for this time already exists -> add active days of new time to
-        // it
-        times_[location][same_time_spot].bf_ |= bf_new_;
-      } else if (overwrite_spot != times_[location].size()) {
-        // overwrite spot was found -> use for new entry
-        times_[location][overwrite_spot].time_ = time_new;
-        times_[location][overwrite_spot].bf_ = bf_new_;
-      } else {
-        // no entry for this time exists yet
-        times_[location].emplace_back(time_new, bf_new_);
-      }
-      // add improvements to impr
-      if (impr != nullptr) {
-        *impr |= bf_new_;
-      }
+    if (times_[location][i].bf_.none()) {
+      // existing entry has no active days left -> remember as overwrite
+      // spot
+      overwrite_spot = i;
     }
-  } else {
-    // add first entry for this location
-    times_[location].emplace_back(time_new, bf);
-    // improvement on all active days of the given bitfield
-    if (impr != nullptr) {
-      *impr |= bf;
+  }
+  // after comparison to existing entries
+  if (bf_new_.any()) {
+    // new time has at least one active day after comparison
+    if (same_time_spot.has_value()) {
+      // entry for this time already exists -> add active days of new time to
+      // it
+      times_[location][same_time_spot.value()].bf_ |= bf_new_;
+    } else if (overwrite_spot.has_value()) {
+      // overwrite spot was found -> use for new entry
+      times_[location][overwrite_spot.value()].time_ = time_new;
+      times_[location][overwrite_spot.value()].bf_ = bf_new_;
+    } else {
+      // add new entry
+      times_[location].emplace_back(time_new, bf_new_);
     }
+    // add improvements to impr
+    impr |= bf_new_;
   }
 }
 #endif
@@ -243,29 +233,28 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
       // the location index from which we are transferring
       auto const p_t_i = stop{stop_seq_t[i]}.location_idx();
 
-      // delta for tau_arr(t,i)
-      auto const tau_arr_t_i_delta = pp->tt_.event_mam(t, i, event_type::kArr);
+      // tau_arr(t,i)
+      std::int32_t const tau_arr_t_i =
+          pp->tt_.event_mam(t, i, event_type::kArr).count();
 
       // time of day for tau_arr(t,i)
-      auto const alpha = duration_t{tau_arr_t_i_delta.mam()};
+      std::int32_t const alpha = pp->tt_.event_mam(t, i, event_type::kArr).mam_;
 
       // shift amount due to travel time of the transport we are
       // transferring from
-      auto const sigma_t = tau_arr_t_i_delta.days();
+      std::int32_t const sigma_t =
+          pp->tt_.event_mam(t, i, event_type::kArr).days_;
 
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-      // duration for tau_arr(t,i)
-      auto const tau_arr_t_i = tau_arr_t_i_delta.as_duration();
       // the bitfield of the transport we are transferring from
       auto const& beta_t =
           pp->tt_.bitfields_[pp->tt_.transport_traffic_days_[t]];
+
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
       // init the earliest times data structure
-      ets_arr_.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
+      ets_arr_.init(p_t_i, tau_arr_t_i, beta_t);
       for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
-        ets_arr_.update(fp.target(), tau_arr_t_i + fp.duration(), beta_t,
-                        nullptr);
-        ets_ch_.update(fp.target(), tau_arr_t_i + fp.duration(), beta_t,
-                       nullptr);
+        ets_arr_.init(fp.target(), tau_arr_t_i + fp.duration().count(), beta_t);
+        ets_ch_.init(fp.target(), tau_arr_t_i + fp.duration().count(), beta_t);
       }
 #endif
 
@@ -275,12 +264,14 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                         &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr
 #endif
                         ,
-                        &omega, &theta, &part](footpath const& fp) {
+                        &omega, &theta, &part, &beta_t](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
 
         // arrival at stop q in alpha time scale
-        auto const tau_q = delta{alpha + fp.duration()};
+        auto const tau_q = alpha + fp.duration().count();
+        auto const tau_q_tod = tau_q % 1440;
+        auto const tau_q_d = tau_q / 1440;
 
         // iterate over lines serving stop_to
         auto const routes_at_q = pp->tt_.location_routes_[q];
@@ -298,8 +289,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                 stop{pp->tt_.route_location_seq_[route_u][j]}.location_idx();
 
             // stop must match and entering must be allowed
-            if (p_u_j == q&& stop{pp->tt_.route_location_seq_[route_u][j]}
-                             .in_allowed()) {
+            if ((p_u_j == q) &&
+                stop{pp->tt_.route_location_seq_[route_u][j]}.in_allowed()) {
 
               // departure times of transports of route route_u at stop j
               auto const event_times =
@@ -308,11 +299,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
               // find first departure at or after a
               // departure time of current transport_to
               auto tau_dep_u_j = std::lower_bound(
-                  event_times.begin(), event_times.end(), tau_q,
-                  [&](auto&& x, auto&& y) { return x.mam() < y.mam(); });
+                  event_times.begin(), event_times.end(), tau_q_tod,
+                  [&](auto&& x, auto&& y) { return x.mam_ < y; });
 
               // shift amount during transfer
-              auto sigma = tau_q.days();
+              auto sigma = tau_q_d;
 
               // no departure on this day at or after a
               if (tau_dep_u_j == event_times.end()) {
@@ -322,7 +313,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
               }
 
               // days of t that still require connection
-              omega = pp->tt_.bitfields_[pp->tt_.transport_traffic_days_[t]];
+              omega = beta_t;
 
               // check if any bit in omega is set to 1 and maximum waiting
               // time not exceeded
@@ -331,9 +322,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                 theta = omega;
 
                 // departure time of current transport in relation to time
-                // tau_alpha_delta
-                auto const tau_dep_alpha_u_j =
-                    duration_t{tau_dep_u_j->mam() + sigma * 1440};
+                // alpha
+                auto const tau_dep_alpha_u_j = sigma * 1440 + tau_dep_u_j->mam_;
 
                 // check if max transfer time is exceeded
                 if (tau_dep_alpha_u_j - alpha > pp->transfer_time_max_) {
@@ -355,12 +345,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                 // 3. same route but u is earlier than t
                 auto const req =
                     route_t != route_u || j < i ||
-                    (u != t && (tau_dep_alpha_u_j -
-                                    (pp->tt_.event_mam(u, j, event_type::kDep)
-                                         .as_duration() -
-                                     pp->tt_.event_mam(u, i, event_type::kArr)
-                                         .as_duration()) <
-                                alpha));
+                    (u != t &&
+                     (tau_dep_alpha_u_j -
+                          (pp->tt_.event_mam(u, j, event_type::kDep).count() -
+                           pp->tt_.event_mam(u, i, event_type::kArr).count()) <
+                      alpha));
 
                 if (req) {
                   // shift amount due to number of times transport u passed
@@ -409,17 +398,19 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                           auto const tau_dep_alpha_u_next =
                               tau_dep_alpha_u_j +
                               (pp->tt_.event_mam(u, j + 1, event_type::kDep)
-                                   .as_duration() -
+                                   .count() -
                                pp->tt_.event_mam(u, j, event_type::kDep)
-                                   .as_duration());
+                                   .count());
                           auto const tau_arr_alpha_t_prev =
-                              alpha - (pp->tt_.event_mam(t, i, event_type::kArr)
-                                           .as_duration() -
-                                       pp->tt_.event_mam(t, i, event_type::kArr)
-                                           .as_duration());
+                              alpha -
+                              (pp->tt_.event_mam(t, i, event_type::kArr)
+                                   .count() -
+                               pp->tt_.event_mam(t, i - 1, event_type::kArr)
+                                   .count());
                           auto const min_change_time =
                               pp->tt_.locations_
-                                  .transfer_time_[p_t_prev.location_idx()];
+                                  .transfer_time_[p_t_prev.location_idx()]
+                                  .count();
                           return tau_arr_alpha_t_prev + min_change_time <=
                                  tau_dep_alpha_u_next;
                         }
@@ -437,18 +428,18 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                            ++l) {
                         auto const tau_arr_t_u_l =
                             tau_dep_t_u_j +
-                            (pp->tt_.event_mam(u, l, event_type::kArr)
-                                 .as_duration() -
-                             tau_dep_u_j->as_duration());
+                            (pp->tt_.event_mam(u, l, event_type::kArr).count() -
+                             tau_dep_u_j->count());
                         auto const p_u_l =
                             stop{pp->tt_.route_location_seq_[route_u][l]}
                                 .location_idx();
-                        ets_arr_.update(p_u_l, tau_arr_t_u_l, theta, &impr);
+                        ets_arr_.update(p_u_l, tau_arr_t_u_l, theta, impr);
                         for (auto const& fp_r :
                              pp->tt_.locations_.footpaths_out_[p_u_l]) {
-                          auto const eta = tau_arr_t_u_l + fp_r.duration();
-                          ets_arr_.update(fp_r.target(), eta, theta, &impr);
-                          ets_ch_.update(fp_r.target(), eta, theta, &impr);
+                          auto const eta =
+                              tau_arr_t_u_l + fp_r.duration().count();
+                          ets_arr_.update(fp_r.target(), eta, theta, impr);
+                          ets_ch_.update(fp_r.target(), eta, theta, impr);
                         }
                       }
 
