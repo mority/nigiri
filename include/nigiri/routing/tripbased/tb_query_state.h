@@ -35,29 +35,25 @@ struct query_start {
 
 struct tb_query_state {
   tb_query_state() = delete;
-  tb_query_state(timetable const& tt,
-                 transfer_set const& ts,
-                 day_idx_t const base)
-      : ts_{ts}, base_{base}, r_{tt}, q_{r_, base} {
+  tb_query_state(timetable const& tt, transfer_set const& ts)
+      : ts_{ts}, r_{tt}, q_n_{r_} {
     route_dest_.reserve(128);
     t_min_.resize(kNumTransfersMax, unixtime_t::max());
-    q_.start_.reserve(kNumTransfersMax);
-    q_.end_.reserve(kNumTransfersMax);
-    q_.segments_.reserve(10000);
+    q_n_.start_.reserve(kNumTransfersMax);
+    q_n_.end_.reserve(kNumTransfersMax);
+    q_n_.segments_.reserve(10000);
     query_starts_.reserve(20);
   }
 
-  void new_query_reset() {
+  void reset(day_idx_t new_base) {
     route_dest_.clear();
     std::fill(t_min_.begin(), t_min_.end(), unixtime_t::max());
     r_.reset();
+    q_n_.reset(new_base);
   }
 
   // transfer set built by preprocessor
   transfer_set const& ts_;
-
-  // base day of the query
-  day_idx_t const base_;
 
   // routes that reach the target stop
   std::vector<route_dest> route_dest_;
@@ -69,7 +65,7 @@ struct tb_query_state {
   std::vector<unixtime_t> t_min_;
 
   // queues of transport segments
-  q_n q_;
+  q_n q_n_;
 
   std::vector<query_start> query_starts_;
 };

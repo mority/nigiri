@@ -46,7 +46,7 @@ struct tb_query_engine {
 #ifndef NDEBUG
     TBDL << "next_start_time\n";
 #endif
-    state_.q_.reset();
+    state_.q_n_.reset(base_);
     state_.query_starts_.clear();
   }
 

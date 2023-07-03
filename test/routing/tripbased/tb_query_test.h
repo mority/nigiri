@@ -18,12 +18,7 @@ pareto_set<routing::journey> tripbased_search(timetable& tt, routing::query q) {
   static auto search_state = routing::search_state{};
   routing::tripbased::transfer_set ts;
   build_transfer_set(tt, ts);
-  day_idx_t const base =
-      tt.day_idx_mam(holds_alternative<unixtime_t>(q.start_time_)
-                         ? get<unixtime_t>(q.start_time_)
-                         : get<interval<unixtime_t>>(q.start_time_).to_)
-          .first;
-  auto algo_state = algo_state_t{tt, ts, base};
+  auto algo_state = algo_state_t{tt, ts};
 
   return *(routing::search<direction::kForward, algo_t>{
       tt, nullptr, search_state, algo_state, std::move(q)}

@@ -10,9 +10,9 @@ using queue_idx_t = std::uint32_t;
 
 struct q_n {
   q_n() = delete;
-  explicit q_n(reached& r, day_idx_t const base) : r_(r), base_(base) {}
+  explicit q_n(reached& r) : r_(r) {}
 
-  void reset();
+  void reset(day_idx_t new_base);
 
   void enqueue(std::uint16_t const transport_day,
                transport_idx_t const,
@@ -27,7 +27,7 @@ struct q_n {
   void print(std::ostream&, queue_idx_t const);
 
   reached& r_;
-  day_idx_t const base_;
+  std::optional<day_idx_t> base_ = std::nullopt;
   std::vector<queue_idx_t> start_;
   std::vector<queue_idx_t> end_;
   std::vector<transport_segment> segments_;

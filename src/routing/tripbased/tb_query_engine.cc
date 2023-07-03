@@ -25,6 +25,9 @@ tb_query_engine::tb_query_engine(timetable const& tt,
       lb_{lb},
       base_{base} {
 
+  // reset state for new query
+  state_.reset(base);
+
   // init l_, i.e., routes that reach the destination at certain stop idx
   if (dist_to_dest.empty()) {
     // create l_entries for station-to-station query
@@ -109,14 +112,14 @@ void tb_query_engine::execute(unixtime_t const start_time,
 
   // process all Q_n in ascending order, i.e., transport segments reached after
   // n transfers
-  for (std::uint8_t n = 0U; n != state_.q_.start_.size() && n <= max_transfers;
-       ++n) {
+  for (std::uint8_t n = 0U;
+       n != state_.q_n_.start_.size() && n <= max_transfers; ++n) {
 #ifndef NDEBUG
     TBDL << "Processing segments of Q_" << std::to_string(n) << ":\n";
 #endif
 
     // iterate trip segments in Q_n
-    for (auto q_cur = state_.q_.start_[n]; q_cur != state_.q_.end_[n];
+    for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
       handle_segment(start_time, worst_time_at_dest, results, n, q_cur);
     }
@@ -216,8 +219,8 @@ void tb_query_engine::handle_start_footpath(std::int32_t const d,
                                                     tau_dep_t_i->as_duration()))
                  << "\n";
 #endif
-            state_.q_.enqueue(static_cast<std::uint16_t>(d_seg), t, i, 0U,
-                              TRANSFERRED_FROM_NULL);
+            state_.q_n_.enqueue(static_cast<std::uint16_t>(d_seg), t, i, 0U,
+                                TRANSFERRED_FROM_NULL);
             break;
           }
           // passing midnight?
@@ -240,11 +243,11 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                                      std::uint8_t const n,
                                      queue_idx_t const q_cur) {
   // the current transport segment
-  auto seg = state_.q_[q_cur];
+  auto seg = state_.q_n_[q_cur];
 
 #ifndef NDEBUG
   TBDL << "Examining segment: ";
-  state_.q_.print(std::cout, q_cur);
+  state_.q_n_.print(std::cout, q_cur);
 #endif
 
   // departure time at the start of the transport segment
@@ -265,7 +268,7 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
   // departure time at start of current transport segment in minutes after
   // midnight on the day of the query
   auto const tau_d =
-      (d_seg + tau_dep_t_b_d - state_.base_.v_) * 1440 + tau_dep_t_b_tod;
+      (d_seg + tau_dep_t_b_d - base_.v_) * 1440 + tau_dep_t_b_tod;
 
   // check if target location is reached from current transport segment
   for (auto const& le : state_.route_dest_) {
@@ -280,8 +283,7 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
       // the time at which the target location is reached by using the
       // current transport segment
       auto const t_cur = tt_.to_unixtime(
-          state_.base_,
-          minutes_after_midnight_t{tau_d + travel_time_seg + le.time_});
+          base_, minutes_after_midnight_t{tau_d + travel_time_seg + le.time_});
 
 #ifndef NDEBUG
       TBDL << "segment reaches a destination at "
@@ -322,7 +324,7 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
 
   // the unix time at the next stop of the transport segment
   auto const unix_time_next = tt_.to_unixtime(
-      state_.base_, minutes_after_midnight_t{tau_d + travel_time_next});
+      base_, minutes_after_midnight_t{tau_d + travel_time_next});
 
   // transfer out of current transport segment?
   if (unix_time_next < state_.t_min_[n] &&
@@ -381,9 +383,9 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                << "\n";
 #endif
 
-          state_.q_.enqueue(static_cast<std::uint16_t>(d_tr),
-                            transfer.get_transport_idx_to(),
-                            transfer.get_stop_idx_to(), n + 1U, q_cur);
+          state_.q_n_.enqueue(static_cast<std::uint16_t>(d_tr),
+                              transfer.get_transport_idx_to(),
+                              transfer.get_stop_idx_to(), n + 1U, q_cur);
         }
       }
     }
@@ -416,7 +418,7 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
   add_final_footpath(q, j, je.value());
 
   // init current segment with last segment
-  auto seg = state_.q_.segments_[je->seg_idx_];
+  auto seg = state_.q_n_.segments_[je->seg_idx_];
 
   // set end stop of current segment according to l_entry
   seg.stop_idx_end_ = je->le_.stop_idx_;
@@ -427,7 +429,7 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
   // add segments and transfers until first segment is reached
   while (seg.transferred_from_ != TRANSFERRED_FROM_NULL) {
     // get previous segment
-    seg = state_.q_.segments_[seg.transferred_from_];
+    seg = state_.q_n_.segments_[seg.transferred_from_];
 
     // reconstruct transfer to following segment
     auto const stop_idx_exit = reconstruct_transfer(j, seg);
@@ -459,10 +461,10 @@ tb_query_engine::reconstruct_journey_end(query const& q,
                                          journey const& j) const {
 
   // iterate transport segments in queue with matching number of transfers
-  for (auto q_cur = state_.q_.start_[j.transfers_];
-       q_cur != state_.q_.end_[j.transfers_]; ++q_cur) {
+  for (auto q_cur = state_.q_n_.start_[j.transfers_];
+       q_cur != state_.q_n_.end_[j.transfers_]; ++q_cur) {
     // the transport segment currently processed
-    auto const& seg = state_.q_[q_cur];
+    auto const& seg = state_.q_n_[q_cur];
 
     // the route index of the current segment
     auto const route_idx = tt_.transport_route_[seg.get_transport_idx()];

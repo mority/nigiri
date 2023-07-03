@@ -5,10 +5,11 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-void q_n::reset() {
+void q_n::reset(day_idx_t new_base) {
 #ifndef NDEBUG
   TBDL << "Resetting transport segment queue\n";
 #endif
+  base_ = new_base;
   start_.clear();
   start_.emplace_back(0U);
   end_.clear();
@@ -22,10 +23,11 @@ void q_n::enqueue(std::uint16_t const transport_day,
                   std::uint16_t const n_transfers,
                   std::uint32_t const transferred_from) {
   assert(segments_.size() < std::numeric_limits<queue_idx_t>::max());
+  assert(base_.has_value());
 
   // compute transport segment index
   auto const transport_segment_idx =
-      embed_day_offset(base_.v_, transport_day, transport_idx);
+      embed_day_offset(base_.value().v_, transport_day, transport_idx);
 
   // look-up the earliest stop index reached
   auto const r_query_res = r_.query(transport_segment_idx, n_transfers);
