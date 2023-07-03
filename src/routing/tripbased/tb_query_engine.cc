@@ -727,9 +727,11 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
     // -> add footpath leg
     std::optional<footpath> fp_initial = std::nullopt;
     for (auto const& fp : tt_.locations_.footpaths_in_[j.legs_.back().from_]) {
-      if (is_start_location(q, fp.target())) {
+      // choose the shortest initial footpath if there is more than one
+      auto min = duration_t::max();
+      if (is_start_location(q, fp.target()) && fp.duration() < min) {
+        min = fp.duration();
         fp_initial = fp;
-        break;
       }
     }
     if (!fp_initial.has_value()) {
@@ -738,9 +740,9 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
       return;
     }
     j.add(journey::leg{direction::kForward, fp_initial->target(),
-                       j.legs_.back().from_,
-                       j.legs_.back().dep_time_ - fp_initial->duration(),
-                       j.legs_.back().dep_time_, fp_initial.value()});
+                       j.legs_.back().from_, j.start_time_,
+                       j.start_time_ + fp_initial->duration(),
+                       fp_initial.value()});
 #ifndef NDEBUG
     TBDL << "Adding an initial footpath:\n";
     j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
