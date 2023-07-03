@@ -289,7 +289,7 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
       TBDL << "segment reaches a destination at "
            << dhhmm(tau_d + travel_time_seg + le.time_) << "\n";
 #endif
-      if (t_cur < state_.t_min_[n]) {
+      if (t_cur < state_.t_min_[n] && t_cur < worst_time_at_dest) {
         state_.t_min_[n] = t_cur;
         // add journey without reconstructing yet
         journey j{};
