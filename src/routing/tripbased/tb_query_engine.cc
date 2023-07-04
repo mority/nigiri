@@ -337,13 +337,19 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
     for (stop_idx_t i = seg.get_stop_idx_start() + 1U;
          i <= seg.get_stop_idx_end(); ++i) {
 #ifndef NDEBUG
-      TBDL << "Processing transfers at stop " << i << ": "
+      TBDL << "Arrival at stop " << i << ": "
            << location_name(
                   tt_,
                   stop{tt_.route_location_seq_
                            [tt_.transport_route_[seg.get_transport_idx()]][i]}
                       .location_idx())
-           << "\n";
+           << " at "
+           << unix_dhhmm(
+                  tt_, tt_.to_unixtime(seg.get_transport_day(base_),
+                                       tt_.event_mam(seg.get_transport_idx(), i,
+                                                     event_type::kArr)
+                                           .as_duration()))
+           << ", processing transfers...\n";
 #endif
 
       // get transfers for this transport/stop
@@ -380,6 +386,14 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                                               [transfer.get_transport_idx_to()]]
                                          [transfer.get_stop_idx_to()]}
                                     .location_idx())
+               << ", departing at "
+               << unix_dhhmm(tt_,
+                             tt_.to_unixtime(
+                                 day_idx_t{d_tr},
+                                 tt_.event_mam(transfer.get_transport_idx_to(),
+                                               transfer.get_stop_idx_to(),
+                                               event_type::kDep)
+                                     .as_duration()))
                << "\n";
 #endif
 
