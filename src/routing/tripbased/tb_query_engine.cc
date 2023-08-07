@@ -648,7 +648,8 @@ void tb_query_engine::add_segment_leg(journey& j,
   j.add(journey::leg{direction::kForward, from, to, dep_time, arr_time,
                      journey::run_enter_exit{
                          rt::run{transport{seg.get_transport_idx(),
-                                           seg.get_transport_day(base_)}},
+                                           seg.get_transport_day(base_)},
+                                 interval<stop_idx_t>{0, 0}},
                          seg.get_stop_idx_start(), seg.get_stop_idx_end()}});
 #ifndef NDEBUG
   TBDL << "Adding a leg for a transport segment:\n";
