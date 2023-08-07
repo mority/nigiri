@@ -34,12 +34,10 @@ struct tb_preprocessor {
       bitfield bf_;
     };
 
-    void init(location_idx_t, std::int32_t time_new, bitfield const&);
-
     void update(location_idx_t,
                 std::int32_t time_new,
                 bitfield const& bf,
-                bitfield& impr);
+                bitfield* impr);
 
     void reset() noexcept { times_.clear(); }
 

@@ -23,16 +23,10 @@ bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
 }
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-void tb_preprocessor::earliest_times::init(location_idx_t location,
-                                           std::int32_t time_new,
-                                           bitfield const& bf) {
-  times_[location].emplace_back(time_new, bf);
-}
-
 void tb_preprocessor::earliest_times::update(location_idx_t location,
                                              std::int32_t time_new,
                                              bitfield const& bf,
-                                             bitfield& impr) {
+                                             bitfield* impr) {
   // bitfield is manipulated during update process
   bf_new_ = bf;
   // position of entry with an equal time
@@ -83,7 +77,9 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
       times_[location].emplace_back(time_new, bf_new_);
     }
     // add improvements to impr
-    impr |= bf_new_;
+    if (impr != nullptr) {
+      *impr |= bf_new_;
+    }
   }
 }
 #endif
@@ -157,7 +153,7 @@ void tb_preprocessor::build(transfer_set& ts) {
   }
 
   std::cout << "Found " << n_transfers_ << " transfers, occupying "
-            << n_transfers_ * sizeof(transfer) << " bytes" << std::endl;
+            << n_transfers_ * sizeof(transfer) << " bytes\n";
 
   ts.tt_hash_ = hash_tt(tt_);
   ts.num_el_con_ = num_el_con_;
@@ -186,25 +182,22 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
   bitfield impr;
 #endif
 
-  while (true) {
+  // init a new part
+  part_t part;
 
-    std::uint32_t t_uint;
+  while (true) {
 
     // get next transport index to process
     {
       std::lock_guard<std::mutex> const lock(pp->next_transport_mutex_);
-      t_uint = pp->next_transport_;
-      if (t_uint == pp->tt_.transport_traffic_days_.size()) {
+      part.first = pp->next_transport_;
+      if (part.first == pp->tt_.transport_traffic_days_.size()) {
         break;
       }
       ++pp->next_transport_;
     }
 
-    // init a new part
-    part_t part;
-    part.first = t_uint;
-
-    transport_idx_t t{t_uint};
+    transport_idx_t t{part.first};
 
     // route index of the current transport
     auto const route_t = pp->tt_.transport_route_[t];
@@ -214,6 +207,9 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
     // resize for number of stops of this transport
     part.second.resize(stop_seq_t.size());
+    for (auto& transfers_vec : part.second) {
+      transfers_vec.clear();
+    }
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
     // clear earliest times
@@ -251,10 +247,15 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
       // init the earliest times data structure
-      ets_arr_.init(p_t_i, tau_arr_t_i, beta_t);
+      ets_arr_.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
+      ets_ch_.update(
+          p_t_i, tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
+          beta_t, nullptr);
       for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
-        ets_arr_.init(fp.target(), tau_arr_t_i + fp.duration().count(), beta_t);
-        ets_ch_.init(fp.target(), tau_arr_t_i + fp.duration().count(), beta_t);
+        ets_arr_.update(fp.target(), tau_arr_t_i + fp.duration().count(),
+                        beta_t, nullptr);
+        ets_ch_.update(fp.target(), tau_arr_t_i + fp.duration().count(), beta_t,
+                       nullptr);
       }
 #endif
 
@@ -433,13 +434,19 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                         auto const p_u_l =
                             stop{pp->tt_.route_location_seq_[route_u][l]}
                                 .location_idx();
-                        ets_arr_.update(p_u_l, tau_arr_t_u_l, theta, impr);
+                        ets_arr_.update(p_u_l, tau_arr_t_u_l, theta, &impr);
+                        ets_ch_.update(
+                            p_u_l,
+                            tau_arr_t_u_l +
+                                pp->tt_.locations_.transfer_time_[p_u_l]
+                                    .count(),
+                            theta, &impr);
                         for (auto const& fp_r :
                              pp->tt_.locations_.footpaths_out_[p_u_l]) {
                           auto const eta =
                               tau_arr_t_u_l + fp_r.duration().count();
-                          ets_arr_.update(fp_r.target(), eta, theta, impr);
-                          ets_ch_.update(fp_r.target(), eta, theta, impr);
+                          ets_arr_.update(fp_r.target(), eta, theta, &impr);
+                          ets_ch_.update(fp_r.target(), eta, theta, &impr);
                         }
                       }
 
