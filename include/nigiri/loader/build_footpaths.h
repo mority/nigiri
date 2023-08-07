@@ -4,6 +4,8 @@
 
 namespace nigiri::loader {
 
-void build_footpaths(timetable& tt);
+void build_footpaths(timetable& tt,
+                     bool adjust_footpaths,
+                     bool merge_duplicates);
 
 }  // namespace nigiri::loader

@@ -29,9 +29,12 @@ void register_special_stations(timetable& tt) {
                                              std::span{empty_footpath_vec}});
   }
   tt.location_routes_.resize(tt.n_locations());
+  tt.bitfields_.emplace_back(bitfield{});  // bitfield_idx 0 = 000...00 bitfield
 }
 
-void finalize(timetable& tt) {
+void finalize(timetable& tt,
+              bool const adjust_footpaths,
+              bool const merge_duplicates) {
   tt.location_routes_.resize(tt.n_locations());
 
   {
@@ -49,7 +52,7 @@ void finalize(timetable& tt) {
                             tt.trip_id_strings_[b.first].view());
         });
   }
-  build_footpaths(tt);
+  build_footpaths(tt, adjust_footpaths, merge_duplicates);
   build_lb_graph<direction::kForward>(tt);
   build_lb_graph<direction::kBackward>(tt);
 }

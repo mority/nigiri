@@ -24,16 +24,28 @@ struct frun : public run {
     std::string_view track() const noexcept;
     std::string_view id() const noexcept;
 
-    provider const& get_provider() const noexcept;
+    provider const& get_provider(event_type = event_type::kDep) const noexcept;
+    trip_idx_t get_trip_idx(event_type = event_type::kDep) const noexcept;
 
     unixtime_t scheduled_time(event_type const ev_type) const noexcept;
     unixtime_t time(event_type const ev_type) const noexcept;
 
-    std::string_view line() const noexcept;
-    std::string_view scheduled_line() const noexcept;
+    std::string_view line(event_type = event_type::kDep) const noexcept;
+    std::string_view scheduled_line(
+        event_type = event_type::kDep) const noexcept;
+    std::string_view direction(event_type = event_type::kDep) const noexcept;
+
+    clasz get_clasz(event_type = event_type::kDep) const noexcept;
+    clasz get_scheduled_clasz(event_type = event_type::kDep) const noexcept;
 
     bool in_allowed() const noexcept;
     bool out_allowed() const noexcept;
+    bool is_canceled() const noexcept;
+
+    stop_idx_t section_idx(event_type) const noexcept;
+
+    timetable const& tt() const noexcept;
+    rt_timetable const* rtt() const noexcept;
 
     void print(std::ostream&, bool first = false, bool last = false) const;
     bool operator==(run_stop const&) const = default;
@@ -66,8 +78,6 @@ struct frun : public run {
   debug dbg() const noexcept;
 
   frun(timetable const&, rt_timetable const*, run);
-  frun(timetable const&, rt_timetable const&, rt_transport_idx_t const);
-  frun(timetable const&, rt_timetable const*, transport const);
 
   iterator begin() const noexcept;
   iterator end() const noexcept;
@@ -78,6 +88,10 @@ struct frun : public run {
   stop_idx_t size() const noexcept;
 
   run_stop operator[](stop_idx_t) const noexcept;
+
+  trip_id id() const noexcept;
+  trip_idx_t trip_idx() const;
+  clasz get_clasz() const noexcept;
 
   void print(std::ostream&, interval<stop_idx_t> stop_range);
   friend std::ostream& operator<<(std::ostream&, frun const&);

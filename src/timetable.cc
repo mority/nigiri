@@ -5,6 +5,7 @@
 
 #include "utl/overloaded.h"
 
+#include "nigiri/common/day_list.h"
 #include "nigiri/rt/frun.h"
 
 namespace nigiri {
@@ -27,11 +28,24 @@ void timetable::locations::resolve_timezones() {
 }
 
 std::ostream& operator<<(std::ostream& out, timetable const& tt) {
+  for (auto const [id, idx] : tt.trip_id_to_idx_) {
+    auto const str = tt.trip_id_strings_[id].view();
+    out << str << ":\n";
+    for (auto const& t : tt.trip_transport_ranges_.at(idx)) {
+      out << "  " << t.first << ": " << t.second << " active="
+          << day_list{tt.bitfields_[tt.transport_traffic_days_[t.first]],
+                      tt.internal_interval_days().from_}
+          << "\n";
+    }
+  }
+
   auto const internal = tt.internal_interval_days();
   auto const num_days =
       static_cast<size_t>((internal.to_ - internal.from_ + 1_days) / 1_days);
   for (auto i = 0U; i != tt.transport_traffic_days_.size(); ++i) {
     auto const transport_idx = transport_idx_t{i};
+    auto const num_stops =
+        tt.route_location_seq_[tt.transport_route_[transport_idx]].size();
     auto const traffic_days =
         tt.bitfields_.at(tt.transport_traffic_days_.at(transport_idx));
     out << "TRANSPORT=" << transport_idx << ", TRAFFIC_DAYS="
@@ -44,7 +58,11 @@ std::ostream& operator<<(std::ostream& out, timetable const& tt) {
       if (traffic_days.test(to_idx(day_idx))) {
         date::to_stream(out, "%F", d);
         out << " (day_idx=" << day_idx << ")\n";
-        out << rt::frun{tt, nullptr, transport{transport_idx, day_idx}};
+        out << rt::frun{
+            tt,
+            nullptr,
+            {.t_ = transport{transport_idx, day_idx},
+             .stop_range_ = {0U, static_cast<stop_idx_t>(num_stops)}}};
         out << "\n";
       }
     }

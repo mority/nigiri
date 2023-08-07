@@ -44,8 +44,10 @@ struct rt_timetable {
                    stop_idx_t const stop_idx,
                    event_type const ev_type,
                    unixtime_t const new_time) {
-    rt_transport_stop_times_[rt_t][stop_idx * 2 -
-                                   (ev_type == event_type::kArr ? 1 : 0)] =
+    auto const ev_idx = stop_idx * 2 - (ev_type == event_type::kArr ? 1 : 0);
+    assert(ev_idx >= 0 && static_cast<stop_idx_t>(ev_idx) <
+                              rt_transport_stop_times_[rt_t].size());
+    rt_transport_stop_times_[rt_t][static_cast<std::size_t>(ev_idx)] =
         unix_to_delta(new_time);
   }
 
@@ -137,6 +139,9 @@ struct rt_timetable {
 
   // RT transport -> vehicle clasz for each section
   vecvec<rt_transport_idx_t, clasz> rt_transport_section_clasz_;
+
+  // RT transport -> canceled flag
+  bitvec rt_transport_is_cancelled_;
 };
 
 }  // namespace nigiri
