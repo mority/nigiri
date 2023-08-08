@@ -49,16 +49,52 @@ struct tb_preprocessor {
 
 #ifdef TB_PREPRO_LB_PRUNING
   struct line_transfer {
-    route_idx_t route_idx_to_;
     stop_idx_t stop_idx_from_;
+    route_idx_t route_idx_to_;
     stop_idx_t stop_idx_to_;
     duration_t footpath_length_;
   };
+
+  struct {
+    // sort neighborhood
+    // 1. by target line
+    // 2. by decreasing origin line index
+    // 3. by increasing target line index
+    bool operator()(line_transfer a, line_transfer b) const {
+      return a.route_idx_to_ < b.route_idx_to_ ||
+             (a.route_idx_to_ == b.route_idx_to_ &&
+              a.stop_idx_from_ > b.stop_idx_from_) ||
+             (a.route_idx_to_ == b.route_idx_to_ &&
+              a.stop_idx_from_ == b.stop_idx_from_ &&
+              a.stop_idx_to_ < b.stop_idx_to_);
+    }
+  } line_transfer_comp;
+
   void line_transfers(route_idx_t route_from,
                       std::vector<line_transfer>& neighborhood);
-  void line_transfers_fp(location_idx_t location_idx,
+
+  void line_transfers_fp(route_idx_t route_from,
+                         std::size_t i,
                          footpath fp,
                          std::vector<line_transfer>& neighborhood);
+
+  struct earliest_transports {
+
+    struct earliest_transport {
+      int shift_amount_;
+      std::uint16_t start_time_;
+      bitfield bf_;
+    };
+
+    void update(stop_idx_t j,
+                int shift_amount_new,
+                std::uint16_t start_time_new,
+                bitfield& bf_new);
+
+    void reset(std::uint16_t num_stops) noexcept;
+
+    mutable_fws_multimap<stop_idx_t, earliest_transport> transports_;
+  };
 #endif
 
   //  preprocessor() = delete;
@@ -139,9 +175,16 @@ struct tb_preprocessor {
   // the number of transfers found
   unsigned n_transfers_ = 0U;
 
+#ifndef TB_PREPRO_LB_PRUNING
   // next transport idx for which to compute transfers
   std::uint32_t next_transport_ = 0U;
   std::mutex next_transport_mutex_;
+#endif
+#ifdef TB_PREPRO_LB_PRUNING
+  // next route idx for which to compute transfers
+  std::uint32_t next_route_ = 0U;
+  std::mutex next_route_mutex_;
+#endif
 
   // pair.first: first transport idx in this partial transfer set, pair.second:
   // partial expanded transfer set

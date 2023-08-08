@@ -163,6 +163,7 @@ void tb_preprocessor::build(transfer_set& ts) {
   ts.ready_ = true;
 }
 
+#ifndef TB_PREPRO_LB_PRUNING
 void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
@@ -499,20 +500,86 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
     }
   }
 }
+#endif
 
 #ifdef TB_PREPRO_LB_PRUNING
-void tb_preprocessor::line_transfers_fp(
-    location_idx_t location_idx,
-    footpath fp,
-    std::vector<tb_preprocessor::line_transfer>& neighborhood) {
-  // handle all routes that serve the target of the footpath
-  auto const& routes_at_target = tt_.location_routes_[fp.target()];
-  for (auto const& route_to : routes_at_target) {
-    auto const& stop_seq_target = tt_.route_location_seq_[route_to];
-    // find the stop indices at which the target route serves the stop
-    for (std::size_t j = 0; j < stop_seq_target.size() - 1; ++j) {
-      auto const location_idx_to = stop{stop_seq_target[j]}.location_idx();
-      if (location_idx_to == fp.target()) {
+void tb_preprocessor::build_part(tb_preprocessor* const pp) {
+
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+  earliest_times ets_arr_;
+  earliest_times ets_ch_;
+#endif
+
+  // days of transport that still require a connection
+  bitfield omega;
+
+  // active days of current transfer
+  bitfield theta;
+
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+  // days on which the transfer constitutes an
+  // improvement
+  bitfield impr;
+#endif
+
+  // the index of the route that we are currently processing
+  route_idx_t current_route;
+
+  // init neighborhood
+  std::vector<tb_preprocessor::line_transfer> neighborhood;
+  neighborhood.reserve(pp->route_max_length_ * 10);
+
+  // init a new part
+  part_t part;
+
+  while (true) {
+    // get next route index to process
+    {
+      std::lock_guard<std::mutex> const lock(pp->next_route_mutex_);
+      current_route = route_idx_t{pp->next_route_};
+      if (current_route == pp->tt_.n_routes()) {
+        break;
+      }
+      ++pp->next_route_;
+    }
+
+    // build neighborhood of current route
+    neighborhood.clear();
+    pp->line_transfers(current_route, neighborhood);
+
+    // the stops of the current route
+    auto const stop_seq_from = pp->tt_.route_location_seq_[current_route];
+
+    // get transports of current route
+    auto const& route_transports =
+        pp->tt_.route_transport_ranges_[current_route];
+
+    // iterate transports of the current route
+    for (auto const t : route_transports) {
+
+      // partial transfer set for this transport
+      part.first = t.v_;
+      // resize for number of stops of this transport
+      part.second.resize(stop_seq_from.size());
+      for (auto& transfers_vec : part.second) {
+        transfers_vec.clear();
+      }
+
+      // the previous target route
+      std::optional<route_idx_t> route_to_prev = std::nullopt;
+
+      // iterate entries in route neighborhood
+      for (auto const& neighbor : neighborhood) {
+      }
+
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+      // do the transfer reduction after processing the neighborhood
+#endif
+
+      // add part to queue
+      {
+        std::lock_guard<std::mutex> const lock(pp->parts_mutex_);
+        pp->parts_.push_back(std::move(part));
       }
     }
   }
@@ -522,13 +589,90 @@ void tb_preprocessor::line_transfers(
     route_idx_t route_from,
     std::vector<tb_preprocessor::line_transfer>& neighborhood) {
   // stop sequence of the source route
-  auto const stop_seq = tt_.route_location_seq_[route_from];
+  auto const& stop_seq = tt_.route_location_seq_[route_from];
 
-  for (auto i = stop_seq.size() - 1; i >= 1; --i) {
+  // examine stops of the line in reverse order, skip first stop
+  for (auto i = stop_seq.size() - 1U; i >= 1; --i) {
+    // location from which we transfer
+    auto const location_from = stop{stop_seq[i]}.location_idx();
+
     // reflexive footpath
+    line_transfers_fp(
+        route_from, i,
+        footpath{location_from, tt_.locations_.transfer_time_[location_from]},
+        neighborhood);
 
-    // out-going footpaths
+    // outgoing footpaths
+    for (auto const& fp : tt_.locations_.footpaths_out_[location_from]) {
+      line_transfers_fp(route_from, i, fp, neighborhood);
+    }
+  }
+
+  // sort neighborhood
+  std::sort(neighborhood.begin(), neighborhood.end(), line_transfer_comp);
+}
+
+void tb_preprocessor::line_transfers_fp(
+    route_idx_t route_from,
+    std::size_t i,
+    footpath fp,
+    std::vector<tb_preprocessor::line_transfer>& neighborhood) {
+  // stop sequence of the source route
+  auto const& stop_seq_from = tt_.route_location_seq_[route_from];
+  // routes that serve the target of the footpath
+  auto const& routes_at_target = tt_.location_routes_[fp.target()];
+  // handle all routes that serve the target of the footpath
+  for (auto const& route_to : routes_at_target) {
+    // stop sequence of the target route
+    auto const& stop_seq_to = tt_.route_location_seq_[route_to];
+    // find the stop indices at which the target route serves the stop
+    for (std::size_t j = 0; j < stop_seq_to.size() - 1; ++j) {
+      // target location of the transfer
+      auto const location_idx_to = stop{stop_seq_to[j]}.location_idx();
+      if (location_idx_to == fp.target()) {
+        // check for U-turn transfer
+        bool is_uturn = false;
+        if (j + 1 < stop_seq_to.size() - 1) {
+          auto const location_from_prev =
+              stop{stop_seq_from[i - 1]}.location_idx();
+          auto const location_to_next = stop{stop_seq_to[j + 1]}.location_idx();
+          // next location of route_to is previous location of route_from?
+          if (location_from_prev == location_to_next) {
+            // check if footpath duration of alternative transfer is equal or
+            // less
+            for (auto const& fp_alt :
+                 tt_.locations_.footpaths_out_[location_from_prev]) {
+              if (fp_alt.target() == location_to_next) {
+                if (fp_alt.duration() <= fp.duration()) {
+                  is_uturn = true;
+                }
+                // once relevant footpath was examined, we can break
+                break;
+              }
+            }
+          }
+        }
+        if (!is_uturn) {
+          // add to neighborhood
+          neighborhood.emplace_back(i, route_to, j, fp.duration());
+        }
+      }
+    }
   }
 }
 
+void tb_preprocessor::earliest_transports::update(stop_idx_t j,
+                                                  int shift_amount_new,
+                                                  std::uint16_t start_time_new,
+                                                  bitfield& bf_new) {}
+
+void tb_preprocessor::earliest_transports::reset(
+    std::uint16_t num_stops) noexcept {
+  transports_.clear();
+  for (std::uint16_t j = 0; j < num_stops; ++j) {
+    transports_[j].emplace_back(std::numeric_limits<int>::max(),
+                                std::numeric_limits<std::uint16_t>::max(),
+                                bitfield::max());
+  }
+}
 #endif
