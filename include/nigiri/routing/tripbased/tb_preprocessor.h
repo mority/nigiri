@@ -12,6 +12,7 @@
 
 #define TB_PREPRO_UTURN_REMOVAL
 #define TB_PREPRO_TRANSFER_REDUCTION
+#define TB_PREPRO_LB_PRUNING
 
 namespace nigiri::routing::tripbased {
 
@@ -44,6 +45,20 @@ struct tb_preprocessor {
     bitfield bf_new_;
     mutable_fws_multimap<location_idx_t, earliest_time> times_;
   };
+#endif
+
+#ifdef TB_PREPRO_LB_PRUNING
+  struct line_transfer {
+    route_idx_t route_idx_to_;
+    stop_idx_t stop_idx_from_;
+    stop_idx_t stop_idx_to_;
+    duration_t footpath_length_;
+  };
+  void line_transfers(route_idx_t route_from,
+                      std::vector<line_transfer>& neighborhood);
+  void line_transfers_fp(location_idx_t location_idx,
+                         footpath fp,
+                         std::vector<line_transfer>& neighborhood);
 #endif
 
   //  preprocessor() = delete;

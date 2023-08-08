@@ -499,3 +499,36 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
     }
   }
 }
+
+#ifdef TB_PREPRO_LB_PRUNING
+void tb_preprocessor::line_transfers_fp(
+    location_idx_t location_idx,
+    footpath fp,
+    std::vector<tb_preprocessor::line_transfer>& neighborhood) {
+  // handle all routes that serve the target of the footpath
+  auto const& routes_at_target = tt_.location_routes_[fp.target()];
+  for (auto const& route_to : routes_at_target) {
+    auto const& stop_seq_target = tt_.route_location_seq_[route_to];
+    // find the stop indices at which the target route serves the stop
+    for (std::size_t j = 0; j < stop_seq_target.size() - 1; ++j) {
+      auto const location_idx_to = stop{stop_seq_target[j]}.location_idx();
+      if (location_idx_to == fp.target()) {
+      }
+    }
+  }
+}
+
+void tb_preprocessor::line_transfers(
+    route_idx_t route_from,
+    std::vector<tb_preprocessor::line_transfer>& neighborhood) {
+  // stop sequence of the source route
+  auto const stop_seq = tt_.route_location_seq_[route_from];
+
+  for (auto i = stop_seq.size() - 1; i >= 1; --i) {
+    // reflexive footpath
+
+    // out-going footpaths
+  }
+}
+
+#endif
