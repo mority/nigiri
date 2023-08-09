@@ -229,11 +229,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
       // the location index from which we are transferring
       auto const p_t_i = stop{stop_seq_t[i]}.location_idx();
-
-      // tau_arr(t,i)
-      std::int32_t const tau_arr_t_i =
-          pp->tt_.event_mam(t, i, event_type::kArr).count();
-
+      
       // time of day for tau_arr(t,i)
       std::int32_t const alpha = pp->tt_.event_mam(t, i, event_type::kArr).mam_;
 
@@ -247,6 +243,10 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
           pp->tt_.bitfields_[pp->tt_.transport_traffic_days_[t]];
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
+      // tau_arr(t,i)
+      std::int32_t const tau_arr_t_i =
+          pp->tt_.event_mam(t, i, event_type::kArr).count();
+
       // init the earliest times data structure
       ets_arr_.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
       ets_ch_.update(
