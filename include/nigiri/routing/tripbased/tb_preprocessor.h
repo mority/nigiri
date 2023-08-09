@@ -50,6 +50,15 @@ struct tb_preprocessor {
 
 #ifdef TB_PREPRO_LB_PRUNING
   struct line_transfer {
+    line_transfer(stop_idx_t stop_idx_from,
+                  route_idx_t route_idx_to,
+                  stop_idx_t stop_idx_to,
+                  duration_t footpath_length)
+        : stop_idx_from_(stop_idx_from),
+          route_idx_to_(route_idx_to),
+          stop_idx_to_(stop_idx_to),
+          footpath_length_(footpath_length) {}
+
     stop_idx_t stop_idx_from_;
     route_idx_t route_idx_to_;
     stop_idx_t stop_idx_to_;

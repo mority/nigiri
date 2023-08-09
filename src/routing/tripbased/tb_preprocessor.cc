@@ -505,23 +505,12 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 #ifdef TB_PREPRO_LB_PRUNING
 void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-  earliest_times ets_arr;
-  earliest_times ets_ch;
-#endif
-
   // days of transport that still require a connection
   bitfield omega;
 
   // active days of current transfer
   bitfield theta;
   bitfield theta_prime;
-
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-  // days on which the transfer constitutes an
-  // improvement
-  bitfield impr;
-#endif
 
   // the index of the route that we are currently processing
   route_idx_t current_route;
@@ -532,6 +521,15 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
   // earliest transport per stop index
   earliest_transports et;
+
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+  earliest_times ets_arr;
+  earliest_times ets_ch;
+
+  // days on which the transfer constitutes an
+  // improvement
+  bitfield impr;
+#endif
 
   while (true) {
     // get next route index to process
@@ -703,11 +701,96 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
             }
           }
         }
-      }
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-      // do the transfer reduction after processing the neighborhood
-#endif
 
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+        // clear earliest times
+        ets_arr.reset();
+        ets_ch.reset();
+
+        // reverse iteration
+        for (auto i = static_cast<stop_idx_t>(stop_seq_from.size() - 1U);
+             i != 0U; --i) {
+          // skip stop if exiting is not allowed
+          if (!stop{stop_seq_from[i]}.out_allowed()) {
+            continue;
+          }
+
+          // the location index from which we are transferring
+          auto const p_t_i = stop{stop_seq_from[i]}.location_idx();
+
+          // tau_arr(t,i)
+          std::int32_t const tau_arr_t_i =
+              pp->tt_.event_mam(t, i, event_type::kArr).count();
+
+          // time of day for tau_arr(t,i)
+          std::int32_t const alpha =
+              pp->tt_.event_mam(t, i, event_type::kArr).mam_;
+
+          // init the earliest times data structure
+          ets_arr.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
+          ets_ch.update(
+              p_t_i,
+              tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
+              beta_t, nullptr);
+          for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
+            ets_arr.update(fp.target(), tau_arr_t_i + fp.duration().count(),
+                           beta_t, nullptr);
+            ets_ch.update(fp.target(), tau_arr_t_i + fp.duration().count(),
+                          beta_t, nullptr);
+          }
+
+          // iterate transfers found by line-based pruning
+          for (auto transfer = part.second[i].begin();
+               transfer != part.second[i].end();) {
+            impr.reset();
+
+            // get route of transport that we transfer to
+            auto const route_u =
+                pp->tt_.transport_route_[transfer->transport_idx_to_];
+
+            // convert departure into timescale of transport t
+            auto const tau_dep_u_j =
+                pp->tt_.event_mam(transfer->transport_idx_to_,
+                                  transfer->stop_idx_to_, event_type::kDep);
+            auto const tau_dep_alpha_u_j =
+                transfer->passes_midnight_ * 1440 + tau_dep_u_j.mam();
+            auto const tau_dep_t_u_j =
+                tau_arr_t_i + (tau_dep_alpha_u_j - alpha);
+            for (stop_idx_t k = transfer->stop_idx_to_ + 1U;
+                 k != pp->tt_.route_location_seq_[route_u].size(); ++k) {
+              auto const tau_arr_t_u_l =
+                  tau_dep_t_u_j + (pp->tt_
+                                       .event_mam(transfer->transport_idx_to_,
+                                                  k, event_type::kArr)
+                                       .count() -
+                                   tau_dep_u_j.count());
+              auto const p_u_l =
+                  stop{pp->tt_.route_location_seq_[route_u][k]}.location_idx();
+              ets_arr.update(p_u_l, tau_arr_t_u_l, theta, &impr);
+              ets_ch.update(
+                  p_u_l,
+                  tau_arr_t_u_l +
+                      pp->tt_.locations_.transfer_time_[p_u_l].count(),
+                  theta, &impr);
+              for (auto const& fp_r :
+                   pp->tt_.locations_.footpaths_out_[p_u_l]) {
+                auto const eta = tau_arr_t_u_l + fp_r.duration().count();
+                ets_arr.update(fp_r.target(), eta, theta, &impr);
+                ets_ch.update(fp_r.target(), eta, theta, &impr);
+              }
+            }
+
+            // if the transfer offers no improvement
+            if (impr.none()) {
+              // remove it
+              transfer = part.second[i].erase(transfer);
+            } else {
+              ++transfer;
+            }
+          }
+        }
+#endif
+      }
       // add part to queue
       {
         std::lock_guard<std::mutex> const lock(pp->parts_mutex_);
@@ -715,7 +798,6 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
       }
     }
   }
-}
 }
 
 void tb_preprocessor::line_transfers(
@@ -803,7 +885,20 @@ void tb_preprocessor::line_transfers_fp(
 void tb_preprocessor::earliest_transports::update(stop_idx_t j,
                                                   int shift_amount_new,
                                                   std::uint16_t start_time_new,
-                                                  bitfield& bf_new) {}
+                                                  bitfield& bf_new) {
+  for (auto& entry : transports_[j]) {
+    if (bf_new.none()) {
+      break;
+    }
+    if (entry.bf_.any() && (shift_amount_new < entry.shift_amount_ ||
+                            (shift_amount_new == entry.shift_amount_ &&
+                             start_time_new < entry.start_time_))) {
+      entry.bf_ &= ~bf_new;
+    } else {
+      bf_new &= ~entry.bf_;
+    }
+  }
+}
 
 void tb_preprocessor::earliest_transports::reset(
     std::size_t num_stops) noexcept {
