@@ -506,8 +506,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  earliest_times ets_arr_;
-  earliest_times ets_ch_;
+  earliest_times ets_arr;
+  earliest_times ets_ch;
 #endif
 
   // days of transport that still require a connection
@@ -515,6 +515,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
   // active days of current transfer
   bitfield theta;
+  bitfield theta_prime;
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   // days on which the transfer constitutes an
@@ -529,8 +530,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
   std::vector<tb_preprocessor::line_transfer> neighborhood;
   neighborhood.reserve(pp->route_max_length_ * 10);
 
-  // init a new part
-  part_t part;
+  // earliest transport per stop index
+  earliest_transports et;
 
   while (true) {
     // get next route index to process
@@ -558,6 +559,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
     for (auto const t : route_transports) {
 
       // partial transfer set for this transport
+      part_t part;
       part.first = t.v_;
       // resize for number of stops of this transport
       part.second.resize(stop_seq_from.size());
@@ -565,13 +567,143 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
         transfers_vec.clear();
       }
 
-      // the previous target route
-      std::optional<route_idx_t> route_to_prev = std::nullopt;
+      if (!neighborhood.empty()) {
+        // the bitfield of the transport we are transferring from
+        auto const& beta_t =
+            pp->tt_.bitfields_[pp->tt_.transport_traffic_days_[t]];
 
-      // iterate entries in route neighborhood
-      for (auto const& neighbor : neighborhood) {
+        // the previous target route
+        route_idx_t route_to_prev = neighborhood[0].route_idx_to_;
+        // stop sequence of the route we are transferring to
+        auto stop_seq_to = pp->tt_.route_location_seq_[route_to_prev];
+
+        // iterate entries in route neighborhood
+        for (auto const& neighbor : neighborhood) {
+
+          // handle change of target line
+          if (route_to_prev != neighbor.route_idx_to_) {
+            route_to_prev = neighbor.route_idx_to_;
+            stop_seq_to = pp->tt_.route_location_seq_[route_to_prev];
+            et.reset(stop_seq_to.size());
+          }
+
+          auto const tau_arr_t_i =
+              pp->tt_.event_mam(t, neighbor.stop_idx_from_, event_type::kArr);
+          auto const alpha = tau_arr_t_i.mam();
+          std::int32_t const sigma_t = tau_arr_t_i.days();
+          auto const tau_q = alpha + neighbor.footpath_length_.count();
+          auto const tau_q_tod = tau_q % 1400;
+          std::int32_t sigma_fpw = tau_q / 1440;
+
+          // departure times of transports of target route at stop j
+          auto const event_times = pp->tt_.event_times_at_stop(
+              neighbor.route_idx_to_, neighbor.stop_idx_to_, event_type::kDep);
+
+          // find first departure at or after a
+          // departure time of current transport_to
+          auto tau_dep_u_j = std::lower_bound(
+              event_times.begin(), event_times.end(), tau_q_tod,
+              [&](auto&& x, auto&& y) { return x.mam_ < y; });
+
+          // no departure on this day at or after a
+          if (tau_dep_u_j == event_times.end()) {
+            ++sigma_fpw;  // start looking on the following day
+            tau_dep_u_j = event_times.begin();  // with the earliest transport
+          }
+
+          // days that still require earliest connecting transport
+          omega = beta_t;
+          while (omega.any()) {
+
+            // departure time of current transport in relation to time
+            // alpha
+            auto const tau_dep_alpha_u_j = sigma_fpw * 1440 + tau_dep_u_j->mam_;
+
+            // check if max transfer time is exceeded
+            if (tau_dep_alpha_u_j - alpha > pp->transfer_time_max_) {
+              break;
+            }
+
+            // offset from begin of tp_to interval
+            auto const k = std::distance(event_times.begin(), tau_dep_u_j);
+
+            // transport index of transport that we transfer to
+            auto const u =
+                pp->tt_.route_transport_ranges_[neighbor.route_idx_to_]
+                                               [static_cast<std::size_t>(k)];
+
+            // shift amount due to number of times transport u passed
+            // midnight
+            std::int32_t const sigma_u = tau_dep_u_j->days();
+
+            // total shift amount
+            auto const sigma_total = sigma_u - sigma_t - sigma_fpw;
+
+            // bitfield transport to
+            auto const& beta_u =
+                pp->tt_.bitfields_[pp->tt_.transport_traffic_days_[u]];
+
+            // init theta
+            theta = omega;
+            // align bitfields and perform AND
+            if (sigma_total < 0) {
+              theta &= beta_u >> static_cast<unsigned>(-1 * sigma_total);
+            } else {
+              theta &= beta_u << static_cast<unsigned>(sigma_total);
+            }
+
+            // check for match
+            if (theta.any()) {
+              // remove days that are covered by this transport from omega
+              omega &= ~theta;
+
+              // update earliest transport data structure
+              et.update(neighbor.stop_idx_to_, sigma_t + sigma_fpw - sigma_u,
+                        pp->tt_.event_mam(u, 0, event_type::kDep).mam_, theta);
+
+              // recheck theta
+              if (theta.any()) {
+                // add transfer to set
+                part.second[neighbor.stop_idx_from_].emplace_back(
+                    theta, u, neighbor.stop_idx_to_, sigma_fpw);
+
+                // add earliest transport entry
+                et.transports_[neighbor.stop_idx_to_].emplace_back(
+                    sigma_t + sigma_fpw - sigma_u,
+                    pp->tt_.event_mam(u, 0, event_type::kDep).mam_, theta);
+
+                // update subsequent stops
+                for (stop_idx_t j_prime = neighbor.stop_idx_to_ + 1U;
+                     j_prime < stop_seq_to.size(); ++j_prime) {
+                  theta_prime = theta;
+                  et.update(j_prime, sigma_t + sigma_fpw - sigma_u,
+                            pp->tt_.event_mam(u, 0, event_type::kDep).mam_,
+                            theta_prime);
+                  if (theta_prime.any()) {
+                    et.transports_[j_prime].emplace_back(
+                        sigma_t + sigma_fpw - sigma_u,
+                        pp->tt_.event_mam(u, 0, event_type::kDep).mam_,
+                        theta_prime);
+                  }
+                }
+              }
+            }
+
+            // prep next iteration
+            // is this the last transport of the day?
+            if (std::next(tau_dep_u_j) == event_times.end()) {
+
+              // passing midnight
+              ++sigma_fpw;
+
+              // start with the earliest transport on the next day
+              tau_dep_u_j = event_times.begin();
+            } else {
+              ++tau_dep_u_j;
+            }
+          }
+        }
       }
-
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
       // do the transfer reduction after processing the neighborhood
 #endif
@@ -584,6 +716,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
     }
   }
 }
+}
 
 void tb_preprocessor::line_transfers(
     route_idx_t route_from,
@@ -593,6 +726,12 @@ void tb_preprocessor::line_transfers(
 
   // examine stops of the line in reverse order, skip first stop
   for (auto i = stop_seq.size() - 1U; i >= 1; --i) {
+
+    // skip stop if exiting is not allowed
+    if (!stop{stop_seq[i]}.out_allowed()) {
+      continue;
+    }
+
     // location from which we transfer
     auto const location_from = stop{stop_seq[i]}.location_idx();
 
@@ -629,7 +768,7 @@ void tb_preprocessor::line_transfers_fp(
     for (std::size_t j = 0; j < stop_seq_to.size() - 1; ++j) {
       // target location of the transfer
       auto const location_idx_to = stop{stop_seq_to[j]}.location_idx();
-      if (location_idx_to == fp.target()) {
+      if (location_idx_to == fp.target() && stop{stop_seq_to[j]}.in_allowed()) {
         // check for U-turn transfer
         bool is_uturn = false;
         if (j + 1 < stop_seq_to.size() - 1) {
@@ -667,9 +806,9 @@ void tb_preprocessor::earliest_transports::update(stop_idx_t j,
                                                   bitfield& bf_new) {}
 
 void tb_preprocessor::earliest_transports::reset(
-    std::uint16_t num_stops) noexcept {
+    std::size_t num_stops) noexcept {
   transports_.clear();
-  for (std::uint16_t j = 0; j < num_stops; ++j) {
+  for (stop_idx_t j = 0; j < num_stops; ++j) {
     transports_[j].emplace_back(std::numeric_limits<int>::max(),
                                 std::numeric_limits<std::uint16_t>::max(),
                                 bitfield::max());

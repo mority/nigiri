@@ -29,7 +29,8 @@ struct tb_preprocessor {
 
     struct earliest_time {
       earliest_time() : time_{0U} {}
-      earliest_time(std::int32_t time, bitfield bf) : time_(time), bf_(bf) {}
+      earliest_time(std::int32_t const time, bitfield const& bf)
+          : time_(time), bf_(bf) {}
 
       std::int32_t time_;
       bitfield bf_;
@@ -81,6 +82,16 @@ struct tb_preprocessor {
   struct earliest_transports {
 
     struct earliest_transport {
+      //      earliest_transport()
+      //          : shift_amount_(std::numeric_limits<int>::max()),
+      //            start_time_(std::numeric_limits<std::uint16_t>::max()),
+      //            bf_(bitfield::max()) {}
+      //      earliest_transport(int const shift_amount,
+      //                         std::uint16_t const start_time,
+      //                         bitfield const& bf)
+      //          : shift_amount_(shift_amount), start_time_(start_time),
+      //          bf_(bf) {}
+
       int shift_amount_;
       std::uint16_t start_time_;
       bitfield bf_;
@@ -91,9 +102,9 @@ struct tb_preprocessor {
                 std::uint16_t start_time_new,
                 bitfield& bf_new);
 
-    void reset(std::uint16_t num_stops) noexcept;
+    void reset(std::size_t num_stops) noexcept;
 
-    mutable_fws_multimap<stop_idx_t, earliest_transport> transports_;
+    mutable_fws_multimap<std::uint32_t, earliest_transport> transports_;
   };
 #endif
 
