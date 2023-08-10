@@ -8,6 +8,7 @@
 #include "nigiri/loader/init_finish.h"
 #include "../../loader/hrd/hrd_timetable.h"
 
+#include "nigiri/routing/tripbased/dominates.h"
 #include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
 #include "tb_preprocessing_test.h"
@@ -384,3 +385,17 @@ TEST(build_transfer_set, serialization) {
 
   std::filesystem::remove(ts_file_name);
 }
+
+#ifdef TB_MIN_WALK
+TEST(dominates, basic) {
+  EXPECT_EQ(-2, dominates(0, 0, 1, 1));
+  EXPECT_EQ(-1, dominates(0, 1, 1, 1));
+  EXPECT_EQ(-1, dominates(1, 0, 1, 1));
+  EXPECT_EQ(0, dominates(0, 0, 0, 0));
+  EXPECT_EQ(0, dominates(0, 1, 1, 0));
+  EXPECT_EQ(0, dominates(1, 0, 0, 1));
+  EXPECT_EQ(1, dominates(1, 1, 0, 1));
+  EXPECT_EQ(1, dominates(1, 1, 1, 0));
+  EXPECT_EQ(2, dominates(1, 1, 0, 0));
+}
+#endif

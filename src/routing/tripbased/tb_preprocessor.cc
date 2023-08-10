@@ -55,38 +55,43 @@ void tb_preprocessor::earliest_times::update_walk(location_idx_t location,
       } else if (0 < dom) {
         // existing tuple dominates
         bf_new_ &= ~times_[location][i].bf_;
-      } else if (time_arr_new == times_[location][i].time_arr_ &&
-                 time_walk_new == times_[location][i].time_walk_) {
-        // remember position of same tuple
-        same_spot = i;
+      } else {
+        if (!(time_arr_new < times_[location][i].time_arr_ ||
+              time_walk_new < times_[location][i].time_walk_)) {
+          // new tuple does not improve
+          bf_new_ &= ~times_[location][i].bf_;
+        }
+        if (time_arr_new == times_[location][i].time_arr_ &&
+            time_walk_new == times_[location][i].time_walk_) {
+          // remember position of same tuple
+          same_spot = i;
+        }
       }
     }
     if (times_[location][i].bf_.none()) {
-      {
-        // remember overwrite spot
-        overwrite_spot = i;
-      }
+      // remember overwrite spot
+      overwrite_spot = i;
     }
-    // after comparison to existing entries
-    if (bf_new_.any()) {
-      // new time has at least one active day after comparison
-      if (same_spot.has_value()) {
-        // entry for this time already exists -> add active days of new time to
-        // it
-        times_[location][same_spot.value()].bf_ |= bf_new_;
-      } else if (overwrite_spot.has_value()) {
-        // overwrite spot was found -> use for new entry
-        times_[location][overwrite_spot.value()].time_arr_ = time_arr_new;
-        times_[location][overwrite_spot.value()].time_walk_ = time_walk_new;
-        times_[location][overwrite_spot.value()].bf_ = bf_new_;
-      } else {
-        // add new entry
-        times_[location].emplace_back(time_arr_new, time_walk_new, bf_new_);
-      }
-      // add improvements to impr
-      if (impr != nullptr) {
-        *impr |= bf_new_;
-      }
+  }
+  // after comparison to existing entries
+  if (bf_new_.any()) {
+    // new entry has at least one active day after comparison
+    if (same_spot.has_value()) {
+      // entry with same values already exists -> add active days of new time
+      // to it
+      times_[location][same_spot.value()].bf_ |= bf_new_;
+    } else if (overwrite_spot.has_value()) {
+      // overwrite spot was found -> use for new entry
+      times_[location][overwrite_spot.value()].time_arr_ = time_arr_new;
+      times_[location][overwrite_spot.value()].time_walk_ = time_walk_new;
+      times_[location][overwrite_spot.value()].bf_ = bf_new_;
+    } else {
+      // add new entry
+      times_[location].emplace_back(time_arr_new, time_walk_new, bf_new_);
+    }
+    // add improvements to impr
+    if (impr != nullptr) {
+      *impr |= bf_new_;
     }
   }
 }
@@ -341,14 +346,16 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 #endif
 #endif
 
-      auto handle_fp = [&sigma_t, &pp, &t, &i, &route_t, &alpha
+      auto handle_fp = [&sigma_t, &pp, &t, &i, &route_t, &alpha,
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-                        ,
-                        &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr
+
+                        &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr,
+#ifdef TB_MIN_WALK
+                        &p_t_i,
 #endif
-                        ,
-                        &omega, &theta, &part, &beta_t,
-                        &p_t_i](footpath const& fp) {
+#endif
+
+                        &omega, &theta, &part, &beta_t](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
 
