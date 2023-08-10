@@ -170,7 +170,11 @@ TEST(build_transfer_set, earlier_stop_transfer) {
   transfer_set ts;
   build_transfer_set(tt, ts);
 
+#if defined(TB_PREPRO_LB_PRUNING) && !defined(TB_PREPRO_TRANSFER_REDUCTION)
+  EXPECT_EQ(3, ts.n_transfers_);
+#else
   EXPECT_EQ(1, ts.n_transfers_);
+#endif
   auto const& transfers = ts.at(0U, 4U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];
@@ -195,7 +199,11 @@ TEST(build_transfer_set, earlier_transport_transfer) {
   transfer_set ts;
   build_transfer_set(tt, ts);
 
+#if defined(TB_PREPRO_LB_PRUNING) && !defined(TB_PREPRO_TRANSFER_REDUCTION)
+  EXPECT_EQ(6, ts.n_transfers_);
+#else
   EXPECT_EQ(1, ts.n_transfers_);
+#endif
   auto const& transfers = ts.at(1U, 1U);
   ASSERT_EQ(1, transfers.size());
   auto const& t = transfers[0];

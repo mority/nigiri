@@ -2,6 +2,7 @@
 #include "utl/progress_tracker.h"
 
 #include "nigiri/logging.h"
+#include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "nigiri/stop.h"
 #include "nigiri/types.h"
@@ -229,7 +230,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
       // the location index from which we are transferring
       auto const p_t_i = stop{stop_seq_t[i]}.location_idx();
-      
+
       // time of day for tau_arr(t,i)
       std::int32_t const alpha = pp->tt_.event_mam(t, i, event_type::kArr).mam_;
 
@@ -556,6 +557,10 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
     // iterate transports of the current route
     for (auto const t : route_transports) {
 
+#ifndef NDEBUG
+      TBDL << "Processing transport " << t << "\n";
+#endif
+
       // partial transfer set for this transport
       part_t part;
       part.first = t.v_;
@@ -574,6 +579,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
         route_idx_t route_to_prev = neighborhood[0].route_idx_to_;
         // stop sequence of the route we are transferring to
         auto stop_seq_to = pp->tt_.route_location_seq_[route_to_prev];
+        // initial reset of earliest transport
+        et.reset(stop_seq_to.size());
 
         // iterate entries in route neighborhood
         for (auto const& neighbor : neighborhood) {
@@ -585,6 +592,12 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
             et.reset(stop_seq_to.size());
           }
 
+#ifndef NDEBUG
+          TBDL << "Examining neighbor (" << neighbor.stop_idx_from_ << ", "
+               << neighbor.route_idx_to_ << ", " << neighbor.stop_idx_to_
+               << ", " << neighbor.footpath_length_ << ")\n";
+#endif
+
           auto const tau_arr_t_i =
               pp->tt_.event_mam(t, neighbor.stop_idx_from_, event_type::kArr);
           auto const alpha = tau_arr_t_i.mam();
@@ -592,6 +605,13 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
           auto const tau_q = alpha + neighbor.footpath_length_.count();
           auto const tau_q_tod = tau_q % 1400;
           std::int32_t sigma_fpw = tau_q / 1440;
+
+#ifndef NDEBUG
+          TBDL << "Transport " << t
+               << " arrives at source stop: " << dhhmm(alpha)
+               << ", earliest possible departure at target stop: "
+               << dhhmm(tau_q) << "\n";
+#endif
 
           // departure times of transports of target route at stop j
           auto const event_times = pp->tt_.event_times_at_stop(
@@ -630,6 +650,12 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                 pp->tt_.route_transport_ranges_[neighbor.route_idx_to_]
                                                [static_cast<std::size_t>(k)];
 
+#ifndef NDEBUG
+            TBDL << "Transport " << u
+                 << " departs at target stop: " << dhhmm(tau_dep_alpha_u_j)
+                 << "\n";
+#endif
+
             // shift amount due to number of times transport u passed
             // midnight
             std::int32_t const sigma_u = tau_dep_u_j->days();
@@ -661,6 +687,12 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
               // recheck theta
               if (theta.any()) {
+#ifndef NDEBUG
+                TBDL << "Adding transfer: (transport " << t << ", stop "
+                     << neighbor.stop_idx_from_ << ") -> (transport " << u
+                     << ", stop " << neighbor.stop_idx_to_ << ")\n";
+#endif
+
                 // add transfer to set
                 part.second[neighbor.stop_idx_from_].emplace_back(
                     theta, u, neighbor.stop_idx_to_, sigma_fpw);
@@ -831,6 +863,11 @@ void tb_preprocessor::line_transfers(
 
   // sort neighborhood
   std::sort(neighborhood.begin(), neighborhood.end(), line_transfer_comp);
+
+#ifndef NDEBUG
+  TBDL << "build neighborhood of route " << route_from
+       << " with size = " << neighborhood.size() << "\n";
+#endif
 }
 
 void tb_preprocessor::line_transfers_fp(
@@ -851,6 +888,11 @@ void tb_preprocessor::line_transfers_fp(
       // target location of the transfer
       auto const location_idx_to = stop{stop_seq_to[j]}.location_idx();
       if (location_idx_to == fp.target() && stop{stop_seq_to[j]}.in_allowed()) {
+#ifndef NDEBUG
+        TBDL << "Checking for U-turn transfer: (" << i << ", " << route_to
+             << ", " << j << ", " << fp.duration() << ")\n";
+#endif
+
         // check for U-turn transfer
         bool is_uturn = false;
         if (j + 1 < stop_seq_to.size() - 1) {
@@ -859,24 +901,26 @@ void tb_preprocessor::line_transfers_fp(
           auto const location_to_next = stop{stop_seq_to[j + 1]}.location_idx();
           // next location of route_to is previous location of route_from?
           if (location_from_prev == location_to_next) {
-            // check if footpath duration of alternative transfer is equal or
+#ifndef NDEBUG
+            TBDL << "Next location of route_to is previous location of "
+                    "route_from\n";
+#endif
+            // check if change time of alternative transfer is equal or
             // less
-            for (auto const& fp_alt :
-                 tt_.locations_.footpaths_out_[location_from_prev]) {
-              if (fp_alt.target() == location_to_next) {
-                if (fp_alt.duration() <= fp.duration()) {
-                  is_uturn = true;
-                }
-                // once relevant footpath was examined, we can break
-                break;
-              }
-            }
+            is_uturn = tt_.locations_.transfer_time_[location_from_prev] <=
+                       fp.duration();
           }
         }
         if (!is_uturn) {
           // add to neighborhood
           neighborhood.emplace_back(i, route_to, j, fp.duration());
         }
+#ifndef NDEBUG
+        else {
+          TBDL << "Discarded U-turn transfer: (" << i << ", " << route_to
+               << ", " << j << ", " << fp.duration() << ")\n";
+        }
+#endif
       }
     }
   }
