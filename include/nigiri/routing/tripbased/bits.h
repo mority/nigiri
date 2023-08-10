@@ -1,5 +1,7 @@
 #pragma once
 
+#define TB_MIN_WALK
+
 #define BITFIELD_IDX_BITS 25U
 #define TRANSPORT_IDX_BITS 26U
 #define STOP_IDX_BITS 10U

@@ -12,7 +12,7 @@
 
 #define TB_PREPRO_UTURN_REMOVAL
 #define TB_PREPRO_TRANSFER_REDUCTION
-#define TB_PREPRO_LB_PRUNING
+// #define TB_PREPRO_LB_PRUNING
 
 namespace nigiri::routing::tripbased {
 
@@ -27,6 +27,25 @@ struct tb_preprocessor {
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   struct earliest_times {
 
+#ifdef TB_MIN_WALK
+    struct earliest_time {
+      earliest_time() : time_arr_(0U), time_walk_(0U) {}
+      earliest_time(std::int32_t const time_arr,
+                    std::int32_t const time_walk,
+                    bitfield const& bf)
+          : time_arr_(time_arr), time_walk_(time_walk), bf_(bf) {}
+
+      std::int32_t time_arr_;
+      std::int32_t time_walk_;
+      bitfield bf_;
+    };
+
+    void update_walk(location_idx_t,
+                     std::int32_t time_arr_new,
+                     std::int32_t time_walk_new,
+                     bitfield const& bf,
+                     bitfield* impr);
+#else
     struct earliest_time {
       earliest_time() : time_{0U} {}
       earliest_time(std::int32_t const time, bitfield const& bf)
@@ -40,6 +59,7 @@ struct tb_preprocessor {
                 std::int32_t time_new,
                 bitfield const& bf,
                 bitfield* impr);
+#endif
 
     void reset() noexcept { times_.clear(); }
 

@@ -3,6 +3,7 @@
 
 #include "nigiri/logging.h"
 #include "nigiri/routing/tripbased/dbg.h"
+#include "nigiri/routing/tripbased/dominates.h"
 #include "nigiri/routing/tripbased/tb_preprocessor.h"
 #include "nigiri/stop.h"
 #include "nigiri/types.h"
@@ -24,6 +25,72 @@ bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
 }
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
+
+#ifdef TB_MIN_WALK
+void tb_preprocessor::earliest_times::update_walk(location_idx_t location,
+                                                  std::int32_t time_arr_new,
+                                                  std::int32_t time_walk_new,
+                                                  bitfield const& bf,
+                                                  bitfield* impr) {
+  // bitfield is manipulated during update process
+  bf_new_ = bf;
+  // position of entry with an equal time
+  std::optional<std::uint32_t> same_spot = std::nullopt;
+  // position of entry with no active days
+  std::optional<std::uint32_t> overwrite_spot = std::nullopt;
+  // compare to existing entries of this location
+  for (auto i{0U}; i != times_[location].size(); ++i) {
+    if (bf_new_.none()) {
+      // all bits of new entry were set to zero, new entry does not improve
+      // upon any times
+      return;
+    }
+    if (times_[location][i].bf_.any()) {
+      auto const dom =
+          dominates(time_arr_new, time_walk_new, times_[location][i].time_arr_,
+                    times_[location][i].time_walk_);
+      if (dom < 0) {
+        // new tuple dominates
+        times_[location][i].bf_ &= ~bf_new_;
+      } else if (0 < dom) {
+        // existing tuple dominates
+        bf_new_ &= ~times_[location][i].bf_;
+      } else if (time_arr_new == times_[location][i].time_arr_ &&
+                 time_walk_new == times_[location][i].time_walk_) {
+        // remember position of same tuple
+        same_spot = i;
+      }
+    }
+    if (times_[location][i].bf_.none()) {
+      {
+        // remember overwrite spot
+        overwrite_spot = i;
+      }
+    }
+    // after comparison to existing entries
+    if (bf_new_.any()) {
+      // new time has at least one active day after comparison
+      if (same_spot.has_value()) {
+        // entry for this time already exists -> add active days of new time to
+        // it
+        times_[location][same_spot.value()].bf_ |= bf_new_;
+      } else if (overwrite_spot.has_value()) {
+        // overwrite spot was found -> use for new entry
+        times_[location][overwrite_spot.value()].time_arr_ = time_arr_new;
+        times_[location][overwrite_spot.value()].time_walk_ = time_walk_new;
+        times_[location][overwrite_spot.value()].bf_ = bf_new_;
+      } else {
+        // add new entry
+        times_[location].emplace_back(time_arr_new, time_walk_new, bf_new_);
+      }
+      // add improvements to impr
+      if (impr != nullptr) {
+        *impr |= bf_new_;
+      }
+    }
+  }
+}
+#else
 void tb_preprocessor::earliest_times::update(location_idx_t location,
                                              std::int32_t time_new,
                                              bitfield const& bf,
@@ -84,6 +151,7 @@ void tb_preprocessor::earliest_times::update(location_idx_t location,
   }
 }
 #endif
+#endif
 
 void tb_preprocessor::build(transfer_set& ts) {
   auto const num_transports = tt_.transport_traffic_days_.size();
@@ -140,7 +208,8 @@ void tb_preprocessor::build(transfer_set& ts) {
         // remove processed part
         std::lock_guard<std::mutex> const lock(parts_mutex_);
         parts_.erase(part);
-        // start from begin, next part maybe more towards the front of the queue
+        // start from begin, next part maybe more towards the front of the
+        // queue
         part = parts_.begin();
       } else {
         ++part;
@@ -167,11 +236,6 @@ void tb_preprocessor::build(transfer_set& ts) {
 #ifndef TB_PREPRO_LB_PRUNING
 void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-  earliest_times ets_arr_;
-  earliest_times ets_ch_;
-#endif
-
   // days of transport that still require a connection
   bitfield omega;
 
@@ -179,6 +243,9 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
   bitfield theta;
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
+  earliest_times ets_arr_;
+  earliest_times ets_ch_;
+
   // days on which the transfer constitutes an
   // improvement
   bitfield impr;
@@ -249,6 +316,18 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
           pp->tt_.event_mam(t, i, event_type::kArr).count();
 
       // init the earliest times data structure
+#ifdef TB_MIN_WALK
+      ets_arr_.update_walk(p_t_i, tau_arr_t_i, 0, beta_t, nullptr);
+      ets_ch_.update_walk(
+          p_t_i, tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
+          0, beta_t, nullptr);
+      for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
+        ets_arr_.update_walk(fp.target(), tau_arr_t_i + fp.duration().count(),
+                             fp.duration().count(), beta_t, nullptr);
+        ets_ch_.update_walk(fp.target(), tau_arr_t_i + fp.duration().count(),
+                            fp.duration().count(), beta_t, nullptr);
+      }
+#else
       ets_arr_.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
       ets_ch_.update(
           p_t_i, tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
@@ -260,6 +339,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                        nullptr);
       }
 #endif
+#endif
 
       auto handle_fp = [&sigma_t, &pp, &t, &i, &route_t, &alpha
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
@@ -267,7 +347,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                         &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr
 #endif
                         ,
-                        &omega, &theta, &part, &beta_t](footpath const& fp) {
+                        &omega, &theta, &part, &beta_t,
+                        &p_t_i](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
 
@@ -436,6 +517,18 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                         auto const p_u_l =
                             stop{pp->tt_.route_location_seq_[route_u][l]}
                                 .location_idx();
+#ifdef TB_MIN_WALK
+                        auto const walk_time_l =
+                            p_t_i == p_u_j ? 0 : fp.duration().count();
+                        ets_arr_.update_walk(p_u_l, tau_arr_t_u_l, walk_time_l,
+                                             theta, &impr);
+                        ets_ch_.update_walk(
+                            p_u_l,
+                            tau_arr_t_u_l +
+                                pp->tt_.locations_.transfer_time_[p_u_l]
+                                    .count(),
+                            walk_time_l, theta, &impr);
+#else
                         ets_arr_.update(p_u_l, tau_arr_t_u_l, theta, &impr);
                         ets_ch_.update(
                             p_u_l,
@@ -443,12 +536,23 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                                 pp->tt_.locations_.transfer_time_[p_u_l]
                                     .count(),
                             theta, &impr);
+#endif
                         for (auto const& fp_r :
                              pp->tt_.locations_.footpaths_out_[p_u_l]) {
                           auto const eta =
                               tau_arr_t_u_l + fp_r.duration().count();
+
+#ifdef TB_MIN_WALK
+                          auto const walk_time_r =
+                              walk_time_l + fp_r.duration().count();
+                          ets_arr_.update_walk(fp_r.target(), eta, walk_time_r,
+                                               theta, &impr);
+                          ets_ch_.update_walk(fp_r.target(), eta, walk_time_r,
+                                              theta, &impr);
+#else
                           ets_arr_.update(fp_r.target(), eta, theta, &impr);
                           ets_ch_.update(fp_r.target(), eta, theta, &impr);
+#endif
                         }
                       }
 
@@ -934,12 +1038,14 @@ void tb_preprocessor::earliest_transports::update(stop_idx_t j,
     if (bf_new.none()) {
       break;
     }
-    if (entry.bf_.any() && (shift_amount_new < entry.shift_amount_ ||
-                            (shift_amount_new == entry.shift_amount_ &&
-                             start_time_new < entry.start_time_))) {
-      entry.bf_ &= ~bf_new;
-    } else {
-      bf_new &= ~entry.bf_;
+    if (entry.bf_.any()) {
+      if (shift_amount_new < entry.shift_amount_ ||
+          (shift_amount_new == entry.shift_amount_ &&
+           start_time_new < entry.start_time_)) {
+        entry.bf_ &= ~bf_new;
+      } else {
+        bf_new &= ~entry.bf_;
+      }
     }
   }
 }
