@@ -28,8 +28,8 @@ bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
 
 #ifdef TB_MIN_WALK
 void tb_preprocessor::earliest_times::update_walk(location_idx_t location,
-                                                  std::int32_t time_arr_new,
-                                                  std::int32_t time_walk_new,
+                                                  std::uint16_t time_arr_new,
+                                                  std::uint16_t time_walk_new,
                                                   bitfield const& bf,
                                                   bitfield* impr) {
   // bitfield is manipulated during update process
@@ -691,8 +691,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
         // stop sequence of the route we are transferring to
         auto stop_seq_to = pp->tt_.route_location_seq_[route_to_prev];
         // initial reset of earliest transport
+#ifdef TB_MIN_WALK
+        et.reset_walk(stop_seq_to.size());
+#else
         et.reset(stop_seq_to.size());
-
+#endif
         // iterate entries in route neighborhood
         for (auto const& neighbor : neighborhood) {
 
@@ -700,7 +703,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
           if (route_to_prev != neighbor.route_idx_to_) {
             route_to_prev = neighbor.route_idx_to_;
             stop_seq_to = pp->tt_.route_location_seq_[route_to_prev];
+#ifdef TB_MIN_WALK
+            et.reset_walk(stop_seq_to.size());
+#else
             et.reset(stop_seq_to.size());
+#endif
           }
 
 #ifndef NDEBUG
@@ -712,10 +719,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
           auto const tau_arr_t_i =
               pp->tt_.event_mam(t, neighbor.stop_idx_from_, event_type::kArr);
           auto const alpha = tau_arr_t_i.mam();
-          std::int32_t const sigma_t = tau_arr_t_i.days();
+          std::int8_t const sigma_t =
+              static_cast<std::int8_t>(tau_arr_t_i.days());
           auto const tau_q = alpha + neighbor.footpath_length_.count();
           auto const tau_q_tod = tau_q % 1400;
-          std::int32_t sigma_fpw = tau_q / 1440;
+          std::int8_t sigma_fpw = static_cast<std::int8_t>(tau_q / 1440);
 
 #ifndef NDEBUG
           TBDL << "Transport " << t
@@ -769,10 +777,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
             // shift amount due to number of times transport u passed
             // midnight
-            std::int32_t const sigma_u = tau_dep_u_j->days();
+            std::int8_t const sigma_u =
+                static_cast<std::int8_t>(tau_dep_u_j->days());
 
             // total shift amount
-            auto const sigma_total = sigma_u - sigma_t - sigma_fpw;
+            std::int8_t const sigma_total = sigma_u - sigma_t - sigma_fpw;
 
             // bitfield transport to
             auto const& beta_u =
@@ -793,9 +802,23 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
               omega &= ~theta;
 
               // update earliest transport data structure
+#ifdef TB_MIN_WALK
+              auto const p_t_i =
+                  stop{stop_seq_from[neighbor.stop_idx_from_]}.location_idx();
+              auto const p_u_j =
+                  stop{stop_seq_to[neighbor.stop_idx_to_]}.location_idx();
+              // compute walking time between the stops
+              auto const walk_time = pp->walk_time(p_t_i, p_u_j);
+
+              et.update_walk(
+                  neighbor.stop_idx_to_,
+                  compute_otid(sigma_t + sigma_fpw - sigma_u,
+                               pp->tt_.event_mam(u, 0, event_type::kDep).mam_),
+                  walk_time, theta);
+#else
               et.update(neighbor.stop_idx_to_, sigma_t + sigma_fpw - sigma_u,
                         pp->tt_.event_mam(u, 0, event_type::kDep).mam_, theta);
-
+#endif
               // recheck theta
               if (theta.any()) {
 #ifndef NDEBUG
@@ -809,22 +832,46 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                     theta, u, neighbor.stop_idx_to_, sigma_fpw);
 
                 // add earliest transport entry
+#ifdef TB_MIN_WALK
+                et.transports_[neighbor.stop_idx_to_].emplace_back(
+                    compute_otid(
+                        sigma_t + sigma_fpw - sigma_u,
+                        pp->tt_.event_mam(u, 0, event_type::kDep).mam_),
+                    walk_time, theta);
+#else
                 et.transports_[neighbor.stop_idx_to_].emplace_back(
                     sigma_t + sigma_fpw - sigma_u,
                     pp->tt_.event_mam(u, 0, event_type::kDep).mam_, theta);
-
+#endif
                 // update subsequent stops
                 for (stop_idx_t j_prime = neighbor.stop_idx_to_ + 1U;
                      j_prime < stop_seq_to.size(); ++j_prime) {
                   theta_prime = theta;
+#ifdef TB_MIN_WALK
+                  et.update_walk(
+                      j_prime,
+                      compute_otid(
+                          sigma_t + sigma_fpw - sigma_u,
+                          pp->tt_.event_mam(u, 0, event_type::kDep).mam_),
+                      walk_time, theta_prime);
+#else
                   et.update(j_prime, sigma_t + sigma_fpw - sigma_u,
                             pp->tt_.event_mam(u, 0, event_type::kDep).mam_,
                             theta_prime);
+#endif
                   if (theta_prime.any()) {
+#ifdef TB_MIN_WALK
+                    et.transports_[j_prime].emplace_back(
+                        compute_otid(
+                            sigma_t + sigma_fpw - sigma_u,
+                            pp->tt_.event_mam(u, 0, event_type::kDep).mam_),
+                        walk_time, theta_prime);
+#else
                     et.transports_[j_prime].emplace_back(
                         sigma_t + sigma_fpw - sigma_u,
                         pp->tt_.event_mam(u, 0, event_type::kDep).mam_,
                         theta_prime);
+#endif
                   }
                 }
               }
@@ -862,26 +909,39 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
           auto const p_t_i = stop{stop_seq_from[i]}.location_idx();
 
           // tau_arr(t,i)
-          std::int32_t const tau_arr_t_i =
-              pp->tt_.event_mam(t, i, event_type::kArr).count();
+          std::uint16_t const tau_arr_t_i = static_cast<std::uint16_t>(
+              pp->tt_.event_mam(t, i, event_type::kArr).count());
 
           // time of day for tau_arr(t,i)
-          std::int32_t const alpha =
+          std::uint16_t const alpha =
               pp->tt_.event_mam(t, i, event_type::kArr).mam_;
 
           // init the earliest times data structure
+#ifdef TB_MIN_WALK
+          ets_arr.update_walk(p_t_i, tau_arr_t_i, 0, beta_t, nullptr);
+          ets_ch.update_walk(
+              p_t_i,
+              tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(), 0,
+              beta_t, nullptr);
+          for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
+            ets_arr.update_walk(fp.target(), tau_arr_t_i + fp.duration_,
+                                fp.duration_, beta_t, nullptr);
+            ets_ch.update_walk(fp.target(), tau_arr_t_i + fp.duration_,
+                               fp.duration_, beta_t, nullptr);
+          }
+#else
           ets_arr.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
           ets_ch.update(
               p_t_i,
               tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
               beta_t, nullptr);
           for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
-            ets_arr.update(fp.target(), tau_arr_t_i + fp.duration().count(),
-                           beta_t, nullptr);
-            ets_ch.update(fp.target(), tau_arr_t_i + fp.duration().count(),
-                          beta_t, nullptr);
+            ets_arr.update(fp.target(), tau_arr_t_i + fp.duration_, beta_t,
+                           nullptr);
+            ets_ch.update(fp.target(), tau_arr_t_i + fp.duration_, beta_t,
+                          nullptr);
           }
-
+#endif
           // iterate transfers found by line-based pruning
           for (auto transfer = part.second[i].begin();
                transfer != part.second[i].end();) {
@@ -891,35 +951,75 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
             auto const route_u =
                 pp->tt_.transport_route_[transfer->transport_idx_to_];
 
+            // target location of the transfer
+            auto const p_u_j =
+                stop{pp->tt_
+                         .route_location_seq_[route_u][transfer->stop_idx_to_]}
+                    .location_idx();
+
             // convert departure into timescale of transport t
             auto const tau_dep_u_j =
                 pp->tt_.event_mam(transfer->transport_idx_to_,
                                   transfer->stop_idx_to_, event_type::kDep);
-            auto const tau_dep_alpha_u_j =
-                transfer->passes_midnight_ * 1440 + tau_dep_u_j.mam();
-            auto const tau_dep_t_u_j =
+            std::uint16_t const tau_dep_alpha_u_j =
+                transfer->passes_midnight_ * 1440U + tau_dep_u_j.mam_;
+            std::uint16_t const tau_dep_t_u_j =
                 tau_arr_t_i + (tau_dep_alpha_u_j - alpha);
-            for (stop_idx_t k = transfer->stop_idx_to_ + 1U;
-                 k != pp->tt_.route_location_seq_[route_u].size(); ++k) {
-              auto const tau_arr_t_u_l =
-                  tau_dep_t_u_j + (pp->tt_
-                                       .event_mam(transfer->transport_idx_to_,
-                                                  k, event_type::kArr)
-                                       .count() -
-                                   tau_dep_u_j.count());
+            for (stop_idx_t l = transfer->stop_idx_to_ + 1U;
+                 l != pp->tt_.route_location_seq_[route_u].size(); ++l) {
+              std::uint16_t tau_arr_t_u_l =
+                  tau_dep_t_u_j +
+                  static_cast<std::uint16_t>(
+                      pp->tt_
+                          .event_mam(transfer->transport_idx_to_, l,
+                                     event_type::kArr)
+                          .count() -
+                      tau_dep_u_j.count());
+
+              // locations after p_u_j
               auto const p_u_l =
-                  stop{pp->tt_.route_location_seq_[route_u][k]}.location_idx();
+                  stop{pp->tt_.route_location_seq_[route_u][l]}.location_idx();
+#ifdef TB_MIN_WALK
+
+              std::uint16_t walk_time_l{0U};
+              if (p_t_i != p_u_j) {
+                // changed stations during transfer -> find footpath of transfer
+                for (auto const& fp :
+                     pp->tt_.locations_.footpaths_out_[p_t_i]) {
+                  if (fp.target() == p_u_j) {
+                    walk_time_l = fp.duration_;
+                    break;
+                  }
+                }
+              }
+              ets_arr.update_walk(p_u_l, tau_arr_t_u_l, walk_time_l, theta,
+                                  &impr);
+              ets_ch.update_walk(
+                  p_u_l,
+                  tau_arr_t_u_l +
+                      pp->tt_.locations_.transfer_time_[p_u_l].count(),
+                  walk_time_l, theta, &impr);
+#else
               ets_arr.update(p_u_l, tau_arr_t_u_l, theta, &impr);
               ets_ch.update(
                   p_u_l,
                   tau_arr_t_u_l +
                       pp->tt_.locations_.transfer_time_[p_u_l].count(),
                   theta, &impr);
+#endif
               for (auto const& fp_r :
                    pp->tt_.locations_.footpaths_out_[p_u_l]) {
-                auto const eta = tau_arr_t_u_l + fp_r.duration().count();
+                std::uint16_t const eta = tau_arr_t_u_l + fp_r.duration_;
+#ifdef TB_MIN_WALK
+                std::uint16_t const walk_time_r = walk_time_l + fp_r.duration_;
+                ets_arr.update_walk(fp_r.target(), eta, walk_time_r, theta,
+                                    &impr);
+                ets_ch.update_walk(fp_r.target(), eta, walk_time_r, theta,
+                                   &impr);
+#else
                 ets_arr.update(fp_r.target(), eta, theta, &impr);
                 ets_ch.update(fp_r.target(), eta, theta, &impr);
+#endif
               }
             }
 
@@ -1037,8 +1137,40 @@ void tb_preprocessor::line_transfers_fp(
   }
 }
 
+#ifdef TB_MIN_WALK
+void tb_preprocessor::earliest_transports::update_walk(
+    stop_idx_t j,
+    std::uint32_t otid_new,
+    std::uint16_t walk_time_new,
+    bitfield& bf_new) {
+  for (auto& entry : transports_[j]) {
+    if (bf_new.none()) {
+      break;
+    }
+    if (entry.bf_.any()) {
+      auto const dom =
+          dominates(otid_new, walk_time_new, entry.otid_, entry.walk_time_);
+      if (dom < 0) {
+        entry.bf_ &= ~bf_new;
+      } else if (!(otid_new < entry.otid_ ||
+                   walk_time_new < entry.walk_time_)) {
+        bf_new &= ~entry.bf_;
+      }
+    }
+  }
+}
+
+void tb_preprocessor::earliest_transports::reset_walk(
+    std::size_t num_stops) noexcept {
+  transports_.clear();
+  for (stop_idx_t j = 0; j < num_stops; ++j) {
+    transports_[j].emplace_back(
+        max_otid(), std::numeric_limits<std::uint16_t>::max(), bitfield::max());
+  }
+}
+#else
 void tb_preprocessor::earliest_transports::update(stop_idx_t j,
-                                                  int shift_amount_new,
+                                                  std::int8_t shift_amount_new,
                                                   std::uint16_t start_time_new,
                                                   bitfield& bf_new) {
   for (auto& entry : transports_[j]) {
@@ -1066,4 +1198,6 @@ void tb_preprocessor::earliest_transports::reset(
                                 bitfield::max());
   }
 }
+#endif
+
 #endif

@@ -2,6 +2,7 @@
 
 #include "boost/functional/hash.hpp"
 #include "nigiri/routing/tripbased/expanded_transfer.h"
+#include "nigiri/routing/tripbased/ordered_transport_id.h"
 #include "nigiri/timetable.h"
 #include <filesystem>
 #include <list>
@@ -9,10 +10,6 @@
 #include "bits.h"
 #include "transfer.h"
 #include "transfer_set.h"
-
-#define TB_PREPRO_UTURN_REMOVAL
-#define TB_PREPRO_TRANSFER_REDUCTION
-// #define TB_PREPRO_LB_PRUNING
 
 namespace nigiri::routing::tripbased {
 
@@ -30,19 +27,19 @@ struct tb_preprocessor {
 #ifdef TB_MIN_WALK
     struct earliest_time {
       earliest_time() : time_arr_(0U), time_walk_(0U) {}
-      earliest_time(std::int32_t const time_arr,
-                    std::int32_t const time_walk,
+      earliest_time(std::uint16_t const time_arr,
+                    std::uint16_t const time_walk,
                     bitfield const& bf)
           : time_arr_(time_arr), time_walk_(time_walk), bf_(bf) {}
 
-      std::int32_t time_arr_;
-      std::int32_t time_walk_;
+      std::uint16_t time_arr_;
+      std::uint16_t time_walk_;
       bitfield bf_;
     };
 
     void update_walk(location_idx_t,
-                     std::int32_t time_arr_new,
-                     std::int32_t time_walk_new,
+                     std::uint16_t time_arr_new,
+                     std::uint16_t time_walk_new,
                      bitfield const& bf,
                      bitfield* impr);
 #else
@@ -110,31 +107,48 @@ struct tb_preprocessor {
 
   struct earliest_transports {
 
+#ifdef TB_MIN_WALK
     struct earliest_transport {
-      //      earliest_transport()
-      //          : shift_amount_(std::numeric_limits<int>::max()),
-      //            start_time_(std::numeric_limits<std::uint16_t>::max()),
-      //            bf_(bitfield::max()) {}
-      //      earliest_transport(int const shift_amount,
-      //                         std::uint16_t const start_time,
-      //                         bitfield const& bf)
-      //          : shift_amount_(shift_amount), start_time_(start_time),
-      //          bf_(bf) {}
+      std::uint32_t otid_;
+      std::uint16_t walk_time_;
+      bitfield bf_;
+    };
 
-      int shift_amount_;
+    void update_walk(stop_idx_t j,
+                     std::uint32_t otid_new,
+                     std::uint16_t walk_time_new,
+                     bitfield& bf_new);
+
+    void reset_walk(std::size_t num_stops) noexcept;
+#else
+    struct earliest_transport {
+      std::int8_t shift_amount_;
       std::uint16_t start_time_;
       bitfield bf_;
     };
 
     void update(stop_idx_t j,
-                int shift_amount_new,
+                std::int8_t shift_amount_new,
                 std::uint16_t start_time_new,
                 bitfield& bf_new);
 
     void reset(std::size_t num_stops) noexcept;
-
+#endif
     mutable_fws_multimap<std::uint32_t, earliest_transport> transports_;
   };
+#endif
+
+#ifdef TB_MIN_WALK
+  std::uint16_t walk_time(location_idx_t a, location_idx_t b) {
+    if (a != b) {
+      for (auto const& fp : tt_.locations_.footpaths_out_[a]) {
+        if (fp.target() == b) {
+          return fp.duration_;
+        }
+      }
+    }
+    return 0;
+  }
 #endif
 
   //  preprocessor() = delete;
