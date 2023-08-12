@@ -8,8 +8,8 @@
 #include "nigiri/loader/init_finish.h"
 #include "../../loader/hrd/hrd_timetable.h"
 
-#include "nigiri/routing/tripbased/dominates.h"
-#include "nigiri/routing/tripbased/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/dominates.h"
+#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
 #include "tb_preprocessing_test.h"
 

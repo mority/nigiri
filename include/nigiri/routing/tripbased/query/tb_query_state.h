@@ -1,10 +1,10 @@
 #pragma once
 
 #include "nigiri/routing/tripbased/bits.h"
-#include "nigiri/routing/tripbased/q_n.h"
-#include "nigiri/routing/tripbased/reached.h"
-#include "nigiri/routing/tripbased/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/query/q_n.h"
 #include "nigiri/types.h"
+#include "reached.h"
 
 namespace nigiri {
 struct timetable;

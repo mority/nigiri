@@ -1,4 +1,4 @@
-#include "nigiri/routing/tripbased/reached.h"
+#include "nigiri/routing/tripbased/query/reached.h"
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;

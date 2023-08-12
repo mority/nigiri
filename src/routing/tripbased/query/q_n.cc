@@ -1,6 +1,6 @@
-#include "nigiri/routing/tripbased/q_n.h"
+#include "nigiri/routing/tripbased/query/q_n.h"
 #include "nigiri/routing/tripbased/dbg.h"
-#include "nigiri/routing/tripbased/transport_segment.h"
+#include "nigiri/routing/tripbased/query/transport_segment.h"
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;

@@ -1,15 +1,16 @@
 #pragma once
 
 #include "boost/functional/hash.hpp"
-#include "nigiri/routing/tripbased/expanded_transfer.h"
-#include "nigiri/routing/tripbased/ordered_transport_id.h"
+#include "nigiri/routing/tripbased/bits.h"
+#include "nigiri/routing/tripbased/preprocessing/earliest_transports.h"
+#include "nigiri/routing/tripbased/preprocessing/expanded_transfer.h"
+#include "nigiri/routing/tripbased/preprocessing/ordered_transport_id.h"
+#include "nigiri/routing/tripbased/transfer.h"
+#include "nigiri/routing/tripbased/transfer_set.h"
 #include "nigiri/timetable.h"
 #include <filesystem>
 #include <list>
 #include <vector>
-#include "bits.h"
-#include "transfer.h"
-#include "transfer_set.h"
 
 namespace nigiri::routing::tripbased {
 
@@ -20,50 +21,6 @@ using queue_t = std::list<part_t>;
 struct expanded_transfer;
 
 struct tb_preprocessor {
-
-#ifdef TB_PREPRO_TRANSFER_REDUCTION
-  struct earliest_times {
-
-#ifdef TB_MIN_WALK
-    struct earliest_time {
-      earliest_time() : time_arr_(0U), time_walk_(0U) {}
-      earliest_time(std::uint16_t const time_arr,
-                    std::uint16_t const time_walk,
-                    bitfield const& bf)
-          : time_arr_(time_arr), time_walk_(time_walk), bf_(bf) {}
-
-      std::uint16_t time_arr_;
-      std::uint16_t time_walk_;
-      bitfield bf_;
-    };
-
-    void update_walk(location_idx_t,
-                     std::uint16_t time_arr_new,
-                     std::uint16_t time_walk_new,
-                     bitfield const& bf,
-                     bitfield* impr);
-#else
-    struct earliest_time {
-      earliest_time() : time_{0U} {}
-      earliest_time(std::int32_t const time, bitfield const& bf)
-          : time_(time), bf_(bf) {}
-
-      std::int32_t time_;
-      bitfield bf_;
-    };
-
-    void update(location_idx_t,
-                std::int32_t time_new,
-                bitfield const& bf,
-                bitfield* impr);
-#endif
-
-    void reset() noexcept { times_.clear(); }
-
-    bitfield bf_new_;
-    mutable_fws_multimap<location_idx_t, earliest_time> times_;
-  };
-#endif
 
 #ifdef TB_PREPRO_LB_PRUNING
   struct line_transfer {
@@ -104,38 +61,6 @@ struct tb_preprocessor {
                          std::size_t i,
                          footpath fp,
                          std::vector<line_transfer>& neighborhood);
-
-  struct earliest_transports {
-
-#ifdef TB_MIN_WALK
-    struct earliest_transport {
-      std::uint32_t otid_;
-      std::uint16_t walk_time_;
-      bitfield bf_;
-    };
-
-    void update_walk(stop_idx_t j,
-                     std::uint32_t otid_new,
-                     std::uint16_t walk_time_new,
-                     bitfield& bf_new);
-
-    void reset_walk(std::size_t num_stops) noexcept;
-#else
-    struct earliest_transport {
-      std::int8_t shift_amount_;
-      std::uint16_t start_time_;
-      bitfield bf_;
-    };
-
-    void update(stop_idx_t j,
-                std::int8_t shift_amount_new,
-                std::uint16_t start_time_new,
-                bitfield& bf_new);
-
-    void reset(std::size_t num_stops) noexcept;
-#endif
-    mutable_fws_multimap<std::uint32_t, earliest_transport> transports_;
-  };
 #endif
 
 #ifdef TB_MIN_WALK

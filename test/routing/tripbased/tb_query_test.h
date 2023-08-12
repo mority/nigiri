@@ -6,7 +6,7 @@
 
 #include "nigiri/routing/debug.h"
 #include "nigiri/routing/pareto_set.h"
-#include "nigiri/routing/tripbased/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
 
 namespace nigiri::test {

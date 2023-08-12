@@ -1,8 +1,8 @@
 #pragma once
 
 #include "nigiri/routing/tripbased/bits.h"
-#include "nigiri/routing/tripbased/reached.h"
 #include "nigiri/types.h"
+#include "reached.h"
 
 namespace nigiri::routing::tripbased {
 

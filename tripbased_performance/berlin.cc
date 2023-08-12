@@ -2,7 +2,7 @@
 
 #include "nigiri/loader/gtfs/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
-#include "nigiri/routing/tripbased/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
 #include "nigiri/timetable.h"
 #include "./paths.h"

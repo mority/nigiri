@@ -5,7 +5,7 @@
 #include "nigiri/loader/gtfs/load_timetable.h"
 #include "nigiri/loader/hrd/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
-#include "nigiri/routing/tripbased/tb_query_engine.h"
+#include "nigiri/routing/tripbased/query/tb_query_engine.h"
 
 #include "../../loader/hrd/hrd_timetable.h"
 

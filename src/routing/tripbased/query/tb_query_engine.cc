@@ -3,7 +3,7 @@
 #include "nigiri/routing/for_each_meta.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/tripbased/dbg.h"
-#include "nigiri/routing/tripbased/tb_query_engine.h"
+#include "nigiri/routing/tripbased/query/tb_query_engine.h"
 #include "nigiri/rt/frun.h"
 #include "nigiri/special_stations.h"
 

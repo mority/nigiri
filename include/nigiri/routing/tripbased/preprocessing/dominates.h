@@ -1,7 +1,7 @@
 #pragma once
 
 #include "nigiri/routing/tripbased/bits.h"
-#include "nigiri/routing/tripbased/ordered_transport_id.h"
+#include "ordered_transport_id.h"
 
 namespace nigiri::routing::tripbased {
 

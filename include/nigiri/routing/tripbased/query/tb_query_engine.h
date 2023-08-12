@@ -6,7 +6,7 @@
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/routing/tripbased/dbg.h"
-#include "nigiri/routing/tripbased/tb_query_state.h"
+#include "tb_query_state.h"
 
 namespace nigiri {
 struct timetable;
