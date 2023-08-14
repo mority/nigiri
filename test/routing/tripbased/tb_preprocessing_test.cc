@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <string_view>
 
 #include "gtest/gtest.h"
 
@@ -21,6 +22,7 @@ using namespace nigiri::routing;
 using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
 using namespace nigiri::test_data::hrd_timetable;
+using namespace std::string_view_literals;
 
 TEST(tripbased, get_or_create_bfi) {
   // init
@@ -54,7 +56,7 @@ TEST(build_transfer_set, no_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
   EXPECT_EQ(0, ts.n_transfers_);
 }
@@ -70,7 +72,7 @@ TEST(build_transfer_set, same_day_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const& transfers = ts.at(0U, 1U);
@@ -94,7 +96,7 @@ TEST(build_transfer_set, from_long_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const transfers = ts.at(0U, 1U);
@@ -119,7 +121,7 @@ TEST(build_transfer_set, weekday_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const transfers = ts.at(0U, 1U);
@@ -143,7 +145,7 @@ TEST(build_transfer_set, daily_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const& transfers = ts.at(0U, 1U);
@@ -168,7 +170,7 @@ TEST(build_transfer_set, earlier_stop_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
 #if defined(TB_PREPRO_LB_PRUNING) && !defined(TB_PREPRO_TRANSFER_REDUCTION)
   EXPECT_EQ(3, ts.n_transfers_);
@@ -197,7 +199,7 @@ TEST(build_transfer_set, earlier_transport_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
 #if defined(TB_PREPRO_LB_PRUNING) && !defined(TB_PREPRO_TRANSFER_REDUCTION)
   EXPECT_EQ(6, ts.n_transfers_);
@@ -225,7 +227,7 @@ TEST(build_transfer_set, uturn_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
   // transfer reduction removes a transfer of the test case on its own
 #if defined(TB_PREPRO_UTURN_REMOVAL) || defined(TB_PREPRO_TRANSFER_REDUCTION)
@@ -278,7 +280,7 @@ TEST(build_transfer_set, unnecessary_transfer0) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   EXPECT_EQ(0, ts.n_transfers_);
@@ -307,7 +309,7 @@ TEST(build_transfer_set, unnecessary_transfer1) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   EXPECT_EQ(1, ts.n_transfers_);
@@ -342,6 +344,95 @@ TEST(build_transfer_set, unnecessary_transfer1) {
   EXPECT_EQ(bitfield_idx_t{0U}, t1.bitfield_idx_);
   EXPECT_EQ(0, t1.passes_midnight_);
   EXPECT_EQ(bf_exp, tt.bitfields_[t1.get_bitfield_idx()]);
+#endif
+}
+
+TEST(build_transfer_set, min_walk) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(loader_config{0, "Etc/UTC"}, src, min_walk_files(), tt);
+  finalize(tt);
+
+  // run preprocessing
+  transfer_set ts;
+  build_transfer_set(tt, ts, 10);
+
+#if defined(TB_MIN_WALK) || !defined(TB_PREPRO_TRANSFER_REDUCTION)
+  EXPECT_EQ(3, ts.n_transfers_);
+#else
+  std::cout << "number of transfers: " << ts.n_transfers_ << std::endl;
+  EXPECT_EQ(1, ts.n_transfers_);
+#endif
+}
+
+constexpr auto const transfer_class_files = R"(
+# agency.txt
+agency_id,agency_name,agency_url,agency_timezone
+DTA,Demo Transit Authority,,Europe/London
+
+# stops.txt
+stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+A,A,,,,,
+B,B,,,,,
+C,C,,,,,
+
+# routes.txt
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R1,DB,RE 1,,,3
+R2,DB,RE 2,,,3
+
+
+# trips.txt
+route_id,service_id,trip_id,trip_headsign,block_id
+R1,DLY,R1_0,RE 1,1
+R2,DLY,R2_0,RE 2,2
+R2,DLY,R2_1,RE 2,2
+R2,DLY,R2_2,RE 2,2
+
+# stop_times.txt
+trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R1_0,00:00:00,00:00:00,A,1,0,0
+R1_0,01:00:00,01:00:00,B,2,0,0
+R2_0,01:00:00,01:04:00,B,1,0,0
+R2_0,02:04:00,03:00:00,C,2,0,0
+R2_1,01:00:00,01:09:00,B,1,0,0
+R2_1,02:09:00,03:00:00,C,2,0,0
+R2_2,01:00:00,01:16:00,B,1,0,0
+R2_2,02:16:00,03:00:00,C,2,0,0
+
+# calendar_dates.txt
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+DLY,1,1,1,1,1,1,1,20210301,20210307
+WE,0,0,0,0,0,1,1,20210301,20210307
+WD,1,1,1,1,1,0,0,20210301,20210307
+MON,1,0,0,0,0,0,0,20210301,20210307
+TUE,0,1,0,0,0,0,0,20210301,20210307
+WED,0,0,1,0,0,0,0,20210301,20210307
+THU,0,0,0,1,0,0,0,20210301,20210307
+FRI,0,0,0,0,1,0,0,20210301,20210307
+SAT,0,0,0,0,0,1,0,20210301,20210307
+SUN,0,0,0,0,0,0,1,20210301,20210307
+)"sv;
+
+TEST(build_transfer_set, transfer_class) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  register_special_stations(tt);
+  load_timetable(loader_config{0, "Etc/UTC"}, source_idx_t{0U},
+                 mem_dir::read(transfer_class_files), tt);
+  finalize(tt);
+
+  // run preprocessing
+  transfer_set ts;
+  build_transfer_set(tt, ts, 10);
+
+#ifdef TB_TRANSFER_CLASS
+  EXPECT_EQ(3, ts.n_transfers_);
+#else
+  EXPECT_EQ(1, ts.n_transfers_);
 #endif
 }
 

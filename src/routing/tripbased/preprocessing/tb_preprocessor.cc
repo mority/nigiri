@@ -21,7 +21,8 @@ bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
   });
 }
 
-void tb_preprocessor::build(transfer_set& ts) {
+void tb_preprocessor::build(transfer_set& ts,
+                            const std::uint16_t sleep_duration) {
   auto const num_transports = tt_.transport_traffic_days_.size();
   auto const num_threads = std::thread::hardware_concurrency();
 
@@ -44,7 +45,8 @@ void tb_preprocessor::build(transfer_set& ts) {
   // next transport idx for which to deduplicate bitfields
   std::uint32_t next_deduplicate = 0U;
   while (next_deduplicate != num_transports) {
-    std::this_thread::sleep_for(1000ms);
+    std::this_thread::sleep_for(
+        std::chrono::duration<std::uint16_t, std::milli>(sleep_duration));
 
     // check if next part is ready
     for (auto part = parts_.begin(); part != parts_.end();) {

@@ -554,4 +554,62 @@ loader::mem_dir early_train_files() {
        {path{kStopTimesFile}, std::string{early_train_stop_times_content}}}};
 }
 
+constexpr auto const coord_stops_file_content = std::string_view{
+    R"(stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+S0,S0,S0,,,,,
+S1,S1,S1,,,,,
+S2,S2,S2,,,,,
+S3,S3,S3,,,,,
+S4,S4,S4,,,,,
+S5,S5,S5,,,,,
+)"};
+
+constexpr auto const min_walk_transfers_file_content =
+    std::string_view{R"(from_stop_id,to_stop_id,transfer_type,min_transfer_time
+S1,S2,2,1800
+S1,S3,2,1200
+S1,S4,2,600
+)"};
+
+constexpr auto const min_walk_routes_file_content = std::string_view{
+    R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R0,DTA,R0,R0,"S0 -> S1",2
+R1,DTA,R1,R1,"S2 -> S5",2
+R2,DTA,R2,R2,"S3 -> S5",2
+R3,DTA,R3,R3,"S4 -> S5",2
+)"};
+
+constexpr auto const min_walk_trips_file_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R0,DLY,R0,R0,1
+R1,DLY,R1,R1,2
+R2,DLY,R2,R2,3
+R3,DLY,R3,R3,4
+)";
+
+constexpr auto const min_walk_stop_times_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R0,00:00:00,00:00:00,S0,0,0,0
+R0,01:00:00,01:00:00,S1,1,0,0
+R1,02:00:00,02:00:00,S2,0,0,0
+R1,03:00:00,03:00:00,S5,1,0,0
+R2,02:00:00,02:00:00,S3,0,0,0
+R2,04:00:00,04:00:00,S5,1,0,0
+R3,02:00:00,02:00:00,S4,0,0,0
+R3,05:00:00,05:00:00,S5,1,0,0
+)";
+
+loader::mem_dir min_walk_files() {
+  using std::filesystem::path;
+  return {{{path{kAgencyFile}, std::string{agency_file_content}},
+           {path{kStopFile}, std::string{coord_stops_file_content}},
+           {path{kCalenderFile}, std::string{calendar_file_content}},
+           {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+           {path{kTransfersFile}, std::string{min_walk_transfers_file_content}},
+           {path{kRoutesFile}, std::string{min_walk_routes_file_content}},
+           {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+           {path{kTripsFile}, std::string{min_walk_trips_file_content}},
+           {path{kStopTimesFile}, std::string{min_walk_stop_times_content}}}};
+}
+
 }  // namespace nigiri::routing::tripbased::test

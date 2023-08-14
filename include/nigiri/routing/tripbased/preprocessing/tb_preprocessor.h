@@ -128,7 +128,7 @@ struct tb_preprocessor {
     }
   }
 
-  void build(transfer_set& ts);
+  void build(transfer_set& ts, const std::uint16_t sleep_duration);
 
   static void build_part(tb_preprocessor* const);
 
@@ -171,11 +171,14 @@ struct tb_preprocessor {
   std::mutex parts_mutex_;
 };
 
-static inline void build_transfer_set(timetable& tt, transfer_set& ts) {
+static inline void build_transfer_set(
+    timetable& tt,
+    transfer_set& ts,
+    const std::uint16_t sleep_duration = 1000) {
   {
     auto const timer = scoped_timer("trip-based preprocessing");
     tb_preprocessor tbp(tt);
-    tbp.build(ts);
+    tbp.build(ts, sleep_duration);
   }
 }
 

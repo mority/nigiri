@@ -46,4 +46,20 @@ static inline std::string location_name(timetable const& tt,
   }
 }
 
+static inline std::string transfer_str(timetable const& tt,
+                                       transport_idx_t transport_from,
+                                       stop_idx_t stop_from,
+                                       transport_idx_t transport_to,
+                                       stop_idx_t stop_to) {
+  auto const location_idx_from =
+      stop{tt.route_location_seq_[tt.transport_route_[transport_from]]
+                                 [stop_from]}
+          .location_idx();
+  auto const location_idx_to =
+      stop{tt.route_location_seq_[tt.transport_route_[transport_to]][stop_to]}
+          .location_idx();
+  return "transfer( " + location_name(tt, location_idx_from) + " -> " +
+         location_name(tt, location_idx_to) + " )";
+}
+
 }  // namespace nigiri::routing::tripbased

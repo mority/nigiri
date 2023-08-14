@@ -263,11 +263,12 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                         // check if next stop of u is the previous stop
                         // of t
                         auto const p_u_next =
-                            stop{pp->tt_.route_location_seq_[route_u][j + 1]};
+                            stop{pp->tt_.route_location_seq_[route_u][j + 1]}
+                                .location_idx();
                         auto const p_t_prev =
-                            stop{pp->tt_.route_location_seq_[route_t][i - 1]};
-                        if (p_u_next.location_idx() ==
-                            p_t_prev.location_idx()) {
+                            stop{pp->tt_.route_location_seq_[route_t][i - 1]}
+                                .location_idx();
+                        if (p_u_next == p_t_prev) {
                           // check if u is already reachable at the
                           // previous stop of t
                           auto const tau_dep_alpha_u_next =
@@ -283,8 +284,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                                pp->tt_.event_mam(t, i - 1, event_type::kArr)
                                    .count());
                           auto const min_change_time =
-                              pp->tt_.locations_
-                                  .transfer_time_[p_t_prev.location_idx()]
+                              pp->tt_.locations_.transfer_time_[p_t_prev]
                                   .count();
                           return tau_arr_alpha_t_prev + min_change_time <=
                                  tau_dep_alpha_u_next;
@@ -351,6 +351,9 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
                       std::swap(theta, impr);
                       if (theta.any()) {
+#endif
+#ifndef NDEBUG
+                        TBDL << transfer_str(pp->tt_, t, i, u, j) << "\n";
 #endif
                         // add transfer to transfers of this transport
                         part.second[i].emplace_back(theta, u, j, sigma);
