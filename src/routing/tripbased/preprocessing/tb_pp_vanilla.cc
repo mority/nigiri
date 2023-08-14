@@ -1,4 +1,4 @@
-#include "nigiri/routing/tripbased/bits.h"
+#include "nigiri/routing/tripbased/settings.h"
 
 #ifdef TB_PREPRO_VANILLA
 

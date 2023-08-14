@@ -1,6 +1,6 @@
 #pragma once
 
-#include "nigiri/routing/tripbased/bits.h"
+#include "nigiri/routing/tripbased/settings.h"
 
 namespace nigiri::routing::tripbased::test {
 

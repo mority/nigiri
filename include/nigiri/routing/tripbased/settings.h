@@ -1,10 +1,12 @@
 #pragma once
 
-// #define TB_PREPRO_VANILLA
+#define TB_PREPRO_VANILLA
+#ifndef TB_PREPRO_VANILLA
 #define TB_PREPRO_LB_PRUNING
+#endif
 
 #define TB_PREPRO_UTURN_REMOVAL
-#define TB_PREPRO_TRANSFER_REDUCTION
+// #define TB_PREPRO_TRANSFER_REDUCTION
 
 // #define TB_MIN_WALK
 

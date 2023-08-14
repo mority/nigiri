@@ -1,6 +1,6 @@
 #pragma once
 
-#include "nigiri/routing/tripbased/bits.h"
+#include "nigiri/routing/tripbased/settings.h"
 #include "nigiri/types.h"
 
 #define TRANSFERRED_FROM_NULL std::numeric_limits<std::uint32_t>::max()

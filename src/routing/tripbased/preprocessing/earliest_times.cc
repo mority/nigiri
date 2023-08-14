@@ -1,4 +1,5 @@
 #include "nigiri/routing/tripbased/preprocessing/earliest_times.h"
+#include "nigiri/routing/tripbased/settings.h"
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
 

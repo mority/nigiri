@@ -1,8 +1,8 @@
 #pragma once
 
 #include "nigiri/routing/pareto_set.h"
-#include "nigiri/routing/tripbased/bits.h"
 #include "nigiri/routing/tripbased/query/transport_segment.h"
+#include "nigiri/routing/tripbased/settings.h"
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
 

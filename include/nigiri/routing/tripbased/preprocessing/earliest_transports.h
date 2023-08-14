@@ -1,5 +1,9 @@
 #pragma once
 
+#include "nigiri/routing/tripbased/settings.h"
+
+#ifdef TB_PREPRO_LB_PRUNING
+
 #include "nigiri/types.h"
 
 namespace nigiri::routing::tripbased {
@@ -37,3 +41,5 @@ struct earliest_transports {
 };
 
 }  // namespace nigiri::routing::tripbased
+
+#endif

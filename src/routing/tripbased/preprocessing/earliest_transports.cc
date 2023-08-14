@@ -1,4 +1,11 @@
+#include "nigiri/routing/tripbased/settings.h"
+
+#ifdef TB_PREPRO_LB_PRUNING
 #include "nigiri/routing/tripbased/preprocessing/earliest_transports.h"
+
+#ifdef TB_MIN_WALK
+#include "nigiri/routing/tripbased/preprocessing/dominates.h"
+#endif
 
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
@@ -56,9 +63,11 @@ void earliest_transports::update(stop_idx_t j,
 void earliest_transports::reset(std::size_t num_stops) noexcept {
   transports_.clear();
   for (stop_idx_t j = 0; j < num_stops; ++j) {
-    transports_[j].emplace_back(std::numeric_limits<int>::max(),
+    transports_[j].emplace_back(std::numeric_limits<std::int8_t>::max(),
                                 std::numeric_limits<std::uint16_t>::max(),
                                 bitfield::max());
   }
 }
+#endif
+
 #endif

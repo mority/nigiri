@@ -1,10 +1,10 @@
 #pragma once
 
 #include "boost/functional/hash.hpp"
-#include "nigiri/routing/tripbased/bits.h"
 #include "nigiri/routing/tripbased/preprocessing/earliest_transports.h"
 #include "nigiri/routing/tripbased/preprocessing/expanded_transfer.h"
 #include "nigiri/routing/tripbased/preprocessing/ordered_transport_id.h"
+#include "nigiri/routing/tripbased/settings.h"
 #include "nigiri/routing/tripbased/transfer.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
 #include "nigiri/timetable.h"
@@ -77,7 +77,7 @@ struct tb_preprocessor {
 #endif
 
   //  preprocessor() = delete;
-  explicit tb_preprocessor(timetable& tt, std::int32_t transfer_time_max = 1400)
+  explicit tb_preprocessor(timetable& tt, std::int32_t transfer_time_max = 1440)
       : tt_(tt), transfer_time_max_(transfer_time_max) {
     {
       auto const timer = scoped_timer("trip-based preprocessing: init");
