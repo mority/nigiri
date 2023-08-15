@@ -81,6 +81,74 @@ void earliest_times::update_walk(location_idx_t location,
 
 #else
 
+#ifdef TB_TRANSFER_CLASS
+void earliest_times::update_class(location_idx_t location,
+                                  std::uint16_t time_new,
+                                  std::int8_t transfer_class_new,
+                                  bitfield const& bf,
+                                  bitfield* impr) {
+  // bitfield is manipulated during update process
+  bf_new_ = bf;
+  // position of entry with an equal time
+  std::optional<std::uint32_t> same_spot = std::nullopt;
+  // position of entry with no active days
+  std::optional<std::uint32_t> overwrite_spot = std::nullopt;
+  // compare to existing entries of this location
+  for (auto i{0U}; i != times_[location].size(); ++i) {
+    if (bf_new_.none()) {
+      // all bits of new entry were set to zero, new entry does not improve
+      // upon any times
+      return;
+    }
+    if (times_[location][i].bf_.any()) {
+      auto const dom =
+          dominates(time_new, transfer_class_new, times_[location][i].time_,
+                    times_[location][i].transfer_class_);
+      if (dom < 0) {  // new tuple dominates
+        times_[location][i].bf_ &= ~bf_new_;
+      } else if (0 < dom) {  // existing tuple dominates
+        bf_new_ &= ~times_[location][i].bf_;
+      } else {
+        if (!(time_new < times_[location][i].time_ ||
+              transfer_class_new < times_[location][i].transfer_class_)) {
+          bf_new_ &= ~times_[location][i].bf_;
+        }
+        if (time_new == times_[location][i].time_ &&
+            transfer_class_new == times_[location][i].transfer_class_) {
+          same_spot = i;
+        }
+        if (times_[location][i].bf_.none()) {
+          overwrite_spot = i;
+        }
+      }
+    }
+  }
+  // after comparison to existing entries
+  if (bf_new_.any()) {
+    // new entry has at least one active day after comparison
+    if (same_spot.has_value()) {
+      // entry with same values already exists -> add active days of new time
+      // to it
+      times_[location][same_spot.value()].bf_ |= bf_new_;
+    } else if (overwrite_spot.has_value()) {
+      // overwrite spot was found -> use for new entry
+      times_[location][overwrite_spot.value()].time_ = time_new;
+      times_[location][overwrite_spot.value()].transfer_class_ =
+          transfer_class_new;
+      times_[location][overwrite_spot.value()].bf_ = bf_new_;
+    } else {
+      // add new entry
+      times_[location].emplace_back(time_new, transfer_class_new, bf_new_);
+    }
+    // add improvements to impr
+    if (impr != nullptr) {
+      *impr |= bf_new_;
+    }
+  }
+}
+
+#else
+
 void earliest_times::update(location_idx_t location,
                             std::uint16_t time_new,
                             bitfield const& bf,
@@ -140,6 +208,7 @@ void earliest_times::update(location_idx_t location,
     }
   }
 }
+#endif
 
 #endif
 

@@ -16,6 +16,10 @@
 #include "nigiri/routing/tripbased/preprocessing/dominates.h"
 #endif
 
+#ifdef TB_TRANSFER_CLASS
+#include "nigiri/routing/tripbased/transfer_class.h"
+#endif
+
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 using namespace std::chrono_literals;
@@ -114,6 +118,17 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
         ets_ch_.update_walk(fp.target(), tau_arr_t_i + fp.duration_,
                             fp.duration_, beta_t, nullptr);
       }
+#elifdef TB_TRANSFER_CLASS
+      ets_arr_.update_class(p_t_i, tau_arr_t_i, 0, beta_t, nullptr);
+      ets_ch_.update_class(
+          p_t_i, tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
+          0, beta_t, nullptr);
+      for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
+        ets_arr_.update_class(fp.target(), tau_arr_t_i + fp.duration_, 0,
+                              beta_t, nullptr);
+        ets_ch_.update_class(fp.target(), tau_arr_t_i + fp.duration_, 0, beta_t,
+                             nullptr);
+      }
 #else
       ets_arr_.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
       ets_ch_.update(
@@ -130,13 +145,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
       auto handle_fp = [&sigma_t, &pp, &t, &i, &route_t, &alpha,
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-
                         &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr,
 #ifdef TB_MIN_WALK
                         &p_t_i,
 #endif
 #endif
-
                         &omega, &theta, &part, &beta_t](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
@@ -248,14 +261,27 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                   // check for match
                   if (theta.any()) {
 
-                    // remove days that are covered by this transfer from
-                    // omega
-                    omega &= ~theta;
+#ifdef TB_TRANSFER_CLASS
+                    auto const kappa =
+                        transfer_class(tau_dep_alpha_u_j - tau_q);
+                    if (kappa == 0U) {
+#endif
+                      // remove days that are covered by this transfer from
+                      // omega
+                      omega &= ~theta;
+#ifdef TB_TRANSFER_CLASS
+                    }
+#endif
 
 #ifdef TB_PREPRO_UTURN_REMOVAL
                     auto const check_uturn = [&j, &route_u, &i, &route_t,
                                               &tau_dep_alpha_u_j, &u, &alpha,
-                                              &t, &pp]() {
+                                              &t, &pp
+#ifdef TB_TRANSFER_CLASS
+                                              ,
+                                              &kappa
+#endif
+                    ]() {
                       // check if next stop for u and previous stop for
                       // t exists
                       if (j + 1 < pp->tt_.route_location_seq_[route_u].size() &&
@@ -271,23 +297,35 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                         if (p_u_next == p_t_prev) {
                           // check if u is already reachable at the
                           // previous stop of t
-                          auto const tau_dep_alpha_u_next =
+                          std::uint16_t const tau_dep_alpha_u_next =
                               tau_dep_alpha_u_j +
-                              (pp->tt_.event_mam(u, j + 1, event_type::kDep)
-                                   .count() -
-                               pp->tt_.event_mam(u, j, event_type::kDep)
-                                   .count());
-                          auto const tau_arr_alpha_t_prev =
+                              static_cast<std::uint16_t>(
+                                  pp->tt_.event_mam(u, j + 1, event_type::kDep)
+                                      .count() -
+                                  pp->tt_.event_mam(u, j, event_type::kDep)
+                                      .count());
+                          std::uint16_t const tau_arr_alpha_t_prev =
                               alpha -
-                              (pp->tt_.event_mam(t, i, event_type::kArr)
-                                   .count() -
-                               pp->tt_.event_mam(t, i - 1, event_type::kArr)
-                                   .count());
+                              static_cast<std::uint16_t>(
+                                  pp->tt_.event_mam(t, i, event_type::kArr)
+                                      .count() -
+                                  pp->tt_.event_mam(t, i - 1, event_type::kArr)
+                                      .count());
                           auto const min_change_time =
-                              pp->tt_.locations_.transfer_time_[p_t_prev]
-                                  .count();
-                          return tau_arr_alpha_t_prev + min_change_time <=
-                                 tau_dep_alpha_u_next;
+                              static_cast<std::uint16_t>(
+                                  pp->tt_.locations_.transfer_time_[p_t_prev]
+                                      .count());
+                          if (tau_arr_alpha_t_prev + min_change_time <=
+                              tau_dep_alpha_u_next) {
+#ifdef TB_TRANSFER_CLASS
+                            auto const kappa_alt = transfer_class(
+                                tau_dep_alpha_u_next - tau_arr_alpha_t_prev +
+                                min_change_time);
+                            return kappa_alt <= kappa;
+#else
+                            return true;
+#endif
+                          }
                         }
                       }
                       return false;
@@ -321,6 +359,15 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                                 pp->tt_.locations_.transfer_time_[p_u_l]
                                     .count(),
                             walk_time_l, theta, &impr);
+#elifdef TB_TRANSFER_CLASS
+                        ets_arr_.update_class(p_u_l, tau_arr_t_u_l, kappa,
+                                              theta, &impr);
+                        ets_ch_.update_class(
+                            p_u_l,
+                            tau_arr_t_u_l +
+                                pp->tt_.locations_.transfer_time_[p_u_l]
+                                    .count(),
+                            kappa, theta, &impr);
 #else
                         ets_arr_.update(p_u_l, tau_arr_t_u_l, theta, &impr);
                         ets_ch_.update(
@@ -342,6 +389,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                                                theta, &impr);
                           ets_ch_.update_walk(fp_r.target(), eta, walk_time_r,
                                               theta, &impr);
+#elifdef TB_TRANSFER_CLASS
+                          ets_arr_.update_class(fp_r.target(), eta, kappa,
+                                                theta, &impr);
+                          ets_ch_.update_class(fp_r.target(), eta, kappa, theta,
+                                               &impr);
 #else
                           ets_arr_.update(fp_r.target(), eta, theta, &impr);
                           ets_ch_.update(fp_r.target(), eta, theta, &impr);

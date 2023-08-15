@@ -26,6 +26,20 @@ struct earliest_times {
                    bitfield const& bf,
                    bitfield* impr);
 #else
+
+#ifdef TB_TRANSFER_CLASS
+  struct earliest_time {
+    std::uint16_t time_;
+    std::int8_t transfer_class_;
+    bitfield bf_;
+  };
+
+  void update_class(location_idx_t,
+                    std::uint16_t time_new,
+                    std::int8_t transfer_class_new,
+                    bitfield const& bf,
+                    bitfield* impr);
+#else
   struct earliest_time {
     earliest_time() : time_{0U} {}
     earliest_time(std::uint16_t const time, bitfield const& bf)
@@ -39,6 +53,8 @@ struct earliest_times {
               std::uint16_t time_new,
               bitfield const& bf,
               bitfield* impr);
+
+#endif
 #endif
 
   void reset() noexcept { times_.clear(); }
