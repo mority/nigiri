@@ -612,4 +612,51 @@ loader::mem_dir min_walk_files() {
            {path{kStopTimesFile}, std::string{min_walk_stop_times_content}}}};
 }
 
+constexpr auto const transfer_class_stops_content =
+    R"(stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+A,A,A,,,,
+B,B,B,,,,
+C,C,C,,,,
+)";
+
+constexpr auto const transfer_class_routes_content =
+    R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R1,DTA,R1,R1,"A -> B",2
+R2,DTA,R2,R2,"B -> C",2
+)";
+
+constexpr auto const transfer_class_trips_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R1,DLY,R1_0,R1_0,1
+R2,DLY,R2_0,R2_0,2
+R2,DLY,R2_1,R2_1,3
+R2,DLY,R2_2,R2_2,4
+)";
+
+constexpr auto const transfer_class_stop_times_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R1_0,00:00:00,00:00:00,A,0,0,0
+R1_0,01:00:00,01:00:00,B,1,0,0
+R2_0,01:00:00,01:04:00,B,0,0,0
+R2_0,02:04:00,03:00:00,C,1,0,0
+R2_1,01:00:00,01:09:00,B,0,0,0
+R2_1,02:09:00,03:00:00,C,1,0,0
+R2_2,01:00:00,01:16:00,B,0,0,0
+R2_2,02:16:00,03:00:00,C,1,0,0
+)";
+
+loader::mem_dir transfer_class_files() {
+  using std::filesystem::path;
+  return {
+      {{path{kAgencyFile}, std::string{agency_file_content}},
+       {path{kStopFile}, std::string{transfer_class_stops_content}},
+       {path{kCalenderFile}, std::string{calendar_file_content}},
+       {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+       {path{kTransfersFile}, std::string{transfers_file_content}},
+       {path{kRoutesFile}, std::string{transfer_class_routes_content}},
+       {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+       {path{kTripsFile}, std::string{transfer_class_trips_content}},
+       {path{kStopTimesFile}, std::string{transfer_class_stop_times_content}}}};
+}
+
 }  // namespace nigiri::routing::tripbased::test

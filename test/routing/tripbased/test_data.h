@@ -32,5 +32,6 @@ nigiri::loader::mem_dir enqueue_files();
 nigiri::loader::mem_dir footpath_files();
 nigiri::loader::mem_dir early_train_files();
 nigiri::loader::mem_dir min_walk_files();
+nigiri::loader::mem_dir transfer_class_files();
 
 }  // namespace nigiri::routing::tripbased::test
