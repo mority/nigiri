@@ -7,6 +7,9 @@
 
 #include "nigiri/logging.h"
 #include "nigiri/routing/tripbased/dbg.h"
+#ifdef TB_TRANSFER_CLASS
+#include "nigiri/routing/tripbased/transfer_class.h"
+#endif
 #include "nigiri/routing/tripbased/preprocessing/earliest_times.h"
 #include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
 #include "nigiri/stop.h"
@@ -98,6 +101,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
         // initial reset of earliest transport
 #ifdef TB_MIN_WALK
         et.reset_walk(stop_seq_to.size());
+#elifdef TB_TRANSFER_CLASS
+        et.reset_class(stop_seq_to.size());
 #else
         et.reset(stop_seq_to.size());
 #endif
@@ -110,6 +115,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
             stop_seq_to = pp->tt_.route_location_seq_[route_to_prev];
 #ifdef TB_MIN_WALK
             et.reset_walk(stop_seq_to.size());
+#elifdef TB_TRANSFER_CLASS
+            et.reset_class(stop_seq_to.size());
 #else
             et.reset(stop_seq_to.size());
 #endif
@@ -124,11 +131,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
           auto const tau_arr_t_i =
               pp->tt_.event_mam(t, neighbor.stop_idx_from_, event_type::kArr);
           auto const alpha = tau_arr_t_i.mam();
-          std::int8_t const sigma_t =
-              static_cast<std::int8_t>(tau_arr_t_i.days());
-          auto const tau_q = alpha + neighbor.footpath_length_.count();
+          auto const sigma_t = static_cast<std::int8_t>(tau_arr_t_i.days());
+          auto const tau_q = static_cast<std::uint16_t>(
+              alpha + neighbor.footpath_length_.count());
           auto const tau_q_tod = tau_q % 1400;
-          std::int8_t sigma_fpw = static_cast<std::int8_t>(tau_q / 1440);
+          auto sigma_fpw = static_cast<std::int8_t>(tau_q / 1440);
 
 #ifndef NDEBUG
           TBDL << "Transport " << t
@@ -159,7 +166,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
             // departure time of current transport in relation to time
             // alpha
-            auto const tau_dep_alpha_u_j = sigma_fpw * 1440 + tau_dep_u_j->mam_;
+            auto const tau_dep_alpha_u_j = static_cast<std::uint16_t>(
+                sigma_fpw * 1440 + tau_dep_u_j->mam_);
 
             // check if max transfer time is exceeded
             if (tau_dep_alpha_u_j - alpha > pp->transfer_time_max_) {
@@ -203,10 +211,23 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
             // check for match
             if (theta.any()) {
-              // remove days that are covered by this transport from omega
-              omega &= ~theta;
-
+#ifdef TB_TRANSFER_CLASS
+              auto const kappa = transfer_class(tau_dep_alpha_u_j - tau_q);
+              if (kappa == 0) {
+#endif
+                // remove days that are covered by this transport from omega
+                omega &= ~theta;
+#ifdef TB_TRANSFER_CLASS
+              }
+#endif
               // update earliest transport data structure
+
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
+              auto const otid =
+                  compute_otid(sigma_t + sigma_fpw - sigma_u,
+                               pp->tt_.event_mam(u, 0, event_type::kDep).mam_);
+#endif
+
 #ifdef TB_MIN_WALK
               auto const p_t_i =
                   stop{stop_seq_from[neighbor.stop_idx_from_]}.location_idx();
@@ -215,11 +236,9 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
               // compute walking time between the stops
               auto const walk_time = pp->walk_time(p_t_i, p_u_j);
 
-              et.update_walk(
-                  neighbor.stop_idx_to_,
-                  compute_otid(sigma_t + sigma_fpw - sigma_u,
-                               pp->tt_.event_mam(u, 0, event_type::kDep).mam_),
-                  walk_time, theta);
+              et.update_walk(neighbor.stop_idx_to_, otid, walk_time, theta);
+#elifdef TB_TRANSFER_CLASS
+              et.update_class(neighbor.stop_idx_to_, otid, kappa, theta);
 #else
               et.update(neighbor.stop_idx_to_, sigma_t + sigma_fpw - sigma_u,
                         pp->tt_.event_mam(u, 0, event_type::kDep).mam_, theta);
@@ -239,10 +258,10 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                 // add earliest transport entry
 #ifdef TB_MIN_WALK
                 et.transports_[neighbor.stop_idx_to_].emplace_back(
-                    compute_otid(
-                        sigma_t + sigma_fpw - sigma_u,
-                        pp->tt_.event_mam(u, 0, event_type::kDep).mam_),
-                    walk_time, theta);
+                    otid, walk_time, theta);
+#elifdef TB_TRANSFER_CLASS
+                et.transports_[neighbor.stop_idx_to_].emplace_back(otid, kappa,
+                                                                   theta);
 #else
                 et.transports_[neighbor.stop_idx_to_].emplace_back(
                     sigma_t + sigma_fpw - sigma_u,
@@ -253,12 +272,9 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                      j_prime < stop_seq_to.size(); ++j_prime) {
                   theta_prime = theta;
 #ifdef TB_MIN_WALK
-                  et.update_walk(
-                      j_prime,
-                      compute_otid(
-                          sigma_t + sigma_fpw - sigma_u,
-                          pp->tt_.event_mam(u, 0, event_type::kDep).mam_),
-                      walk_time, theta_prime);
+                  et.update_walk(j_prime, otid, walk_time, theta_prime);
+#elifdef TB_TRANSFER_CLASS
+                  et.update_class(j_prime, otid, kappa, theta_prime);
 #else
                   et.update(j_prime, sigma_t + sigma_fpw - sigma_u,
                             pp->tt_.event_mam(u, 0, event_type::kDep).mam_,
@@ -266,11 +282,11 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 #endif
                   if (theta_prime.any()) {
 #ifdef TB_MIN_WALK
-                    et.transports_[j_prime].emplace_back(
-                        compute_otid(
-                            sigma_t + sigma_fpw - sigma_u,
-                            pp->tt_.event_mam(u, 0, event_type::kDep).mam_),
-                        walk_time, theta_prime);
+                    et.transports_[j_prime].emplace_back(otid, walk_time,
+                                                         theta_prime);
+#elifdef TB_TRANSFER_CLASS
+                    et.transports_[j_prime].emplace_back(otid, kappa,
+                                                         theta_prime);
 #else
                     et.transports_[j_prime].emplace_back(
                         sigma_t + sigma_fpw - sigma_u,
@@ -334,6 +350,18 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
             ets_ch.update_walk(fp.target(), tau_arr_t_i + fp.duration_,
                                fp.duration_, beta_t, nullptr);
           }
+#elifdef TB_TRANSFER_CLASS
+          ets_arr.update_class(p_t_i, tau_arr_t_i, 0, beta_t, nullptr);
+          ets_ch.update_class(
+              p_t_i,
+              tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(), 0,
+              beta_t, nullptr);
+          for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
+            ets_arr.update_class(fp.target(), tau_arr_t_i + fp.duration_, 0,
+                                 beta_t, nullptr);
+            ets_ch.update_class(fp.target(), tau_arr_t_i + fp.duration_, 0,
+                                beta_t, nullptr);
+          }
 #else
           ets_arr.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
           ets_ch.update(
@@ -366,7 +394,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                 tau_arr_t_i + (tau_dep_alpha_u_j - alpha);
             for (stop_idx_t l = transfer->stop_idx_to_ + 1U;
                  l != pp->tt_.route_location_seq_[route_u].size(); ++l) {
-              std::uint16_t tau_arr_t_u_l =
+              std::uint16_t const tau_arr_t_u_l =
                   tau_dep_t_u_j +
                   static_cast<std::uint16_t>(
                       pp->tt_
@@ -378,14 +406,16 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
               // locations after p_u_j
               auto const p_u_l =
                   stop{pp->tt_.route_location_seq_[route_u][l]}.location_idx();
-#ifdef TB_MIN_WALK
 
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
               // target location of the transfer
               auto const p_u_j =
                   stop{pp->tt_.route_location_seq_[route_u]
                                                   [transfer->stop_idx_to_]}
                       .location_idx();
+#endif
 
+#ifdef TB_MIN_WALK
               std::uint16_t walk_time_l{0U};
               if (p_t_i != p_u_j) {
                 // changed stations during transfer -> find footpath of transfer
@@ -404,6 +434,29 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                   tau_arr_t_u_l +
                       pp->tt_.locations_.transfer_time_[p_u_l].count(),
                   walk_time_l, theta, &impr);
+#elifdef TB_TRANSFER_CLASS
+              std::uint16_t walk_or_change = 0;
+              if (p_t_i == p_u_j) {
+                walk_or_change =
+                    pp->tt_.locations_.transfer_time_[p_t_i].count();
+              } else {
+                for (auto const& fp :
+                     pp->tt_.locations_.footpaths_out_[p_t_i]) {
+                  if (fp.target() == p_u_j) {
+                    walk_or_change = fp.duration_;
+                  }
+                }
+              }
+
+              auto const kappa =
+                  transfer_class(tau_dep_alpha_u_j - (alpha + walk_or_change));
+
+              ets_arr.update_class(p_u_l, tau_arr_t_u_l, kappa, theta, &impr);
+              ets_ch.update_class(
+                  p_u_l,
+                  tau_arr_t_u_l +
+                      pp->tt_.locations_.transfer_time_[p_u_l].count(),
+                  kappa, theta, &impr);
 #else
               ets_arr.update(p_u_l, tau_arr_t_u_l, theta, &impr);
               ets_ch.update(
@@ -421,6 +474,9 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                                     &impr);
                 ets_ch.update_walk(fp_r.target(), eta, walk_time_r, theta,
                                    &impr);
+#elifdef TB_TRANSFER_CLASS
+                ets_arr.update_class(fp_r.target(), eta, kappa, theta, &impr);
+                ets_ch.update_class(fp_r.target(), eta, kappa, theta, &impr);
 #else
                 ets_arr.update(fp_r.target(), eta, theta, &impr);
                 ets_ch.update(fp_r.target(), eta, theta, &impr);

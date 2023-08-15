@@ -1,7 +1,7 @@
 #pragma once
 
 // preprocessing options
-// #define TB_PREPRO_LB_PRUNING
+#define TB_PREPRO_LB_PRUNING
 #ifndef TB_PREPRO_LB_PRUNING
 #define TB_PREPRO_VANILLA
 #endif

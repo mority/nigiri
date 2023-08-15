@@ -76,7 +76,6 @@ struct tb_preprocessor {
   }
 #endif
 
-  //  preprocessor() = delete;
   explicit tb_preprocessor(timetable& tt, std::int32_t transfer_time_max = 1440)
       : tt_(tt), transfer_time_max_(transfer_time_max) {
     {

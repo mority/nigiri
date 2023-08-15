@@ -2,8 +2,9 @@
 
 #ifdef TB_PREPRO_LB_PRUNING
 #include "nigiri/routing/tripbased/preprocessing/earliest_transports.h"
+#include "nigiri/routing/tripbased/preprocessing/ordered_transport_id.h"
 
-#ifdef TB_MIN_WALK
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
 #include "nigiri/routing/tripbased/preprocessing/dominates.h"
 #endif
 
@@ -37,6 +38,35 @@ void earliest_transports::reset_walk(std::size_t num_stops) noexcept {
   for (stop_idx_t j = 0; j < num_stops; ++j) {
     transports_[j].emplace_back(
         max_otid(), std::numeric_limits<std::uint16_t>::max(), bitfield::max());
+  }
+}
+#elifdef TB_TRANSFER_CLASS
+void earliest_transports::update_class(stop_idx_t j,
+                                       std::uint32_t otid_new,
+                                       std::int8_t transfer_class_new,
+                                       bitfield& bf_new) {
+  for (auto& entry : transports_[j]) {
+    if (bf_new.none()) {
+      break;
+    }
+    if (entry.bf_.any()) {
+      auto const dom = dominates(otid_new, transfer_class_new, entry.otid_,
+                                 entry.transfer_class_);
+      if (dom < 0) {
+        entry.bf_ &= ~bf_new;
+      } else if (!(otid_new < entry.otid_ ||
+                   transfer_class_new < entry.transfer_class_)) {
+        bf_new &= ~entry.bf_;
+      }
+    }
+  }
+}
+
+void earliest_transports::reset_class(std::size_t num_stops) noexcept {
+  transports_.clear();
+  for (stop_idx_t j = 0; j < num_stops; ++j) {
+    transports_[j].emplace_back(
+        max_otid(), std::numeric_limits<std::int8_t>::max(), bitfield::max());
   }
 }
 #else

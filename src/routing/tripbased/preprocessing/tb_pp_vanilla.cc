@@ -276,12 +276,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 #ifdef TB_PREPRO_UTURN_REMOVAL
                     auto const check_uturn = [&j, &route_u, &i, &route_t,
                                               &tau_dep_alpha_u_j, &u, &alpha,
-                                              &t, &pp
-#ifdef TB_TRANSFER_CLASS
-                                              ,
-                                              &kappa
-#endif
-                    ]() {
+                                              &t, &pp]() {
                       // check if next stop for u and previous stop for
                       // t exists
                       if (j + 1 < pp->tt_.route_location_seq_[route_u].size() &&
@@ -315,17 +310,8 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
                               static_cast<std::uint16_t>(
                                   pp->tt_.locations_.transfer_time_[p_t_prev]
                                       .count());
-                          if (tau_arr_alpha_t_prev + min_change_time <=
-                              tau_dep_alpha_u_next) {
-#ifdef TB_TRANSFER_CLASS
-                            auto const kappa_alt = transfer_class(
-                                tau_dep_alpha_u_next - tau_arr_alpha_t_prev +
-                                min_change_time);
-                            return kappa_alt <= kappa;
-#else
-                            return true;
-#endif
-                          }
+                          return tau_arr_alpha_t_prev + min_change_time <=
+                                 tau_dep_alpha_u_next;
                         }
                       }
                       return false;

@@ -6,7 +6,6 @@
 namespace nigiri::routing::tripbased {
 
 #ifdef TB_MIN_WALK
-
 #ifdef TB_PREPRO_LB_PRUNING
 static inline std::int32_t dominates(std::uint32_t otid1,
                                      std::int32_t tw1,
@@ -31,7 +30,6 @@ static inline std::int32_t dominates(std::int32_t ta1,
   return sgna + sgnw;
 }
 #endif
-
 #endif
 
 #ifdef TB_TRANSFER_CLASS
@@ -45,6 +43,19 @@ static inline std::int32_t dominates(std::int32_t tau1,
   auto const sgn_kappa = (0 < dif_kappa) - (dif_kappa < 0);
   return sgn_tau + sgn_kappa;
 }
+#ifdef TB_PREPRO_LB_PRUNING
+static inline std::int32_t dominates(std::uint32_t otid1,
+                                     std::int8_t kappa1,
+                                     std::uint32_t otid2,
+                                     std::int8_t kappa2) {
+  auto const difa =
+      static_cast<std::int64_t>(otid1) - static_cast<std::int64_t>(otid2);
+  auto const sgna = (0 < difa) - (difa < 0);
+  auto const difk = kappa1 - kappa2;
+  auto const sgnk = (0 < difk) - (difk < 0);
+  return sgna + sgnk;
+}
+#endif
 #endif
 
 }  // namespace nigiri::routing::tripbased

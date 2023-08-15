@@ -23,6 +23,19 @@ struct earliest_transports {
                    bitfield& bf_new);
 
   void reset_walk(std::size_t num_stops) noexcept;
+#elifdef TB_TRANSFER_CLASS
+  struct earliest_transport {
+    std::uint32_t otid_;
+    std::int8_t transfer_class_;
+    bitfield bf_;
+  };
+
+  void update_class(stop_idx_t j,
+                    std::uint32_t otid_new,
+                    std::int8_t transfer_class_new,
+                    bitfield& bf_new);
+
+  void reset_class(std::size_t num_stops) noexcept;
 #else
   struct earliest_transport {
     std::int8_t shift_amount_;

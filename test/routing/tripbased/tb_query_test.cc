@@ -34,7 +34,7 @@ TEST(tb_query, enqueue) {
 
   // init preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
 
   // init query
   day_idx_t const base{5U};

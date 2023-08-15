@@ -17,7 +17,7 @@ pareto_set<routing::journey> tripbased_search(timetable& tt, routing::query q) {
 
   static auto search_state = routing::search_state{};
   routing::tripbased::transfer_set ts;
-  build_transfer_set(tt, ts);
+  build_transfer_set(tt, ts, 10);
   auto algo_state = algo_state_t{tt, ts};
 
   return *(routing::search<direction::kForward, algo_t>{
