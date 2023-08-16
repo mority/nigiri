@@ -9,6 +9,49 @@ void reached::reset() {
   }
 }
 
+#ifdef TB_MIN_WALK
+
+void reached::update(transport_segment_idx_t const transport_segment_idx,
+                     std::uint16_t const stop_idx,
+                     std::uint16_t const n_transfers,
+                     std::uint16_t const time_walk) {
+  data_[tt_.transport_route_[transport_idx(transport_segment_idx)].v_].add(
+      reached_entry{transport_segment_idx, stop_idx, n_transfers, time_walk});
+}
+
+std::uint16_t reached::stop(transport_segment_idx_t const transport_segment_idx,
+                            std::uint16_t const n_transfers,
+                            std::uint16_t const time_walk) {
+  auto const route_idx =
+      tt_.transport_route_[transport_idx(transport_segment_idx)];
+  auto stop_idx_min =
+      static_cast<uint16_t>(tt_.route_location_seq_[route_idx].size() - 1);
+  for (auto const& re : data_[route_idx.v_]) {
+    if (re.n_transfers_ <= n_transfers &&
+        re.transport_segment_idx_ <= transport_segment_idx &&
+        re.time_walk_ <= time_walk && re.stop_idx_ < stop_idx_min) {
+      stop_idx_min = re.stop_idx_;
+    }
+  }
+  return stop_idx_min;
+}
+
+std::uint16_t reached::walk(transport_segment_idx_t const transport_segment_idx,
+                            std::uint16_t const n_transfers,
+                            std::uint16_t const stop_idx) {
+  auto const route_idx =
+      tt_.transport_route_[transport_idx(transport_segment_idx)];
+  auto time_walk_min = std::numeric_limits<std::uint16_t>::max();
+  for (auto const& re : data_[route_idx.v_]) {
+    if (re.n_transfers_ <= n_transfers &&
+        re.transport_segment_idx_ <= transport_segment_idx &&
+        re.stop_idx_ <= stop_idx && re.time_walk_ < time_walk_min) {
+      time_walk_min = re.time_walk_;
+    }
+  }
+
+#else
+
 void reached::update(transport_segment_idx_t const transport_segment_idx,
                      std::uint16_t const stop_idx,
                      std::uint16_t const n_transfers) {
@@ -37,3 +80,5 @@ std::uint16_t reached::query(
 
   return stop_idx_min;
 }
+
+#endif

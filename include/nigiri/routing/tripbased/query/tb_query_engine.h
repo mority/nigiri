@@ -8,6 +8,10 @@
 #include "nigiri/routing/tripbased/dbg.h"
 #include "tb_query_state.h"
 
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
+#include "journey_more_criteria.h"
+#endif
+
 namespace nigiri {
 struct timetable;
 }  // namespace nigiri
@@ -61,7 +65,11 @@ struct tb_query_engine {
   void execute(unixtime_t const start_time,
                std::uint8_t const max_transfers,
                unixtime_t const worst_time_at_dest,
+#ifdef TB_MIN_WALK
+               pareto_set<journey_min_walk>& results);
+#else
                pareto_set<journey>& results);
+#endif
 
   void reconstruct(query const& q, journey& j) const;
 
@@ -74,7 +82,11 @@ private:
 
   void handle_segment(unixtime_t const start_time,
                       unixtime_t const worst_time_at_dest,
+#ifdef TB_MIN_WALK
+                      pareto_set<journey_min_walk>& results,
+#else
                       pareto_set<journey>& results,
+#endif
                       std::uint8_t const n,
                       queue_idx_t const q_cur);
 

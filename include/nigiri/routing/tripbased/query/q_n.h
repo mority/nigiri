@@ -14,11 +14,24 @@ struct q_n {
 
   void reset(day_idx_t new_base);
 
+#ifdef TB_MIN_WALK
+
+  void enqueue_walk(std::uint16_t const transport_day,
+                    transport_idx_t const,
+                    std::uint16_t const stop_idx,
+                    std::uint16_t const n_transfers,
+                    std::uint16_t const time_walk,
+                    std::uint32_t const transferred_from);
+
+#else
+
   void enqueue(std::uint16_t const transport_day,
                transport_idx_t const,
                std::uint16_t const stop_idx,
                std::uint16_t const n_transfers,
                std::uint32_t const transferred_from);
+
+#endif
 
   auto& operator[](queue_idx_t pos) { return segments_[pos]; }
 
