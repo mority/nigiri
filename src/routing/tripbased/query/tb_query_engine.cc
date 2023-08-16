@@ -104,7 +104,11 @@ tb_query_engine::tb_query_engine(timetable const& tt,
 void tb_query_engine::execute(unixtime_t const start_time,
                               std::uint8_t const max_transfers,
                               unixtime_t const worst_time_at_dest,
+#ifdef TB_MIN_WALK
+                              pareto_set<journey_min_walk>& results) {
+#else
                               pareto_set<journey>& results) {
+#endif
 #ifndef NDEBUG
   TBDL << "Executing with start_time: " << unix_dhhmm(tt_, start_time)
        << ", max_transfers: " << std::to_string(max_transfers)
@@ -358,9 +362,8 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
   auto const unix_time_next = tt_.to_unixtime(
       base_, minutes_after_midnight_t{tau_d + travel_time_next});
 
-  // transfer out of current transport segment?
-#ifdef TB_MIN_WALK
   bool no_prune = unix_time_next < worst_time_at_dest;
+#ifdef TB_MIN_WALK
   if (no_prune) {
     journey_min_walk tentative_j{};
     tentative_j.start_time_ = start_time;
@@ -375,11 +378,11 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
       }
     }
   }
-  if (no_prune) {
 #else
-  if (unix_time_next < state_.t_min_[n] &&
-      unix_time_next < worst_time_at_dest) {
+  no_prune = no_prune && unix_time_next < state_.t_min_[n];
 #endif
+  // transfer out of current transport segment?
+  if (no_prune) {
 #ifndef NDEBUG
     TBDL << "Time at next stop of segment is viable\n";
 #endif
@@ -448,9 +451,35 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                << "\n";
 #endif
 
+#ifdef TB_MIN_WALK
+          auto const p_t_i =
+              stop{tt_.route_location_seq_
+                       [tt_.transport_route_[seg.get_transport_idx()]][i]}
+                  .location_idx();
+          auto const p_u_j =
+              stop{tt_.route_location_seq_
+                       [tt_.transport_route_[transfer.get_transport_idx_to()]]
+                       [transfer.get_stop_idx_to()]}
+                  .location_idx();
+
+          std::uint16_t walk_time = state_.r_.walk(seg.transport_segment_idx_,
+                                                   n, seg.stop_idx_start_);
+          if (p_t_i != p_u_j) {
+            for (auto const& fp : tt_.locations_.footpaths_out_[p_t_i]) {
+              if (fp.target() == p_u_j) {
+                walk_time += fp.duration_;
+              }
+            }
+          }
+
+          state_.q_n_.enqueue_walk(
+              static_cast<std::uint16_t>(d_tr), transfer.get_transport_idx_to(),
+              transfer.get_stop_idx_to(), n + 1U, walk_time, q_cur);
+#else
           state_.q_n_.enqueue(static_cast<std::uint16_t>(d_tr),
                               transfer.get_transport_idx_to(),
                               transfer.get_stop_idx_to(), n + 1U, q_cur);
+#endif
         }
       }
     }
