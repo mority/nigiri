@@ -67,6 +67,8 @@ struct tb_query_engine {
                unixtime_t const worst_time_at_dest,
 #ifdef TB_MIN_WALK
                pareto_set<journey_min_walk>& results);
+#elifdef TB_TRANSFER_CLASS
+               pareto_set<journey_transfer_class>& results);
 #else
                pareto_set<journey>& results);
 #endif
@@ -84,6 +86,8 @@ private:
                       unixtime_t const worst_time_at_dest,
 #ifdef TB_MIN_WALK
                       pareto_set<journey_min_walk>& results,
+#elifdef TB_TRANSFER_CLASS
+                      pareto_set<journey_transfer_class>& results,
 #else
                       pareto_set<journey>& results,
 #endif

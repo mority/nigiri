@@ -6,7 +6,7 @@
 
 namespace nigiri::routing::tripbased {
 
-static inline std::int8_t transfer_class(std::uint16_t waiting_time) {
+static inline std::uint8_t transfer_class(std::uint16_t waiting_time) {
   if (waiting_time > TB_TRANSFER_CLASS0) {
     return 0;
   } else if (waiting_time > TB_TRANSFER_CLASS1) {

@@ -30,13 +30,13 @@ struct earliest_times {
 #ifdef TB_TRANSFER_CLASS
   struct earliest_time {
     std::uint16_t time_;
-    std::int8_t transfer_class_;
+    std::uint8_t transfer_class_;
     bitfield bf_;
   };
 
   void update_class(location_idx_t,
                     std::uint16_t time_new,
-                    std::int8_t transfer_class_new,
+                    std::uint8_t transfer_class_new,
                     bitfield const& bf,
                     bitfield* impr);
 #else

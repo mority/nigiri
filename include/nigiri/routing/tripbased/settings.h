@@ -1,7 +1,7 @@
 #pragma once
 
 // preprocessing options
-#define TB_PREPRO_LB_PRUNING
+// #define TB_PREPRO_LB_PRUNING
 #ifndef TB_PREPRO_LB_PRUNING
 #define TB_PREPRO_VANILLA
 #endif
@@ -9,8 +9,8 @@
 #define TB_PREPRO_TRANSFER_REDUCTION
 
 // additional criteria
-#define TB_MIN_WALK
-// #define TB_TRANSFER_CLASS
+// #define TB_MIN_WALK
+#define TB_TRANSFER_CLASS
 #ifdef TB_TRANSFER_CLASS
 #define TB_TRANSFER_CLASS0 15
 #define TB_TRANSFER_CLASS1 5

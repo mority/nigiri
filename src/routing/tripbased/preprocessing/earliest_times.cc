@@ -84,7 +84,7 @@ void earliest_times::update_walk(location_idx_t location,
 #ifdef TB_TRANSFER_CLASS
 void earliest_times::update_class(location_idx_t location,
                                   std::uint16_t time_new,
-                                  std::int8_t transfer_class_new,
+                                  std::uint8_t transfer_class_new,
                                   bitfield const& bf,
                                   bitfield* impr) {
   // bitfield is manipulated during update process

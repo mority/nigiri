@@ -23,6 +23,16 @@ struct q_n {
                     std::uint16_t const time_walk,
                     std::uint32_t const transferred_from);
 
+#elifdef TB_TRANSFER_CLASS
+
+  void enqueue_class(std::uint16_t const transport_day,
+                     transport_idx_t const,
+                     std::uint16_t const stop_idx,
+                     std::uint16_t const n_transfers,
+                     std::uint8_t const transfer_class_max,
+                     std::uint8_t const transfer_class_sum,
+                     std::uint32_t const transferred_from);
+
 #else
 
   void enqueue(std::uint16_t const transport_day,

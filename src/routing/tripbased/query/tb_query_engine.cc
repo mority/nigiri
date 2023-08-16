@@ -9,6 +9,10 @@
 #include "nigiri/routing/tripbased/query/journey_more_criteria.h"
 #endif
 
+#ifdef TB_TRANSFER_CLASS
+#include "nigiri/routing/tripbased/transfer_class.h"
+#endif
+
 #include "nigiri/routing/tripbased/query/tb_query_engine.h"
 #include "nigiri/rt/frun.h"
 #include "nigiri/special_stations.h"
@@ -106,6 +110,8 @@ void tb_query_engine::execute(unixtime_t const start_time,
                               unixtime_t const worst_time_at_dest,
 #ifdef TB_MIN_WALK
                               pareto_set<journey_min_walk>& results) {
+#elifdef TB_TRANSFER_CLASS
+                              pareto_set<journey_transfer_class>& results) {
 #else
                               pareto_set<journey>& results) {
 #endif
@@ -232,6 +238,9 @@ void tb_query_engine::handle_start_footpath(std::int32_t const d,
 #ifdef TB_MIN_WALK
             state_.q_n_.enqueue_walk(static_cast<std::uint16_t>(d_seg), t, i,
                                      0U, fp.duration_, TRANSFERRED_FROM_NULL);
+#elifdef TB_TRANSFER_CLASS
+            state_.q_n_.enqueue_class(static_cast<std::uint16_t>(d_seg), t, i,
+                                      0U, 0, 0, TRANSFERRED_FROM_NULL);
 #else
             state_.q_n_.enqueue(static_cast<std::uint16_t>(d_seg), t, i, 0U,
                                 TRANSFERRED_FROM_NULL);
@@ -256,6 +265,9 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                                      unixtime_t const worst_time_at_dest,
 #ifdef TB_MIN_WALK
                                      pareto_set<journey_min_walk>& results,
+#elifdef TB_TRANSFER_CLASS
+                                     pareto_set<journey_transfer_class>&
+                                         results,
 #else
                                      pareto_set<journey>& results,
 #endif
@@ -289,6 +301,16 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
   auto const tau_d =
       (d_seg + tau_dep_t_b_d - base_.v_) * 1440 + tau_dep_t_b_tod;
 
+#ifdef TB_MIN_WALK
+  auto const reached_walk =
+      state_.r_.walk(seg.transport_segment_idx_, n, seg.get_stop_idx_start());
+#elifdef TB_TRANSFER_CLASS
+  auto const reached_transfer_class = state_.r_.transfer_class(
+      seg.transport_segment_idx_, n, seg.stop_idx_start_);
+  auto const reached_transfer_class_max = reached_transfer_class.first;
+  auto const reached_transfer_class_sum = reached_transfer_class.second;
+#endif
+
   // check if target location is reached from current transport segment
   for (auto const& le : state_.route_dest_) {
     if (le.route_idx_ == tt_.transport_route_[seg.get_transport_idx()] &&
@@ -310,10 +332,7 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
 #endif
 
 #ifdef TB_MIN_WALK
-      std::uint16_t const time_walk =
-          state_.r_.walk(seg.transport_segment_idx_, n,
-                         seg.get_stop_idx_start()) +
-          le.time_;
+      std::uint16_t const time_walk = reached_walk + le.time_;
       // add journey if it is non-dominated
       journey_min_walk j{};
       j.start_time_ = start_time;
@@ -322,6 +341,17 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                     .location_idx();
       j.transfers_ = n;
       j.time_walk_ = time_walk;
+      results.add(std::move(j));
+#elifdef TB_TRANSFER_CLASS
+      // add journey if it is non-dominated
+      journey_transfer_class j{};
+      j.start_time_ = start_time;
+      j.dest_time_ = t_cur;
+      j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
+                    .location_idx();
+      j.transfers_ = n;
+      j.transfer_class_max_ = reached_transfer_class_max;
+      j.transfer_class_sum_ = reached_transfer_class_sum;
       results.add(std::move(j));
 #else
       if (t_cur < state_.t_min_[n] && t_cur < worst_time_at_dest) {
@@ -369,8 +399,22 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
     tentative_j.start_time_ = start_time;
     tentative_j.dest_time_ = unix_time_next;
     tentative_j.transfers_ = n + 1;
-    tentative_j.time_walk_ =
-        state_.r_.walk(seg.transport_segment_idx_, n, seg.get_stop_idx_start());
+    tentative_j.time_walk_ = reached_walk;
+    for (auto const& existing_j : results) {
+      if (existing_j.dominates(tentative_j)) {
+        no_prune = false;
+        break;
+      }
+    }
+  }
+#elifdef TB_TRANSFER_CLASS
+  if (no_prune) {
+    journey_transfer_class tentative_j{};
+    tentative_j.start_time_ = start_time;
+    tentative_j.dest_time_ = unix_time_next;
+    tentative_j.transfers_ = n + 1;
+    tentative_j.transfer_class_max_ = reached_transfer_class_max;
+    tentative_j.transfer_class_sum_ = reached_transfer_class_sum;
     for (auto const& existing_j : results) {
       if (existing_j.dominates(tentative_j)) {
         no_prune = false;
@@ -426,8 +470,7 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
                             transfer.stop_idx_to_, event_type::kDep)
                   .count();
 
-          auto const d_tr = seg.get_transport_day(base_).v_ +
-                            tau_arr_t_i / 1440 - tau_dep_u_j / 1440 +
+          auto const d_tr = d_seg + tau_arr_t_i / 1440 - tau_dep_u_j / 1440 +
                             transfer.passes_midnight_;
 #ifndef NDEBUG
           TBDL << "Found a transfer to transport "
@@ -475,6 +518,16 @@ void tb_query_engine::handle_segment(unixtime_t const start_time,
           state_.q_n_.enqueue_walk(
               static_cast<std::uint16_t>(d_tr), transfer.get_transport_idx_to(),
               transfer.get_stop_idx_to(), n + 1U, walk_time, q_cur);
+#elifdef TB_TRANSFER_CLASS
+          auto const kappa = transfer_class(transfer_wait(
+              tt_, seg.get_transport_idx(), i, transfer.get_transport_idx_to(),
+              transfer.get_stop_idx_to(), static_cast<const uint16_t>(d_seg),
+              static_cast<const uint16_t>(d_tr)));
+          state_.q_n_.enqueue_class(static_cast<std::uint16_t>(d_tr),
+                                    transfer.get_transport_idx_to(),
+                                    transfer.get_stop_idx_to(), n + 1U,
+                                    std::max(kappa, reached_transfer_class_max),
+                                    reached_transfer_class_sum + kappa, q_cur);
 #else
           state_.q_n_.enqueue(static_cast<std::uint16_t>(d_tr),
                               transfer.get_transport_idx_to(),

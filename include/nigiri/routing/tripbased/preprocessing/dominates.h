@@ -34,12 +34,13 @@ static inline std::int32_t dominates(std::int32_t ta1,
 
 #ifdef TB_TRANSFER_CLASS
 static inline std::int32_t dominates(std::int32_t tau1,
-                                     std::int8_t kappa1,
+                                     std::uint8_t kappa1,
                                      std::int32_t tau2,
-                                     std::int8_t kappa2) {
+                                     std::uint8_t kappa2) {
   auto const dif_tau = tau1 - tau2;
   auto const sgn_tau = (0 < dif_tau) - (dif_tau < 0);
-  auto const dif_kappa = kappa1 - kappa2;
+  auto const dif_kappa =
+      static_cast<std::int16_t>(kappa1) - static_cast<std::int16_t>(kappa2);
   auto const sgn_kappa = (0 < dif_kappa) - (dif_kappa < 0);
   return sgn_tau + sgn_kappa;
 }
