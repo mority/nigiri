@@ -6,7 +6,7 @@
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/routing/tripbased/dbg.h"
-#include "tb_query_state.h"
+#include "query_state.h"
 
 #if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
 #include "journey_more_criteria.h"
@@ -20,19 +20,19 @@ namespace nigiri::routing::tripbased {
 
 struct tb_query_stats {};
 
-struct tb_query_engine {
-  using algo_state_t = tb_query_state;
+struct query_engine {
+  using algo_state_t = query_state;
   using algo_stats_t = tb_query_stats;
 
   static constexpr bool kUseLowerBounds = false;
 
-  tb_query_engine(timetable const& tt,
-                  rt_timetable const* rtt,
-                  tb_query_state& state,
-                  std::vector<bool>& is_dest,
-                  std::vector<std::uint16_t>& dist_to_dest,
-                  std::vector<std::uint16_t>& lb,
-                  day_idx_t const base);
+  query_engine(timetable const& tt,
+               rt_timetable const* rtt,
+               query_state& state,
+               std::vector<bool>& is_dest,
+               std::vector<std::uint16_t>& dist_to_dest,
+               std::vector<std::uint16_t>& lb,
+               day_idx_t const base);
 
   algo_stats_t get_stats() const { return stats_; }
 
@@ -82,6 +82,23 @@ private:
                              std::int32_t const,
                              footpath const);
 
+#ifdef TB_CACHE_PRESSURE_REDUCTION
+  void seg_dest(unixtime_t const start_time,
+                unixtime_t const worst_time_at_dest,
+#ifdef TB_MIN_WALK
+                pareto_set<journey_min_walk>& results,
+#elifdef TB_TRANSFER_CLASS
+                pareto_set<journey_transfer_class>& results,
+#else
+                pareto_set<journey>& results,
+#endif
+                std::uint8_t const n,
+                queue_idx_t const q_cur);
+
+  void seg_prune(queue_idx_t const q_cur);
+
+  void seg_transfers(queue_idx_t const q_cur);
+#else
   void handle_segment(unixtime_t const start_time,
                       unixtime_t const worst_time_at_dest,
 #ifdef TB_MIN_WALK
@@ -93,6 +110,7 @@ private:
 #endif
                       std::uint8_t const n,
                       queue_idx_t const q_cur);
+#endif
 
   struct journey_end {
     journey_end(queue_idx_t const seg_idx,
@@ -134,7 +152,7 @@ private:
 
   timetable const& tt_;
   rt_timetable const* rtt_;
-  tb_query_state& state_;
+  query_state& state_;
   std::vector<bool>& is_dest_;
   std::vector<std::uint16_t>& dist_to_dest_;
   std::vector<std::uint16_t>& lb_;

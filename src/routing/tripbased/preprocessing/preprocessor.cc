@@ -2,7 +2,7 @@
 #include "utl/progress_tracker.h"
 
 #include "nigiri/logging.h"
-#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/preprocessor.h"
 #include "nigiri/types.h"
 
 #include <chrono>
@@ -13,7 +13,7 @@ using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 using namespace std::chrono_literals;
 
-bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
+bitfield_idx_t preprocessor::get_or_create_bfi(bitfield const& bf) {
   return utl::get_or_create(bitfield_to_bitfield_idx_, bf, [&bf, this]() {
     auto const bfi = tt_.register_bitfield(bf);
     bitfield_to_bitfield_idx_.emplace(bf, bfi);
@@ -21,8 +21,7 @@ bitfield_idx_t tb_preprocessor::get_or_create_bfi(bitfield const& bf) {
   });
 }
 
-void tb_preprocessor::build(transfer_set& ts,
-                            const std::uint16_t sleep_duration) {
+void preprocessor::build(transfer_set& ts, const std::uint16_t sleep_duration) {
   auto const num_transports = tt_.transport_traffic_days_.size();
   auto const num_threads = std::thread::hardware_concurrency();
 

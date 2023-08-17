@@ -3,7 +3,7 @@
 #include "nigiri/routing/for_each_meta.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/tripbased/dbg.h"
-#include "nigiri/routing/tripbased/query/tb_query_engine.h"
+#include "nigiri/routing/tripbased/query/query_engine.h"
 #include "nigiri/routing/tripbased/settings.h"
 #include "nigiri/rt/frun.h"
 #include "nigiri/special_stations.h"
@@ -11,7 +11,7 @@
 using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 
-void tb_query_engine::reconstruct(query const& q, journey& j) const {
+void query_engine::reconstruct(query const& q, journey& j) const {
 #ifndef NDEBUG
   TBDL << "Beginning reconstruction of journey: ";
   j.print(std::cout, tt_, nullptr, true);
@@ -75,9 +75,8 @@ void tb_query_engine::reconstruct(query const& q, journey& j) const {
 #endif
 }
 
-std::optional<tb_query_engine::journey_end>
-tb_query_engine::reconstruct_journey_end(query const& q,
-                                         journey const& j) const {
+std::optional<query_engine::journey_end> query_engine::reconstruct_journey_end(
+    query const& q, journey const& j) const {
 
   // iterate transport segments in queue with matching number of transfers
   for (auto q_cur = state_.q_n_.start_[j.transfers_];
@@ -156,9 +155,9 @@ tb_query_engine::reconstruct_journey_end(query const& q,
   return std::nullopt;
 }
 
-void tb_query_engine::add_final_footpath(query const& q,
-                                         journey& j,
-                                         journey_end const& je) const {
+void query_engine::add_final_footpath(query const& q,
+                                      journey& j,
+                                      journey_end const& je) const {
 
   if (q.dest_match_mode_ == location_match_mode::kIntermodal) {
 #ifndef NDEBUG
@@ -228,8 +227,8 @@ void tb_query_engine::add_final_footpath(query const& q,
   }
 }
 
-void tb_query_engine::add_segment_leg(journey& j,
-                                      transport_segment const& seg) const {
+void query_engine::add_segment_leg(journey& j,
+                                   transport_segment const& seg) const {
   auto const from =
       stop{
           tt_.route_location_seq_[tt_.transport_route_[seg.get_transport_idx()]]
@@ -262,7 +261,7 @@ void tb_query_engine::add_segment_leg(journey& j,
 #endif
 }
 
-std::optional<unsigned> tb_query_engine::reconstruct_transfer(
+std::optional<unsigned> query_engine::reconstruct_transfer(
     journey& j, transport_segment const& seg) const {
   assert(std::holds_alternative<journey::run_enter_exit>(j.legs_.back().uses_));
 
@@ -340,7 +339,7 @@ std::optional<unsigned> tb_query_engine::reconstruct_transfer(
   return std::nullopt;
 }
 
-void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
+void query_engine::add_initial_footpath(query const& q, journey& j) const {
   // check if first transport departs at start location
   if (!is_start_location(q, j.legs_.back().from_)) {
     // first transport does not start at a start location
@@ -394,8 +393,8 @@ void tb_query_engine::add_initial_footpath(query const& q, journey& j) const {
   }
 }
 
-bool tb_query_engine::is_start_location(query const& q,
-                                        location_idx_t const l) const {
+bool query_engine::is_start_location(query const& q,
+                                     location_idx_t const l) const {
   bool res = false;
   for (auto const& offset : q.start_) {
     res = matches(tt_, q.start_match_mode_, offset.target(), l);

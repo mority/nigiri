@@ -6,14 +6,14 @@
 
 #include "nigiri/routing/debug.h"
 #include "nigiri/routing/pareto_set.h"
-#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/preprocessor.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
 
 namespace nigiri::test {
 
 pareto_set<routing::journey> tripbased_search(timetable& tt, routing::query q) {
-  using algo_t = routing::tripbased::tb_query_engine;
-  using algo_state_t = routing::tripbased::tb_query_state;
+  using algo_t = routing::tripbased::query_engine;
+  using algo_state_t = routing::tripbased::query_state;
 
   static auto search_state = routing::search_state{};
   routing::tripbased::transfer_set ts;

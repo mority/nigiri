@@ -11,7 +11,7 @@
 #ifdef TB_MIN_WALK
 #include "nigiri/routing/tripbased/preprocessing/dominates.h"
 #endif
-#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/preprocessor.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
 #include "tb_preprocessing_test.h"
 
@@ -31,7 +31,7 @@ using namespace std::chrono_literals;
 TEST(tripbased, get_or_create_bfi) {
   // init
   timetable tt;
-  tb_preprocessor tbp{tt};
+  preprocessor tbp{tt};
 
   // bitfield already registered with timetable
   bitfield const bf0{"0"};

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/preprocessor.h"
 #include "nigiri/routing/tripbased/query/q_n.h"
 #include "nigiri/routing/tripbased/settings.h"
 #include "nigiri/types.h"
@@ -33,9 +33,9 @@ struct query_start {
   unixtime_t time_;
 };
 
-struct tb_query_state {
-  tb_query_state() = delete;
-  tb_query_state(timetable const& tt, transfer_set const& ts)
+struct query_state {
+  query_state() = delete;
+  query_state(timetable const& tt, transfer_set const& ts)
       : ts_{ts}, r_{tt}, q_n_{r_} {
     route_dest_.reserve(128);
     t_min_.resize(kNumTransfersMax, unixtime_t::max());

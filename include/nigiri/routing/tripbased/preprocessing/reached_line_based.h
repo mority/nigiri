@@ -8,7 +8,7 @@
 
 namespace nigiri::routing::tripbased {
 
-struct earliest_transports {
+struct reached_line_based {
 
 #ifdef TB_MIN_WALK
   struct earliest_transport {
@@ -26,13 +26,13 @@ struct earliest_transports {
 #elifdef TB_TRANSFER_CLASS
   struct earliest_transport {
     std::uint32_t otid_;
-    std::int8_t transfer_class_;
+    std::uint8_t transfer_class_;
     bitfield bf_;
   };
 
   void update_class(stop_idx_t j,
                     std::uint32_t otid_new,
-                    std::int8_t transfer_class_new,
+                    std::uint8_t transfer_class_new,
                     bitfield& bf_new);
 
   void reset_class(std::size_t num_stops) noexcept;

@@ -1,4 +1,4 @@
-#include "nigiri/routing/tripbased/preprocessing/earliest_times.h"
+#include "nigiri/routing/tripbased/preprocessing/reached_reduction.h"
 #include "nigiri/routing/tripbased/settings.h"
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
@@ -10,11 +10,11 @@ using namespace nigiri::routing::tripbased;
 
 #ifdef TB_MIN_WALK
 
-void earliest_times::update_walk(location_idx_t location,
-                                 std::uint16_t time_arr_new,
-                                 std::uint16_t time_walk_new,
-                                 bitfield const& bf,
-                                 bitfield* impr) {
+void reached_reduction::update_walk(location_idx_t location,
+                                    std::uint16_t time_arr_new,
+                                    std::uint16_t time_walk_new,
+                                    bitfield const& bf,
+                                    bitfield* impr) {
   // bitfield is manipulated during update process
   bf_new_ = bf;
   // position of entry with an equal time
@@ -82,11 +82,11 @@ void earliest_times::update_walk(location_idx_t location,
 #else
 
 #ifdef TB_TRANSFER_CLASS
-void earliest_times::update_class(location_idx_t location,
-                                  std::uint16_t time_new,
-                                  std::uint8_t transfer_class_new,
-                                  bitfield const& bf,
-                                  bitfield* impr) {
+void reached_reduction::update_class(location_idx_t location,
+                                     std::uint16_t time_new,
+                                     std::uint8_t transfer_class_new,
+                                     bitfield const& bf,
+                                     bitfield* impr) {
   // bitfield is manipulated during update process
   bf_new_ = bf;
   // position of entry with an equal time
@@ -149,10 +149,10 @@ void earliest_times::update_class(location_idx_t location,
 
 #else
 
-void earliest_times::update(location_idx_t location,
-                            std::uint16_t time_new,
-                            bitfield const& bf,
-                            bitfield* impr) {
+void reached_reduction::update(location_idx_t location,
+                               std::uint16_t time_new,
+                               bitfield const& bf,
+                               bitfield* impr) {
   // bitfield is manipulated during update process
   bf_new_ = bf;
   // position of entry with an equal time

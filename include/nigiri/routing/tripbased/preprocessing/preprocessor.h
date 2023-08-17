@@ -1,9 +1,9 @@
 #pragma once
 
 #include "boost/functional/hash.hpp"
-#include "nigiri/routing/tripbased/preprocessing/earliest_transports.h"
 #include "nigiri/routing/tripbased/preprocessing/expanded_transfer.h"
 #include "nigiri/routing/tripbased/preprocessing/ordered_transport_id.h"
+#include "nigiri/routing/tripbased/preprocessing/reached_line_based.h"
 #include "nigiri/routing/tripbased/settings.h"
 #include "nigiri/routing/tripbased/transfer.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
@@ -20,7 +20,7 @@ using queue_t = std::list<part_t>;
 
 struct expanded_transfer;
 
-struct tb_preprocessor {
+struct preprocessor {
 
 #ifdef TB_PREPRO_LB_PRUNING
   struct line_transfer {
@@ -76,7 +76,7 @@ struct tb_preprocessor {
   }
 #endif
 
-  explicit tb_preprocessor(timetable& tt, std::int32_t transfer_time_max = 1440)
+  explicit preprocessor(timetable& tt, std::int32_t transfer_time_max = 1440)
       : tt_(tt), transfer_time_max_(transfer_time_max) {
     {
       auto const timer = scoped_timer("trip-based preprocessing: init");
@@ -129,7 +129,7 @@ struct tb_preprocessor {
 
   void build(transfer_set& ts, const std::uint16_t sleep_duration);
 
-  static void build_part(tb_preprocessor* const);
+  static void build_part(preprocessor* const);
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
@@ -176,7 +176,7 @@ static inline void build_transfer_set(
     const std::uint16_t sleep_duration = 1000) {
   {
     auto const timer = scoped_timer("trip-based preprocessing");
-    tb_preprocessor tbp(tt);
+    preprocessor tbp(tt);
     tbp.build(ts, sleep_duration);
   }
 }

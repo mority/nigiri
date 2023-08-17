@@ -10,8 +10,8 @@
 #ifdef TB_TRANSFER_CLASS
 #include "nigiri/routing/tripbased/transfer_class.h"
 #endif
-#include "nigiri/routing/tripbased/preprocessing/earliest_times.h"
-#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/reached_reduction.h"
 #include "nigiri/stop.h"
 #include "nigiri/types.h"
 
@@ -23,7 +23,7 @@ using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 using namespace std::chrono_literals;
 
-void tb_preprocessor::build_part(tb_preprocessor* const pp) {
+void preprocessor::build_part(preprocessor* const pp) {
 
   // days of transport that still require a connection
   bitfield omega;
@@ -36,15 +36,15 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
   route_idx_t current_route;
 
   // init neighborhood
-  std::vector<tb_preprocessor::line_transfer> neighborhood;
+  std::vector<preprocessor::line_transfer> neighborhood;
   neighborhood.reserve(pp->route_max_length_ * 10);
 
   // earliest transport per stop index
-  earliest_transports et;
+  reached_line_based et;
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  earliest_times ets_arr;
-  earliest_times ets_ch;
+  reached_reduction ets_arr;
+  reached_reduction ets_ch;
 
   // days on which the transfer constitutes an
   // improvement
@@ -190,8 +190,7 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
 
             // shift amount due to number of times transport u passed
             // midnight
-            std::int8_t const sigma_u =
-                static_cast<std::int8_t>(tau_dep_u_j->days());
+            auto const sigma_u = static_cast<std::int8_t>(tau_dep_u_j->days());
 
             // total shift amount
             std::int8_t const sigma_total = sigma_u - sigma_t - sigma_fpw;
@@ -504,9 +503,9 @@ void tb_preprocessor::build_part(tb_preprocessor* const pp) {
   }
 }
 
-void tb_preprocessor::line_transfers(
+void preprocessor::line_transfers(
     route_idx_t route_from,
-    std::vector<tb_preprocessor::line_transfer>& neighborhood) {
+    std::vector<preprocessor::line_transfer>& neighborhood) {
   // stop sequence of the source route
   auto const& stop_seq = tt_.route_location_seq_[route_from];
 
@@ -542,11 +541,11 @@ void tb_preprocessor::line_transfers(
 #endif
 }
 
-void tb_preprocessor::line_transfers_fp(
+void preprocessor::line_transfers_fp(
     route_idx_t route_from,
     std::size_t i,
     footpath fp,
-    std::vector<tb_preprocessor::line_transfer>& neighborhood) {
+    std::vector<preprocessor::line_transfer>& neighborhood) {
   // stop sequence of the source route
   auto const& stop_seq_from = tt_.route_location_seq_[route_from];
   // routes that serve the target of the footpath

@@ -1,20 +1,23 @@
 #pragma once
 
+// additional criteria
+// #define TB_MIN_WALK
+// #define TB_TRANSFER_CLASS
+#ifdef TB_TRANSFER_CLASS
+#define TB_TRANSFER_CLASS0 15
+#define TB_TRANSFER_CLASS1 5
+#endif
+
 // preprocessing options
-// #define TB_PREPRO_LB_PRUNING
+#define TB_PREPRO_LB_PRUNING
 #ifndef TB_PREPRO_LB_PRUNING
 #define TB_PREPRO_VANILLA
 #endif
 #define TB_PREPRO_UTURN_REMOVAL
 #define TB_PREPRO_TRANSFER_REDUCTION
 
-// additional criteria
-// #define TB_MIN_WALK
-#define TB_TRANSFER_CLASS
-#ifdef TB_TRANSFER_CLASS
-#define TB_TRANSFER_CLASS0 15
-#define TB_TRANSFER_CLASS1 5
-#endif
+// query engine options
+#define TB_CACHE_PRESSURE_REDUCTION
 
 // system limits - number of bits
 #define BITFIELD_IDX_BITS 25U

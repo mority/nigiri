@@ -24,7 +24,7 @@ using namespace nigiri;
 using namespace nigiri::routing::tripbased;
 using namespace std::chrono_literals;
 
-void tb_preprocessor::build_part(tb_preprocessor* const pp) {
+void preprocessor::build_part(preprocessor* const pp) {
 
   // days of transport that still require a connection
   bitfield omega;
