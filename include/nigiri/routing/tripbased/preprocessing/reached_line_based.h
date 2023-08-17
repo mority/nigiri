@@ -11,7 +11,7 @@ namespace nigiri::routing::tripbased {
 struct reached_line_based {
 
 #ifdef TB_MIN_WALK
-  struct earliest_transport {
+  struct rlb_entry {
     std::uint32_t otid_;
     std::uint16_t walk_time_;
     bitfield bf_;
@@ -24,7 +24,7 @@ struct reached_line_based {
 
   void reset_walk(std::size_t num_stops) noexcept;
 #elifdef TB_TRANSFER_CLASS
-  struct earliest_transport {
+  struct rlb_entry {
     std::uint32_t otid_;
     std::uint8_t transfer_class_;
     bitfield bf_;
@@ -37,7 +37,7 @@ struct reached_line_based {
 
   void reset_class(std::size_t num_stops) noexcept;
 #else
-  struct earliest_transport {
+  struct rlb_entry {
     std::int8_t shift_amount_;
     std::uint16_t start_time_;
     bitfield bf_;
@@ -50,7 +50,7 @@ struct reached_line_based {
 
   void reset(std::size_t num_stops) noexcept;
 #endif
-  mutable_fws_multimap<std::uint32_t, earliest_transport> transports_;
+  mutable_fws_multimap<std::uint32_t, rlb_entry> transports_;
 };
 
 }  // namespace nigiri::routing::tripbased

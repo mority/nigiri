@@ -84,23 +84,34 @@ private:
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
   void seg_dest(unixtime_t const start_time,
-                unixtime_t const worst_time_at_dest,
 #ifdef TB_MIN_WALK
                 pareto_set<journey_min_walk>& results,
 #elifdef TB_TRANSFER_CLASS
                 pareto_set<journey_transfer_class>& results,
 #else
                 pareto_set<journey>& results,
+                unixtime_t worst_time_at_dest,
 #endif
                 std::uint8_t const n,
                 transport_segment& seg);
 
-  void seg_prune(unixtime_t const worst_time_at_dest,
-                 std::uint8_t const n,
-                 transport_segment& seg);
+  void seg_prune(
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
+      unixtime_t const start_time,
+#endif
+      unixtime_t const worst_time_at_dest,
+#ifdef TB_MIN_WALK
+      pareto_set<journey_min_walk>& results,
+#elifdef TB_TRANSFER_CLASS
+      pareto_set<journey_transfer_class>& results,
+#endif
+      std::uint8_t const n,
+      transport_segment& seg);
 
   void seg_transfers(std::uint8_t const n, queue_idx_t const q_cur);
+
 #else
+
   void handle_segment(unixtime_t const start_time,
                       unixtime_t const worst_time_at_dest,
 #ifdef TB_MIN_WALK
@@ -112,6 +123,7 @@ private:
 #endif
                       std::uint8_t const n,
                       queue_idx_t const q_cur);
+
 #endif
 
   struct journey_end {

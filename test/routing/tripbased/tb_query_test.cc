@@ -24,6 +24,7 @@ using namespace nigiri::routing::tripbased;
 using namespace nigiri::routing::tripbased::test;
 using namespace nigiri::test_data::hrd_timetable;
 
+#if !defined(TB_MIN_WALK) && !defined(TB_TRANSFER_CLASS)
 TEST(tb_query, enqueue) {
   // load timetable
   timetable tt;
@@ -95,6 +96,7 @@ TEST(tb_query, enqueue) {
   EXPECT_EQ(si2, tbq.get_state().r_.query(
                      embed_day_offset(base.v_, day_idx6.v_, tpi0), 1));
 }
+#endif
 
 constexpr auto const same_day_transfer_journeys = R"(
 [2021-02-28 23:00, 2021-03-01 13:00]

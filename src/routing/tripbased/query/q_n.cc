@@ -48,8 +48,13 @@ void q_n::enqueue_walk(std::uint16_t const transport_day,
         r_.stop(transport_segment_idx, n_transfers, time_walk);
 
     // add transport segment
+#ifdef TB_CACHE_PRESSURE_REDUCTION
+    segments_.emplace_back(transport_segment_idx, stop_idx, reached_stop_idx,
+                           transferred_from, time_walk);
+#else
     segments_.emplace_back(transport_segment_idx, stop_idx, reached_stop_idx,
                            transferred_from);
+#endif
 #ifndef NDEBUG
     TBDL << "Enqueued transport segment: ";
     print(std::cout, static_cast<queue_idx_t>(segments_.size() - 1));
@@ -99,8 +104,15 @@ void q_n::enqueue_class(std::uint16_t const transport_day,
                 transfer_class_sum);
 
     // add transport segment
+#ifdef TB_CACHE_PRESSURE_REDUCTION
+    segments_.emplace_back(transport_segment_idx, stop_idx, reached_stop_idx,
+                           transferred_from, transfer_class_max,
+                           transfer_class_sum);
+#else
     segments_.emplace_back(transport_segment_idx, stop_idx, reached_stop_idx,
                            transferred_from);
+#endif
+
 #ifndef NDEBUG
     TBDL << "Enqueued transport segment: ";
     print(std::cout, static_cast<queue_idx_t>(segments_.size() - 1));

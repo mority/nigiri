@@ -33,7 +33,7 @@ void reached_line_based::update_walk(stop_idx_t j,
   }
 }
 
-void earliest_transports::reset_walk(std::size_t num_stops) noexcept {
+void reached_line_based::reset_walk(std::size_t num_stops) noexcept {
   transports_.clear();
   for (stop_idx_t j = 0; j < num_stops; ++j) {
     transports_[j].emplace_back(
@@ -90,7 +90,7 @@ void reached_line_based::update(stop_idx_t j,
   }
 }
 
-void earliest_transports::reset(std::size_t num_stops) noexcept {
+void reached_line_based::reset(std::size_t num_stops) noexcept {
   transports_.clear();
   for (stop_idx_t j = 0; j < num_stops; ++j) {
     transports_[j].emplace_back(std::numeric_limits<std::int8_t>::max(),

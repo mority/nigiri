@@ -48,6 +48,31 @@ static inline transport_idx_t transport_idx(
 }
 
 struct transport_segment {
+#if defined(TB_MIN_WALK) && defined(TB_CACHE_PRESSURE_REDUCTION)
+  transport_segment(transport_segment_idx_t transport_segment_idx,
+                    stop_idx_t stop_idx_start,
+                    stop_idx_t stop_idx_end,
+                    std::uint32_t transferred_from,
+                    std::uint16_t time_walk)
+      : transport_segment_idx_(transport_segment_idx),
+        stop_idx_start_(stop_idx_start),
+        stop_idx_end_(stop_idx_end),
+        transferred_from_(transferred_from),
+        time_walk_(time_walk) {}
+#elif defined(TB_TRANSFER_CLASS) && defined(TB_CACHE_PRESSURE_REDUCTION)
+  transport_segment(transport_segment_idx_t transport_segment_idx,
+                    stop_idx_t stop_idx_start,
+                    stop_idx_t stop_idx_end,
+                    std::uint32_t transferred_from,
+                    std::uint8_t transfer_class_max,
+                    std::uint8_t transfer_class_sum)
+      : transport_segment_idx_(transport_segment_idx),
+        stop_idx_start_(stop_idx_start),
+        stop_idx_end_(stop_idx_end),
+        transferred_from_(transferred_from),
+        transfer_class_max_(transfer_class_max),
+        transfer_class_sum_(transfer_class_sum) {}
+#else
   transport_segment(transport_segment_idx_t transport_segment_idx,
                     stop_idx_t stop_idx_start,
                     stop_idx_t stop_idx_end,
@@ -56,6 +81,7 @@ struct transport_segment {
         stop_idx_start_(stop_idx_start),
         stop_idx_end_(stop_idx_end),
         transferred_from_(transferred_from) {}
+#endif
 
   day_idx_t get_transport_day(day_idx_t const base) const {
     return transport_day(base, transport_segment_idx_);
@@ -86,9 +112,15 @@ struct transport_segment {
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
   union {
-    unixtime_t prune_time_;
+    unixtime_t time_prune_;
     bool no_prune_;
   };
+#ifdef TB_MIN_WALK
+  std::uint16_t time_walk_;
+#elifdef TB_TRANSFER_CLASS
+  std::uint8_t transfer_class_max_;
+  std::uint8_t transfer_class_sum_;
+#endif
 #endif
 };
 

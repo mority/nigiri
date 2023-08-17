@@ -49,6 +49,8 @@ std::uint16_t reached::walk(transport_segment_idx_t const transport_segment_idx,
       time_walk_min = re.time_walk_;
     }
   }
+  return time_walk_min;
+}
 
 #elifdef TB_TRANSFER_CLASS
 
