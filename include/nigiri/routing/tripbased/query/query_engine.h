@@ -93,11 +93,13 @@ private:
                 pareto_set<journey>& results,
 #endif
                 std::uint8_t const n,
-                queue_idx_t const q_cur);
+                transport_segment& seg);
 
-  void seg_prune(queue_idx_t const q_cur);
+  void seg_prune(unixtime_t const worst_time_at_dest,
+                 std::uint8_t const n,
+                 transport_segment& seg);
 
-  void seg_transfers(queue_idx_t const q_cur);
+  void seg_transfers(std::uint8_t const n, queue_idx_t const q_cur);
 #else
   void handle_segment(unixtime_t const start_time,
                       unixtime_t const worst_time_at_dest,

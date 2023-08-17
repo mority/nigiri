@@ -55,8 +55,7 @@ struct transport_segment {
       : transport_segment_idx_(transport_segment_idx),
         stop_idx_start_(stop_idx_start),
         stop_idx_end_(stop_idx_end),
-        transferred_from_(transferred_from),
-        prune_time_(0) {}
+        transferred_from_(transferred_from) {}
 
   day_idx_t get_transport_day(day_idx_t const base) const {
     return transport_day(base, transport_segment_idx_);
@@ -86,7 +85,10 @@ struct transport_segment {
   std::uint32_t transferred_from_;
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
-  unixtime_t prune_time_;
+  union {
+    unixtime_t prune_time_;
+    bool no_prune_;
+  };
 #endif
 };
 

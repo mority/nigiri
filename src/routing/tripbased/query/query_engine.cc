@@ -139,22 +139,26 @@ void query_engine::execute(unixtime_t const start_time,
     // (1)  destination reached?
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
-      seg_dest(start_time, worst_time_at_dest, results, n, q_cur);
+      seg_dest(start_time, worst_time_at_dest, results, n, state_.q_n_[q_cur]);
     }
     // (2) pruning?
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
-      seg_prune(q_cur);
+      seg_prune(worst_time_at_dest, n, state_.q_n_[q_cur]);
     }
     // (3) process transfers & enqueue segments
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
-      seg_transfers();
+      seg_transfers(n, q_cur);
     }
 #else
     // iterate trip segments in Q_n
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
+#ifndef NDEBUG
+      TBDL << "Examining segment: ";
+      state_.q_n_.print(std::cout, q_cur);
+#endif
       handle_segment(start_time, worst_time_at_dest, results, n, q_cur);
     }
 #endif
@@ -172,14 +176,7 @@ void query_engine::seg_dest(unixtime_t const start_time,
                             pareto_set<journey>& results,
 #endif
                             std::uint8_t const n,
-                            queue_idx_t const q_cur) {
-  // the current transport segment
-  auto& seg = state_.q_n_[q_cur];
-
-#ifndef NDEBUG
-  TBDL << "Examining segment: ";
-  state_.q_n_.print(std::cout, q_cur);
-#endif
+                            transport_segment& seg) {
 
   // departure time at the start of the transport segment
   auto const tau_dep_t_b = tt_.event_mam(seg.get_transport_idx(),
@@ -293,9 +290,165 @@ void query_engine::seg_dest(unixtime_t const start_time,
       base_, minutes_after_midnight_t{tau_d + travel_time_next});
 }
 
-void query_engine::seg_prune(queue_idx_t const q_cur) {}
+void query_engine::seg_prune(unixtime_t const worst_time_at_dest,
+                             std::uint8_t const n,
+                             transport_segment& seg) {
+  bool no_prune = seg.prune_time_ < worst_time_at_dest;
+#ifdef TB_MIN_WALK
+  if (no_prune) {
+    journey_min_walk tentative_j{};
+    tentative_j.start_time_ = start_time;
+    tentative_j.dest_time_ = unix_time_next;
+    tentative_j.transfers_ = n + 1;
+    tentative_j.time_walk_ = reached_walk;
+    for (auto const& existing_j : results) {
+      if (existing_j.dominates(tentative_j)) {
+        no_prune = false;
+        break;
+      }
+    }
+  }
+#elifdef TB_TRANSFER_CLASS
+  if (no_prune) {
+    journey_transfer_class tentative_j{};
+    tentative_j.start_time_ = start_time;
+    tentative_j.dest_time_ = unix_time_next;
+    tentative_j.transfers_ = n + 1;
+    tentative_j.transfer_class_max_ = reached_transfer_class_max;
+    tentative_j.transfer_class_sum_ = reached_transfer_class_sum;
+    for (auto const& existing_j : results) {
+      if (existing_j.dominates(tentative_j)) {
+        no_prune = false;
+        break;
+      }
+    }
+  }
+#else
+  seg.no_prune_ = no_prune && seg.prune_time_ < state_.t_min_[n];
+#endif
+}
 
-void query_engine::seg_transfers(queue_idx_t const q_cur) {}
+void query_engine::seg_transfers(std::uint8_t const n,
+                                 queue_idx_t const q_cur) {
+  // the current segment
+  auto const& seg = state_.q_n_[q_cur];
+
+  // transfer out of current transport segment?
+  if (seg.no_prune_) {
+#ifndef NDEBUG
+    TBDL << "Time at next stop of segment is viable\n";
+#endif
+
+    // the day index of the segment
+    std::int32_t const d_seg = seg.get_transport_day(base_).v_;
+
+    // iterate stops of the current transport segment
+    for (stop_idx_t i = seg.get_stop_idx_start() + 1U;
+         i <= seg.get_stop_idx_end(); ++i) {
+#ifndef NDEBUG
+      TBDL << "Arrival at stop " << i << ": "
+           << location_name(
+                  tt_,
+                  stop{tt_.route_location_seq_
+                           [tt_.transport_route_[seg.get_transport_idx()]][i]}
+                      .location_idx())
+           << " at "
+           << unix_dhhmm(
+                  tt_, tt_.to_unixtime(seg.get_transport_day(base_),
+                                       tt_.event_mam(seg.get_transport_idx(), i,
+                                                     event_type::kArr)
+                                           .as_duration()))
+           << ", processing transfers...\n";
+#endif
+
+      // get transfers for this transport/stop
+      auto const& transfers =
+          state_.ts_.data_.at(seg.get_transport_idx().v_, i);
+      // iterate transfers from this stop
+      for (auto const& transfer : transfers) {
+        // bitset specifying the days on which the transfer is possible
+        // from the current transport segment
+        auto const& theta = tt_.bitfields_[transfer.get_bitfield_idx()];
+        // enqueue if transfer is possible
+        if (theta.test(static_cast<std::size_t>(d_seg))) {
+          // arrival time at start location of transfer
+          auto const tau_arr_t_i =
+              tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr)
+                  .count();
+          // departure time at end location of transfer
+          auto const tau_dep_u_j =
+              tt_.event_mam(transfer.get_transport_idx_to(),
+                            transfer.stop_idx_to_, event_type::kDep)
+                  .count();
+
+          auto const d_tr = d_seg + tau_arr_t_i / 1440 - tau_dep_u_j / 1440 +
+                            transfer.passes_midnight_;
+#ifndef NDEBUG
+          TBDL << "Found a transfer to transport "
+               << transfer.get_transport_idx_to() << ": "
+               << tt_.transport_name(transfer.get_transport_idx_to())
+               << " at its stop " << transfer.stop_idx_to_ << ": "
+               << location_name(tt_,
+                                stop{tt_.route_location_seq_
+                                         [tt_.transport_route_
+                                              [transfer.get_transport_idx_to()]]
+                                         [transfer.get_stop_idx_to()]}
+                                    .location_idx())
+               << ", departing at "
+               << unix_dhhmm(tt_,
+                             tt_.to_unixtime(
+                                 day_idx_t{d_tr},
+                                 tt_.event_mam(transfer.get_transport_idx_to(),
+                                               transfer.get_stop_idx_to(),
+                                               event_type::kDep)
+                                     .as_duration()))
+               << "\n";
+#endif
+
+#ifdef TB_MIN_WALK
+          auto const p_t_i =
+              stop{tt_.route_location_seq_
+                       [tt_.transport_route_[seg.get_transport_idx()]][i]}
+                  .location_idx();
+          auto const p_u_j =
+              stop{tt_.route_location_seq_
+                       [tt_.transport_route_[transfer.get_transport_idx_to()]]
+                       [transfer.get_stop_idx_to()]}
+                  .location_idx();
+
+          std::uint16_t walk_time = state_.r_.walk(seg.transport_segment_idx_,
+                                                   n, seg.stop_idx_start_);
+          if (p_t_i != p_u_j) {
+            for (auto const& fp : tt_.locations_.footpaths_out_[p_t_i]) {
+              if (fp.target() == p_u_j) {
+                walk_time += fp.duration_;
+              }
+            }
+          }
+
+          state_.q_n_.enqueue_walk(
+              static_cast<std::uint16_t>(d_tr), transfer.get_transport_idx_to(),
+              transfer.get_stop_idx_to(), n + 1U, walk_time, q_cur);
+#elifdef TB_TRANSFER_CLASS
+          auto const kappa = transfer_class(transfer_wait(
+              tt_, seg.get_transport_idx(), i, transfer.get_transport_idx_to(),
+              transfer.get_stop_idx_to(), static_cast<const uint16_t>(d_seg),
+              static_cast<const uint16_t>(d_tr)));
+          state_.q_n_.enqueue_class(static_cast<std::uint16_t>(d_tr),
+                                    transfer.get_transport_idx_to(),
+                                    transfer.get_stop_idx_to(), n + 1U,
+                                    std::max(kappa, reached_transfer_class_max),
+                                    reached_transfer_class_sum + kappa, q_cur);
+#else
+          state_.q_n_.enqueue(static_cast<std::uint16_t>(d_tr),
+                              transfer.get_transport_idx_to(),
+                              transfer.get_stop_idx_to(), n + 1U, q_cur);
+#endif
+        }
+      }
+    }
+  }
+}
 
 #else
 void query_engine::handle_segment(unixtime_t const start_time,
