@@ -73,7 +73,6 @@ private:
                              footpath const);
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
-
 #if !defined(TB_MIN_WALK) && !defined(TB_TRANSFER_CLASS)
   void seg_dest(unixtime_t const start_time,
                 pareto_set<journey>& results,
@@ -98,7 +97,7 @@ private:
                  std::uint8_t const n,
                  transport_segment& seg);
 #endif
-  
+
   void seg_transfers(std::uint8_t const n, queue_idx_t const q_cur);
 
 #else
@@ -108,9 +107,7 @@ private:
                       pareto_set<journey>& results,
                       std::uint8_t const n,
                       queue_idx_t const q_cur);
-
 #endif
-
   struct journey_end {
     journey_end(queue_idx_t const seg_idx,
                 route_dest const& le,

@@ -165,7 +165,6 @@ void query_engine::execute(unixtime_t const start_time,
 }
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
-
 void query_engine::seg_dest(unixtime_t const start_time,
                             pareto_set<journey>& results,
 #if !defined(TB_MIN_WALK) && !defined(TB_TRANSFER_CLASS)
@@ -275,9 +274,6 @@ void query_engine::seg_prune(
     unixtime_t const worst_time_at_dest,
 #if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
     pareto_set<journey>& results,
-#endif
-#ifndef TB_CACHE_PRESSURE_REDUCTION
-    unixtime_t time_prune,
 #endif
     std::uint8_t const n,
     transport_segment& seg) {
