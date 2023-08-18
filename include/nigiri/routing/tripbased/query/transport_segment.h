@@ -59,6 +59,7 @@ struct transport_segment {
         stop_idx_end_(stop_idx_end),
         transferred_from_(transferred_from),
         time_walk_(time_walk) {}
+
 #elif defined(TB_TRANSFER_CLASS) && defined(TB_CACHE_PRESSURE_REDUCTION)
   transport_segment(transport_segment_idx_t transport_segment_idx,
                     stop_idx_t stop_idx_start,

@@ -277,9 +277,9 @@ void query_engine::seg_prune(
 #endif
     std::uint8_t const n,
     transport_segment& seg) {
-  bool const no_prune = seg.time_prune_ < worst_time_at_dest;
+  seg.no_prune_ = seg.time_prune_ < worst_time_at_dest;
 #if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
-  if (no_prune) {
+  if (seg.no_prune_) {
     journey tentative_j{};
     tentative_j.start_time_ = start_time;
     tentative_j.dest_time_ = seg.time_prune_;
@@ -304,7 +304,7 @@ void query_engine::seg_prune(
 
 void query_engine::seg_transfers(std::uint8_t const n,
                                  queue_idx_t const q_cur) {
-  // the current segment
+
   auto const& seg = state_.q_n_[q_cur];
 
   // transfer out of current transport segment?
