@@ -277,9 +277,9 @@ void query_engine::seg_prune(
 #endif
     std::uint8_t const n,
     transport_segment& seg) {
-  seg.no_prune_ = seg.time_prune_ < worst_time_at_dest;
+  bool no_prune = seg.time_prune_ < worst_time_at_dest;
 #if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
-  if (seg.no_prune_) {
+  if (no_prune) {
     journey tentative_j{};
     tentative_j.start_time_ = start_time;
     tentative_j.dest_time_ = seg.time_prune_;
@@ -296,6 +296,7 @@ void query_engine::seg_prune(
         break;
       }
     }
+    seg.no_prune_ = true;
   }
 #else
   seg.no_prune_ = no_prune && seg.time_prune_ < state_.t_min_[n];
