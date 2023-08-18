@@ -8,10 +8,6 @@
 #include "nigiri/routing/tripbased/dbg.h"
 #include "query_state.h"
 
-#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
-#include "journey_more_criteria.h"
-#endif
-
 namespace nigiri {
 struct timetable;
 }  // namespace nigiri
@@ -65,13 +61,7 @@ struct query_engine {
   void execute(unixtime_t const start_time,
                std::uint8_t const max_transfers,
                unixtime_t const worst_time_at_dest,
-#ifdef TB_MIN_WALK
-               pareto_set<journey_min_walk>& results);
-#elifdef TB_TRANSFER_CLASS
-               pareto_set<journey_transfer_class>& results);
-#else
                pareto_set<journey>& results);
-#endif
 
   void reconstruct(query const& q, journey& j) const;
 
@@ -83,44 +73,39 @@ private:
                              footpath const);
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
+
+#if !defined(TB_MIN_WALK) && !defined(TB_TRANSFER_CLASS)
   void seg_dest(unixtime_t const start_time,
-#ifdef TB_MIN_WALK
-                pareto_set<journey_min_walk>& results,
-#elifdef TB_TRANSFER_CLASS
-                pareto_set<journey_transfer_class>& results,
-#else
                 pareto_set<journey>& results,
                 unixtime_t worst_time_at_dest,
-#endif
                 std::uint8_t const n,
                 transport_segment& seg);
+#else
+  void seg_dest(unixtime_t const start_time,
+                pareto_set<journey>& results,
+                std::uint8_t const n,
+                transport_segment& seg);
+#endif
 
-  void seg_prune(
 #if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
-      unixtime_t const start_time,
+  void seg_prune(unixtime_t const start_time,
+                 unixtime_t const worst_time_at_dest,
+                 pareto_set<journey>& results,
+                 std::uint8_t const n,
+                 transport_segment& seg);
+#else
+  void seg_prune(unixtime_t const worst_time_at_dest,
+                 std::uint8_t const n,
+                 transport_segment& seg);
 #endif
-      unixtime_t const worst_time_at_dest,
-#ifdef TB_MIN_WALK
-      pareto_set<journey_min_walk>& results,
-#elifdef TB_TRANSFER_CLASS
-      pareto_set<journey_transfer_class>& results,
-#endif
-      std::uint8_t const n,
-      transport_segment& seg);
-
+  
   void seg_transfers(std::uint8_t const n, queue_idx_t const q_cur);
 
 #else
 
   void handle_segment(unixtime_t const start_time,
                       unixtime_t const worst_time_at_dest,
-#ifdef TB_MIN_WALK
-                      pareto_set<journey_min_walk>& results,
-#elifdef TB_TRANSFER_CLASS
-                      pareto_set<journey_transfer_class>& results,
-#else
                       pareto_set<journey>& results,
-#endif
                       std::uint8_t const n,
                       queue_idx_t const q_cur);
 

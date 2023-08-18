@@ -11,6 +11,8 @@
 #include "nigiri/rt/run.h"
 #include "nigiri/types.h"
 
+#include "nigiri/routing/tripbased/settings.h"
+
 namespace nigiri {
 struct timetable;
 struct rt_timetable;
@@ -53,6 +55,31 @@ struct journey {
     std::variant<run_enter_exit, footpath, offset> uses_;
   };
 
+#ifdef TB_MIN_WALK
+  bool dominates(journey const& o) const {
+    if (start_time_ <= dest_time_) {
+      return transfers_ <= o.transfers_ && start_time_ >= o.start_time_ &&
+             dest_time_ <= o.dest_time_ && time_walk_ <= o.time_walk_;
+    } else {
+      return transfers_ <= o.transfers_ && start_time_ <= o.start_time_ &&
+             dest_time_ >= o.dest_time_ && time_walk_ <= o.time_walk_;
+    }
+  }
+#elifdef TB_TRANSFER_CLASS
+  bool dominates(journey const& o) const {
+    if (start_time_ <= dest_time_) {
+      return transfers_ <= o.transfers_ && start_time_ >= o.start_time_ &&
+             dest_time_ <= o.dest_time_ &&
+             transfer_class_max_ <= o.transfer_class_max_ &&
+             transfer_class_sum_ <= o.transfer_class_sum_;
+    } else {
+      return transfers_ <= o.transfers_ && start_time_ <= o.start_time_ &&
+             dest_time_ >= o.dest_time_ &&
+             transfer_class_max_ <= o.transfer_class_max_ &&
+             transfer_class_sum_ <= o.transfer_class_sum_;
+    }
+  }
+#else
   bool dominates(journey const& o) const {
     if (start_time_ <= dest_time_) {
       return transfers_ <= o.transfers_ && start_time_ >= o.start_time_ &&
@@ -62,6 +89,7 @@ struct journey {
              dest_time_ >= o.dest_time_;
     }
   }
+#endif
 
   void add(leg&& l) { legs_.emplace_back(l); }
 
@@ -79,6 +107,12 @@ struct journey {
   unixtime_t dest_time_;
   location_idx_t dest_;
   std::uint8_t transfers_{0U};
+#ifdef TB_MIN_WALK
+  std::uint16_t time_walk_{0U};
+#elifdef TB_TRANSFER_CLASS
+  std::uint8_t transfer_class_max_{0U};
+  std::uint8_t transfer_class_sum_{0U};
+#endif
 };
 
 }  // namespace nigiri::routing

@@ -5,10 +5,6 @@
 #include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/settings.h"
 
-#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
-#include "nigiri/routing/tripbased/query/journey_more_criteria.h"
-#endif
-
 #ifdef TB_TRANSFER_CLASS
 #include "nigiri/routing/tripbased/transfer_class.h"
 #endif
@@ -109,13 +105,7 @@ query_engine::query_engine(timetable const& tt,
 void query_engine::execute(unixtime_t const start_time,
                            std::uint8_t const max_transfers,
                            unixtime_t const worst_time_at_dest,
-#ifdef TB_MIN_WALK
-                           pareto_set<journey_min_walk>& results) {
-#elifdef TB_TRANSFER_CLASS
-                           pareto_set<journey_transfer_class>& results) {
-#else
                            pareto_set<journey>& results) {
-#endif
 #ifndef NDEBUG
   TBDL << "Executing with start_time: " << unix_dhhmm(tt_, start_time)
        << ", max_transfers: " << std::to_string(max_transfers)
@@ -139,24 +129,20 @@ void query_engine::execute(unixtime_t const start_time,
     // (1)  destination reached?
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
-      seg_dest(start_time, results,
 #if !defined(TB_MIN_WALK) && !defined(TB_TRANSFER_CLASS)
-               worst_time_at_dest,
+      seg_dest(start_time, results, worst_time_at_dest, n, state_.q_n_[q_cur]);
+#else
+      seg_dest(start_time, results, n, state_.q_n_[q_cur]);
 #endif
-               n, state_.q_n_[q_cur]);
     }
     // (2) pruning?
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
-      seg_prune(
 #if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
-          start_time,
+      seg_prune(start_time, worst_time_at_dest, results, n, state_.q_n_[q_cur]);
+#else
+      seg_prune(worst_time_at_dest, n, state_.q_n_[q_cur]);
 #endif
-          worst_time_at_dest,
-#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
-          results,
-#endif
-          n, state_.q_n_[q_cur]);
     }
     // (3) process transfers & enqueue segments
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
@@ -181,12 +167,8 @@ void query_engine::execute(unixtime_t const start_time,
 #ifdef TB_CACHE_PRESSURE_REDUCTION
 
 void query_engine::seg_dest(unixtime_t const start_time,
-#ifdef TB_MIN_WALK
-                            pareto_set<journey_min_walk>& results,
-#elifdef TB_TRANSFER_CLASS
-                            pareto_set<journey_transfer_class>& results,
-#else
                             pareto_set<journey>& results,
+#if !defined(TB_MIN_WALK) && !defined(TB_TRANSFER_CLASS)
                             unixtime_t worst_time_at_dest,
 #endif
                             std::uint8_t const n,
@@ -231,28 +213,20 @@ void query_engine::seg_dest(unixtime_t const start_time,
       TBDL << "segment reaches a destination at "
            << dhhmm(tau_d + travel_time_seg + le.time_) << "\n";
 #endif
-
+      // add journey if it is non-dominated
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
+      journey j{};
+      j.start_time_ = start_time;
+      j.dest_time_ = t_cur;
+      j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
+                    .location_idx();
+      j.transfers_ = n;
 #ifdef TB_MIN_WALK
-      std::uint16_t const time_walk = seg.time_walk_ + le.time_;
-      // add journey if it is non-dominated
-      journey_min_walk j{};
-      j.start_time_ = start_time;
-      j.dest_time_ = t_cur;
-      j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
-                    .location_idx();
-      j.transfers_ = n;
-      j.time_walk_ = time_walk;
-      results.add(std::move(j));
+      j.time_walk_ = seg.time_walk_ + le.time_;
 #elifdef TB_TRANSFER_CLASS
-      // add journey if it is non-dominated
-      journey_transfer_class j{};
-      j.start_time_ = start_time;
-      j.dest_time_ = t_cur;
-      j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
-                    .location_idx();
-      j.transfers_ = n;
       j.transfer_class_max_ = seg.transfer_class_max_;
       j.transfer_class_sum_ = seg.transfer_class_sum_;
+#endif
       results.add(std::move(j));
 #else
       if (t_cur < state_.t_min_[n] && t_cur < worst_time_at_dest) {
@@ -299,10 +273,8 @@ void query_engine::seg_prune(
     unixtime_t const start_time,
 #endif
     unixtime_t const worst_time_at_dest,
-#ifdef TB_MIN_WALK
-    pareto_set<journey_min_walk>& results,
-#elifdef TB_TRANSFER_CLASS
-    pareto_set<journey_transfer_class>& results,
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
+    pareto_set<journey>& results,
 #endif
 #ifndef TB_CACHE_PRESSURE_REDUCTION
     unixtime_t time_prune,
@@ -310,28 +282,18 @@ void query_engine::seg_prune(
     std::uint8_t const n,
     transport_segment& seg) {
   bool const no_prune = seg.time_prune_ < worst_time_at_dest;
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
+  if (no_prune) {
+    journey tentative_j{};
+    tentative_j.start_time_ = start_time;
+    tentative_j.dest_time_ = seg.time_prune_;
+    tentative_j.transfers_ = n + 1;
 #ifdef TB_MIN_WALK
-  if (no_prune) {
-    journey_min_walk tentative_j{};
-    tentative_j.start_time_ = start_time;
-    tentative_j.dest_time_ = seg.time_prune_;
     tentative_j.time_walk_ = seg.time_walk_;
-    tentative_j.transfers_ = n + 1;
-    for (auto const& existing_j : results) {
-      if (existing_j.dominates(tentative_j)) {
-        seg.no_prune_ = false;
-        break;
-      }
-    }
-  }
 #elifdef TB_TRANSFER_CLASS
-  if (no_prune) {
-    journey_transfer_class tentative_j{};
-    tentative_j.start_time_ = start_time;
-    tentative_j.dest_time_ = seg.time_prune_;
-    tentative_j.transfers_ = n + 1;
     tentative_j.transfer_class_max_ = seg.transfer_class_max_;
     tentative_j.transfer_class_sum_ = seg.transfer_class_sum_;
+#endif
     for (auto const& existing_j : results) {
       if (existing_j.dominates(tentative_j)) {
         seg.no_prune_ = false;
@@ -470,13 +432,7 @@ void query_engine::seg_transfers(std::uint8_t const n,
 
 void query_engine::handle_segment(unixtime_t const start_time,
                                   unixtime_t const worst_time_at_dest,
-#ifdef TB_MIN_WALK
-                                  pareto_set<journey_min_walk>& results,
-#elifdef TB_TRANSFER_CLASS
-                                  pareto_set<journey_transfer_class>& results,
-#else
                                   pareto_set<journey>& results,
-#endif
                                   std::uint8_t const n,
                                   queue_idx_t const q_cur) {
   // the current transport segment
@@ -537,27 +493,20 @@ void query_engine::handle_segment(unixtime_t const start_time,
            << dhhmm(tau_d + travel_time_seg + le.time_) << "\n";
 #endif
 
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
+      // add journey if it is non-dominated
+      journey j{};
+      j.start_time_ = start_time;
+      j.dest_time_ = t_cur;
+      j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
+                    .location_idx();
+      j.transfers_ = n;
 #ifdef TB_MIN_WALK
-      std::uint16_t const time_walk = reached_walk + le.time_;
-      // add journey if it is non-dominated
-      journey_min_walk j{};
-      j.start_time_ = start_time;
-      j.dest_time_ = t_cur;
-      j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
-                    .location_idx();
-      j.transfers_ = n;
-      j.time_walk_ = time_walk;
-      results.add(std::move(j));
+      j.time_walk_ = reached_walk + le.time_;
 #elifdef TB_TRANSFER_CLASS
-      // add journey if it is non-dominated
-      journey_transfer_class j{};
-      j.start_time_ = start_time;
-      j.dest_time_ = t_cur;
-      j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
-                    .location_idx();
-      j.transfers_ = n;
       j.transfer_class_max_ = reached_transfer_class_max;
       j.transfer_class_sum_ = reached_transfer_class_sum;
+#endif
       results.add(std::move(j));
 #else
       if (t_cur < state_.t_min_[n] && t_cur < worst_time_at_dest) {
@@ -599,28 +548,18 @@ void query_engine::handle_segment(unixtime_t const start_time,
       base_, minutes_after_midnight_t{tau_d + travel_time_next});
 
   bool no_prune = unix_time_next < worst_time_at_dest;
+#if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
+  if (no_prune) {
+    journey tentative_j{};
+    tentative_j.start_time_ = start_time;
+    tentative_j.dest_time_ = unix_time_next;
+    tentative_j.transfers_ = n + 1;
 #ifdef TB_MIN_WALK
-  if (no_prune) {
-    journey_min_walk tentative_j{};
-    tentative_j.start_time_ = start_time;
-    tentative_j.dest_time_ = unix_time_next;
-    tentative_j.transfers_ = n + 1;
     tentative_j.time_walk_ = reached_walk;
-    for (auto const& existing_j : results) {
-      if (existing_j.dominates(tentative_j)) {
-        no_prune = false;
-        break;
-      }
-    }
-  }
 #elifdef TB_TRANSFER_CLASS
-  if (no_prune) {
-    journey_transfer_class tentative_j{};
-    tentative_j.start_time_ = start_time;
-    tentative_j.dest_time_ = unix_time_next;
-    tentative_j.transfers_ = n + 1;
     tentative_j.transfer_class_max_ = reached_transfer_class_max;
     tentative_j.transfer_class_sum_ = reached_transfer_class_sum;
+#endif
     for (auto const& existing_j : results) {
       if (existing_j.dominates(tentative_j)) {
         no_prune = false;
