@@ -14,11 +14,11 @@ struct timetable;
 
 namespace nigiri::routing::tripbased {
 
-struct tb_query_stats {};
+struct query_stats {};
 
 struct query_engine {
   using algo_state_t = query_state;
-  using algo_stats_t = tb_query_stats;
+  using algo_stats_t = query_stats;
 
   static constexpr bool kUseLowerBounds = false;
 
@@ -153,7 +153,7 @@ private:
   std::vector<std::uint16_t>& dist_to_dest_;
   std::vector<std::uint16_t>& lb_;
   day_idx_t const base_;
-  tb_query_stats stats_;
+  query_stats stats_;
 };
 
 }  // namespace nigiri::routing::tripbased
