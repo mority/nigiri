@@ -5,8 +5,8 @@
 #include "utl/get_or_create.h"
 
 #include "nigiri/routing/tripbased/dbg.h"
-#include "nigiri/routing/tripbased/preprocessing/earliest_times.h"
-#include "nigiri/routing/tripbased/preprocessing/tb_preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/preprocessor.h"
+#include "nigiri/routing/tripbased/preprocessing/reached_reduction.h"
 #include "nigiri/stop.h"
 #include "nigiri/types.h"
 
@@ -33,8 +33,8 @@ void preprocessor::build_part(preprocessor* const pp) {
   bitfield theta;
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-  earliest_times ets_arr_;
-  earliest_times ets_ch_;
+  reached_reduction rr_arr_;
+  reached_reduction rr_ch_;
 
   // days on which the transfer constitutes an
   // improvement
@@ -72,8 +72,8 @@ void preprocessor::build_part(preprocessor* const pp) {
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
     // clear earliest times
-    ets_arr_.reset();
-    ets_ch_.reset();
+    rr_arr_.reset();
+    rr_ch_.reset();
     // reverse iteration
     for (auto i = static_cast<stop_idx_t>(stop_seq_t.size() - 1U); i != 0U;
          --i) {
@@ -108,44 +108,43 @@ void preprocessor::build_part(preprocessor* const pp) {
 
       // init the earliest times data structure
 #ifdef TB_MIN_WALK
-      ets_arr_.update_walk(p_t_i, tau_arr_t_i, 0, beta_t, nullptr);
-      ets_ch_.update_walk(
+      rr_arr_.update_walk(p_t_i, tau_arr_t_i, 0, beta_t, nullptr);
+      rr_ch_.update_walk(
           p_t_i, tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
           0, beta_t, nullptr);
       for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
-        ets_arr_.update_walk(fp.target(), tau_arr_t_i + fp.duration_,
-                             fp.duration_, beta_t, nullptr);
-        ets_ch_.update_walk(fp.target(), tau_arr_t_i + fp.duration_,
+        rr_arr_.update_walk(fp.target(), tau_arr_t_i + fp.duration_,
                             fp.duration_, beta_t, nullptr);
+        rr_ch_.update_walk(fp.target(), tau_arr_t_i + fp.duration_,
+                           fp.duration_, beta_t, nullptr);
       }
 #elifdef TB_TRANSFER_CLASS
-      ets_arr_.update_class(p_t_i, tau_arr_t_i, 0, beta_t, nullptr);
-      ets_ch_.update_class(
+      rr_arr_.update_class(p_t_i, tau_arr_t_i, 0, beta_t, nullptr);
+      rr_ch_.update_class(
           p_t_i, tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
           0, beta_t, nullptr);
       for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
-        ets_arr_.update_class(fp.target(), tau_arr_t_i + fp.duration_, 0,
-                              beta_t, nullptr);
-        ets_ch_.update_class(fp.target(), tau_arr_t_i + fp.duration_, 0, beta_t,
+        rr_arr_.update_class(fp.target(), tau_arr_t_i + fp.duration_, 0, beta_t,
                              nullptr);
+        rr_ch_.update_class(fp.target(), tau_arr_t_i + fp.duration_, 0, beta_t,
+                            nullptr);
       }
 #else
-      ets_arr_.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
-      ets_ch_.update(
+      rr_arr_.update(p_t_i, tau_arr_t_i, beta_t, nullptr);
+      rr_ch_.update(
           p_t_i, tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
           beta_t, nullptr);
       for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
-        ets_arr_.update(fp.target(), tau_arr_t_i + fp.duration_, beta_t,
-                        nullptr);
-        ets_ch_.update(fp.target(), tau_arr_t_i + fp.duration_, beta_t,
+        rr_arr_.update(fp.target(), tau_arr_t_i + fp.duration_, beta_t,
                        nullptr);
+        rr_ch_.update(fp.target(), tau_arr_t_i + fp.duration_, beta_t, nullptr);
       }
 #endif
 #endif
 
       auto handle_fp = [&sigma_t, &pp, &t, &i, &route_t, &alpha,
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
-                        &tau_arr_t_i, &ets_arr_, &ets_ch_, &impr,
+                        &tau_arr_t_i, &rr_arr_, &rr_ch_, &impr,
 #ifdef TB_MIN_WALK
                         &p_t_i,
 #endif
@@ -337,31 +336,30 @@ void preprocessor::build_part(preprocessor* const pp) {
 #ifdef TB_MIN_WALK
                         std::uint16_t const walk_time_l =
                             p_t_i == p_u_j ? 0 : fp.duration_;
-                        ets_arr_.update_walk(p_u_l, tau_arr_t_u_l, walk_time_l,
-                                             theta, &impr);
-                        ets_ch_.update_walk(
+                        rr_arr_.update_walk(p_u_l, tau_arr_t_u_l, walk_time_l,
+                                            theta, &impr);
+                        rr_ch_.update_walk(
                             p_u_l,
                             tau_arr_t_u_l +
                                 pp->tt_.locations_.transfer_time_[p_u_l]
                                     .count(),
                             walk_time_l, theta, &impr);
 #elifdef TB_TRANSFER_CLASS
-                        ets_arr_.update_class(p_u_l, tau_arr_t_u_l, kappa,
-                                              theta, &impr);
-                        ets_ch_.update_class(
+                        rr_arr_.update_class(p_u_l, tau_arr_t_u_l, kappa, theta,
+                                             &impr);
+                        rr_ch_.update_class(
                             p_u_l,
                             tau_arr_t_u_l +
                                 pp->tt_.locations_.transfer_time_[p_u_l]
                                     .count(),
                             kappa, theta, &impr);
 #else
-                        ets_arr_.update(p_u_l, tau_arr_t_u_l, theta, &impr);
-                        ets_ch_.update(
-                            p_u_l,
-                            tau_arr_t_u_l +
-                                pp->tt_.locations_.transfer_time_[p_u_l]
-                                    .count(),
-                            theta, &impr);
+                        rr_arr_.update(p_u_l, tau_arr_t_u_l, theta, &impr);
+                        rr_ch_.update(p_u_l,
+                                      tau_arr_t_u_l + pp->tt_.locations_
+                                                          .transfer_time_[p_u_l]
+                                                          .count(),
+                                      theta, &impr);
 #endif
                         for (auto const& fp_r :
                              pp->tt_.locations_.footpaths_out_[p_u_l]) {
@@ -371,18 +369,18 @@ void preprocessor::build_part(preprocessor* const pp) {
 #ifdef TB_MIN_WALK
                           std::uint16_t const walk_time_r =
                               walk_time_l + fp_r.duration_;
-                          ets_arr_.update_walk(fp_r.target(), eta, walk_time_r,
-                                               theta, &impr);
-                          ets_ch_.update_walk(fp_r.target(), eta, walk_time_r,
+                          rr_arr_.update_walk(fp_r.target(), eta, walk_time_r,
                                               theta, &impr);
+                          rr_ch_.update_walk(fp_r.target(), eta, walk_time_r,
+                                             theta, &impr);
 #elifdef TB_TRANSFER_CLASS
-                          ets_arr_.update_class(fp_r.target(), eta, kappa,
-                                                theta, &impr);
-                          ets_ch_.update_class(fp_r.target(), eta, kappa, theta,
+                          rr_arr_.update_class(fp_r.target(), eta, kappa, theta,
                                                &impr);
+                          rr_ch_.update_class(fp_r.target(), eta, kappa, theta,
+                                              &impr);
 #else
-                          ets_arr_.update(fp_r.target(), eta, theta, &impr);
-                          ets_ch_.update(fp_r.target(), eta, theta, &impr);
+                          rr_arr_.update(fp_r.target(), eta, theta, &impr);
+                          rr_ch_.update(fp_r.target(), eta, theta, &impr);
 #endif
                         }
                       }
