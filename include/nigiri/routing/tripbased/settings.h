@@ -1,7 +1,7 @@
 #pragma once
 
 // additional criteria
-#define TB_MIN_WALK
+// #define TB_MIN_WALK
 // #define TB_TRANSFER_CLASS
 #ifdef TB_TRANSFER_CLASS
 #define TB_TRANSFER_CLASS0 15
@@ -17,7 +17,7 @@
 #define TB_PREPRO_TRANSFER_REDUCTION
 
 // query engine options
-#define TB_CACHE_PRESSURE_REDUCTION
+// #define TB_CACHE_PRESSURE_REDUCTION
 
 // system limits - number of bits
 #define BITFIELD_IDX_BITS 25U
