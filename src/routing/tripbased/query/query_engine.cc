@@ -49,10 +49,10 @@ query_engine::query_engine(timetable const& tt,
             for (std::uint16_t stop_idx{1U};
                  stop_idx < tt_.route_location_seq_[route_idx].size();
                  ++stop_idx) {
-              auto const location_idx =
-                  stop{tt_.route_location_seq_[route_idx][stop_idx]}
-                      .location_idx();
-              if (location_idx == fp.target()) {
+              auto const route_stop =
+                  stop{tt_.route_location_seq_[route_idx][stop_idx]};
+              if (route_stop.location_idx() == fp.target() &&
+                  route_stop.out_allowed()) {
                 state_.route_dest_.emplace_back(route_idx, stop_idx,
                                                 fp.duration().count());
               }
@@ -80,10 +80,10 @@ query_engine::query_engine(timetable const& tt,
             for (std::uint16_t stop_idx{1U};
                  stop_idx < tt_.route_location_seq_[route_idx].size();
                  ++stop_idx) {
-              auto const location_idx =
-                  stop{tt_.route_location_seq_[route_idx][stop_idx]}
-                      .location_idx();
-              if (location_idx == fp.target()) {
+              auto const route_stop =
+                  stop{tt_.route_location_seq_[route_idx][stop_idx]};
+              if (route_stop.location_idx() == fp.target() &&
+                  route_stop.out_allowed()) {
                 state_.route_dest_.emplace_back(
                     route_idx, stop_idx,
                     fp.duration().count() + dist_to_dest_[dest.v_]);
@@ -731,8 +731,8 @@ void query_engine::handle_start_footpath(std::int32_t const d,
     // iterate stop sequence of route, skip last stop
     for (std::uint16_t i = 0U;
          i < tt_.route_location_seq_[route_idx].size() - 1; ++i) {
-      auto const q = stop{tt_.route_location_seq_[route_idx][i]}.location_idx();
-      if (q == fp.target()) {
+      auto const route_stop = stop{tt_.route_location_seq_[route_idx][i]};
+      if (route_stop.location_idx() == fp.target() && route_stop.in_allowed()) {
 #ifndef NDEBUG
         TBDL << "serves " << location_name(tt_, fp.target())
              << " at stop idx = " << i << "\n";
