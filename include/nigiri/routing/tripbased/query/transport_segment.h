@@ -23,23 +23,29 @@ static inline transport_segment_idx_t embed_day_offset(
     const std::uint16_t base,
     const std::uint16_t transport_day,
     const transport_idx_t transport_idx) {
-  return (((static_cast<transport_segment_idx_t>(transport_day) +
-            QUERY_DAY_SHIFT) -
-           static_cast<transport_segment_idx_t>(base))
-          << (32U - DAY_OFFSET_BITS)) |
+  auto const day_offset = static_cast<std::int32_t>(transport_day) -
+                          static_cast<std::int32_t>(base) + QUERY_DAY_SHIFT;
+  assert(0 <= day_offset && day_offset <= 7);
+  return (static_cast<std::uint32_t>(day_offset) << (32U - DAY_OFFSET_BITS)) |
          transport_idx.v_;
 }
 
 static inline std::uint32_t day_offset(
     const transport_segment_idx_t transport_segment_idx) {
-  return (transport_segment_idx & day_offset_mask) >> (32U - DAY_OFFSET_BITS);
+  auto const day_offset =
+      (transport_segment_idx & day_offset_mask) >> (32U - DAY_OFFSET_BITS);
+  assert(0 <= day_offset && day_offset <= 7);
+  return day_offset;
 }
 
 static inline day_idx_t transport_day(
     const day_idx_t base, const transport_segment_idx_t transport_segment_idx) {
-  return day_idx_t{base.v_ +
-                   static_cast<int>(day_offset(transport_segment_idx)) -
-                   QUERY_DAY_SHIFT};
+  auto const transport_day =
+      static_cast<std::int32_t>(base.v_) +
+      static_cast<std::int32_t>(day_offset(transport_segment_idx)) -
+      QUERY_DAY_SHIFT;
+  assert(0 <= transport_day);
+  return day_idx_t{transport_day};
 }
 
 static inline transport_idx_t transport_idx(
