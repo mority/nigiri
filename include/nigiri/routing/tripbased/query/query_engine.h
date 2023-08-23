@@ -139,7 +139,7 @@ private:
 
   // reconstruct the transfer from the given segment to the last journey leg
   // returns the stop idx at which the segment is exited
-  std::optional<unsigned> reconstruct_transfer(
+  std::optional<stop_idx_t> reconstruct_transfer(
       journey& j, transport_segment const& seg) const;
 
   void add_initial_footpath(query const& q, journey& j) const;

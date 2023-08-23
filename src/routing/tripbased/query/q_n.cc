@@ -19,9 +19,9 @@ void q_n::reset(day_idx_t new_base) {
 }
 
 #ifdef TB_MIN_WALK
-void q_n::enqueue_walk(std::uint16_t const transport_day,
+void q_n::enqueue_walk(day_idx_t const transport_day,
                        transport_idx_t const transport_idx,
-                       std::uint16_t const stop_idx,
+                       stop_idx_t const stop_idx,
                        std::uint16_t const n_transfers,
                        std::uint16_t const time_walk,
                        std::uint32_t const transferred_from) {
@@ -70,9 +70,9 @@ void q_n::enqueue_walk(std::uint16_t const transport_day,
 
 #elifdef TB_TRANSFER_CLASS
 
-void q_n::enqueue_class(std::uint16_t const transport_day,
+void q_n::enqueue_class(day_idx_t const transport_day,
                         transport_idx_t const transport_idx,
-                        std::uint16_t const stop_idx,
+                        stop_idx_t const stop_idx,
                         std::uint16_t const n_transfers,
                         std::uint8_t const transfer_class_max,
                         std::uint8_t const transfer_class_sum,
@@ -128,7 +128,7 @@ void q_n::enqueue_class(std::uint16_t const transport_day,
 }
 
 #else
-void q_n::enqueue(std::uint16_t const transport_day,
+void q_n::enqueue(day_idx_t const transport_day,
                   transport_idx_t const transport_idx,
                   std::uint16_t const stop_idx,
                   std::uint16_t const n_transfers,
@@ -136,9 +136,8 @@ void q_n::enqueue(std::uint16_t const transport_day,
   assert(segments_.size() < std::numeric_limits<queue_idx_t>::max());
   assert(base_.has_value());
 
-  // compute transport segment index
-  auto const transport_segment_idx =
-      embed_day_offset(base_.value().v_, transport_day, transport_idx);
+  transport_segment_idx_t transport_segment_idx{base_.value(), transport_day,
+                                                transport_idx};
 
   // look-up the earliest stop index reached
   auto const r_query_res = r_.query(transport_segment_idx, n_transfers);

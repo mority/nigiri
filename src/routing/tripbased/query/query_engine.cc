@@ -574,8 +574,7 @@ void query_engine::handle_segment(unixtime_t const start_time,
 #endif
 
     // iterate stops of the current transport segment
-    for (stop_idx_t i = seg.get_stop_idx_start() + 1U;
-         i <= seg.get_stop_idx_end(); ++i) {
+    for (stop_idx_t i = seg.stop_idx_start_ + 1U; i <= seg.stop_idx_end_; ++i) {
 #ifndef NDEBUG
       TBDL << "Arrival at stop " << i << ": "
            << location_name(
@@ -612,8 +611,9 @@ void query_engine::handle_segment(unixtime_t const start_time,
                             transfer.stop_idx_to_, event_type::kDep)
                   .count();
 
-          auto const d_tr = d_seg + tau_arr_t_i / 1440 - tau_dep_u_j / 1440 +
-                            transfer.passes_midnight_;
+          auto const d_tr =
+              day_idx_t{d_seg + tau_arr_t_i / 1440 - tau_dep_u_j / 1440 +
+                        transfer.passes_midnight_};
 #ifndef NDEBUG
           TBDL << "Found a transfer to transport "
                << transfer.get_transport_idx_to() << ": "
@@ -657,22 +657,20 @@ void query_engine::handle_segment(unixtime_t const start_time,
             }
           }
 
-          state_.q_n_.enqueue_walk(
-              static_cast<std::uint16_t>(d_tr), transfer.get_transport_idx_to(),
-              transfer.get_stop_idx_to(), n + 1U, walk_time, q_cur);
+          state_.q_n_.enqueue_walk(d_tr, transfer.get_transport_idx_to(),
+                                   transfer.get_stop_idx_to(), n + 1U,
+                                   walk_time, q_cur);
 #elifdef TB_TRANSFER_CLASS
           auto const kappa = transfer_class(transfer_wait(
               tt_, seg.get_transport_idx(), i, transfer.get_transport_idx_to(),
               transfer.get_stop_idx_to(), static_cast<const uint16_t>(d_seg),
               static_cast<const uint16_t>(d_tr)));
-          state_.q_n_.enqueue_class(static_cast<std::uint16_t>(d_tr),
-                                    transfer.get_transport_idx_to(),
+          state_.q_n_.enqueue_class(d_tr, transfer.get_transport_idx_to(),
                                     transfer.get_stop_idx_to(), n + 1U,
                                     std::max(kappa, reached_transfer_class_max),
                                     reached_transfer_class_sum + kappa, q_cur);
 #else
-          state_.q_n_.enqueue(static_cast<std::uint16_t>(d_tr),
-                              transfer.get_transport_idx_to(),
+          state_.q_n_.enqueue(d_tr, transfer.get_transport_idx_to(),
                               transfer.get_stop_idx_to(), n + 1U, q_cur);
 #endif
         }
@@ -783,7 +781,7 @@ void query_engine::handle_start_footpath(std::int32_t const d,
             state_.q_n_.enqueue_class(static_cast<std::uint16_t>(d_seg), t, i,
                                       0U, 0, 0, TRANSFERRED_FROM_NULL);
 #else
-            state_.q_n_.enqueue(static_cast<std::uint16_t>(d_seg), t, i, 0U,
+            state_.q_n_.enqueue(day_idx_t{d_seg}, t, i, 0U,
                                 TRANSFERRED_FROM_NULL);
 #endif
             break;

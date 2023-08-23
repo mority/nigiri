@@ -232,12 +232,12 @@ void query_engine::add_segment_leg(journey& j,
   auto const from =
       stop{
           tt_.route_location_seq_[tt_.transport_route_[seg.get_transport_idx()]]
-                                 [seg.get_stop_idx_start()]}
+                                 [seg.stop_idx_start_]}
           .location_idx();
   auto const to =
       stop{
           tt_.route_location_seq_[tt_.transport_route_[seg.get_transport_idx()]]
-                                 [seg.get_stop_idx_end()]}
+                                 [seg.stop_idx_end_]}
           .location_idx();
   auto const dep_time =
       tt_.to_unixtime(seg.get_transport_day(base_),
@@ -249,19 +249,19 @@ void query_engine::add_segment_leg(journey& j,
                       tt_.event_mam(seg.get_transport_idx(), seg.stop_idx_end_,
                                     event_type::kArr)
                           .as_duration());
-  j.add(journey::leg{direction::kForward, from, to, dep_time, arr_time,
-                     journey::run_enter_exit{
-                         rt::run{transport{seg.get_transport_idx(),
-                                           seg.get_transport_day(base_)},
-                                 interval<stop_idx_t>{0, 0}},
-                         seg.get_stop_idx_start(), seg.get_stop_idx_end()}});
+  j.add(journey::leg{
+      direction::kForward, from, to, dep_time, arr_time,
+      journey::run_enter_exit{rt::run{transport{seg.get_transport_idx(),
+                                                seg.get_transport_day(base_)},
+                                      interval<stop_idx_t>{0, 0}},
+                              seg.stop_idx_start_, seg.stop_idx_end_}});
 #ifndef NDEBUG
   TBDL << "Adding a leg for a transport segment:\n";
   j.legs_.back().print(std::cout, tt_, nullptr, 0U, true);
 #endif
 }
 
-std::optional<unsigned> query_engine::reconstruct_transfer(
+std::optional<stop_idx_t> query_engine::reconstruct_transfer(
     journey& j, transport_segment const& seg) const {
   assert(std::holds_alternative<journey::run_enter_exit>(j.legs_.back().uses_));
 
@@ -273,8 +273,8 @@ std::optional<unsigned> query_engine::reconstruct_transfer(
   auto const target_location_idx = j.legs_.back().from_;
 
   // iterate stops of segment
-  for (stop_idx_t stop_idx_exit = seg.get_stop_idx_start() + 1U;
-       stop_idx_exit <= seg.get_stop_idx_end(); ++stop_idx_exit) {
+  for (stop_idx_t stop_idx_exit = seg.stop_idx_start_ + 1U;
+       stop_idx_exit <= seg.stop_idx_end_; ++stop_idx_exit) {
     auto const exit_location_idx =
         stop{tt_.route_location_seq_
                  [tt_.transport_route_[seg.get_transport_idx()]][stop_idx_exit]}
