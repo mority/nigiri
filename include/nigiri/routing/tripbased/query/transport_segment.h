@@ -19,12 +19,24 @@ static constexpr transport_segment_idx_t day_offset_mask{
 static constexpr transport_segment_idx_t transport_idx_mask{
     0b0001'1111'1111'1111'1111'1111'1111'1111};
 
+static inline std::int32_t compute_day_offset(
+    const std::uint16_t base, const std::uint16_t transport_day) {
+  return static_cast<std::int32_t>(transport_day) -
+         static_cast<std::int32_t>(base) + QUERY_DAY_SHIFT;
+}
+
 static inline transport_segment_idx_t embed_day_offset(
     const std::uint16_t base,
     const std::uint16_t transport_day,
     const transport_idx_t transport_idx) {
-  auto const day_offset = static_cast<std::int32_t>(transport_day) -
-                          static_cast<std::int32_t>(base) + QUERY_DAY_SHIFT;
+  auto const day_offset = compute_day_offset(base, transport_day);
+  assert(0 <= day_offset && day_offset <= 7);
+  return (static_cast<std::uint32_t>(day_offset) << (32U - DAY_OFFSET_BITS)) |
+         transport_idx.v_;
+}
+
+static inline transport_segment_idx_t embed_day_offset(
+    const std::int32_t day_offset, const transport_idx_t transport_idx) {
   assert(0 <= day_offset && day_offset <= 7);
   return (static_cast<std::uint32_t>(day_offset) << (32U - DAY_OFFSET_BITS)) |
          transport_idx.v_;
