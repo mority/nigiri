@@ -119,8 +119,8 @@ void query_engine::execute(unixtime_t const start_time,
 
   // process all Q_n in ascending order, i.e., transport segments reached after
   // n transfers
-  for (std::uint8_t n = 0U;
-       n != state_.q_n_.start_.size() && n <= max_transfers; ++n) {
+  for (std::uint8_t n = 0U; n != state_.q_n_.start_.size() && n < max_transfers;
+       ++n) {
 #ifndef NDEBUG
     TBDL << "Processing segments of Q_" << std::to_string(n) << ":\n";
 #endif
