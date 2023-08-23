@@ -199,7 +199,9 @@ void query_engine::add_final_footpath(query const& q,
 #ifndef NDEBUG
     TBDL << "Adding final footpath, destination match mode: not intermodal\n";
 #endif
-    if (matches(tt_, q.dest_match_mode_, je.le_location_, je.last_location_)) {
+    if (je.last_location_ == je.le_location_) {
+      //    if (matches(tt_, q.dest_match_mode_, je.le_location_,
+      //    je.last_location_)) {
       // add footpath with duration = 0 if destination is reached directly
       footpath const fp{je.last_location_, duration_t{0}};
       j.add(journey::leg{direction::kForward, je.last_location_,
