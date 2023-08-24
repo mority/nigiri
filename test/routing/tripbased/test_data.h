@@ -20,6 +20,7 @@ constexpr interval<std::chrono::sys_days> gtfs_full_period() {
 // test cases
 nigiri::loader::mem_dir no_transfer_files();
 nigiri::loader::mem_dir same_day_transfer_files();
+nigiri::loader::mem_dir next_day_transfer_files();
 nigiri::loader::mem_dir long_transfer_files();
 nigiri::loader::mem_dir weekday_transfer_files();
 nigiri::loader::mem_dir daily_transfer_files();

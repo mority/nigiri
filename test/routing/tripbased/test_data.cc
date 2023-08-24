@@ -116,6 +116,35 @@ loader::mem_dir same_day_transfer_files() {
         std::string{same_day_transfer_stop_times_content}}}};
 }
 
+constexpr auto const next_day_transfer_trips_file_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R0,MON,R0_MON,R0_MON,1
+R1,TUE,R1_TUE,R1_TUE,2
+)";
+
+constexpr auto const next_day_transfer_stop_times_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R0_MON,00:00:00,00:00:00,S0,0,0,0
+R0_MON,12:00:00,12:00:00,S1,1,0,0
+R1_TUE,06:00:00,06:00:00,S1,0,0,0
+R1_TUE,08:00:00,08:00:00,S2,1,0,0
+)";
+
+loader::mem_dir next_day_transfer_files() {
+  using std::filesystem::path;
+  return {
+      {{path{kAgencyFile}, std::string{agency_file_content}},
+       {path{kStopFile}, std::string{simple_stops_file_content}},
+       {path{kCalenderFile}, std::string{calendar_file_content}},
+       {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+       {path{kTransfersFile}, std::string{transfers_file_content}},
+       {path{kRoutesFile}, std::string{same_day_transfer_routes_file_content}},
+       {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+       {path{kTripsFile}, std::string{next_day_transfer_trips_file_content}},
+       {path{kStopTimesFile},
+        std::string{next_day_transfer_stop_times_content}}}};
+}
+
 constexpr auto const long_transfer_routes_file_content = std::string_view{
     R"(route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
 R0,DTA,R0,R0,"S0 -> S1",2

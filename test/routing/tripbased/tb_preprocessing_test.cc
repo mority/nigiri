@@ -88,6 +88,31 @@ TEST(build_transfer_set, same_day_transfer) {
   EXPECT_EQ(bf_exp, tt.bitfields_[t.get_bitfield_idx()]);
 }
 
+TEST(build_transfer_set, next_day_transfer) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(loader_config{0, "Etc/UTC"}, src, next_day_transfer_files(),
+                 tt);
+  finalize(tt);
+
+  // run preprocessing
+  transfer_set ts;
+  build_transfer_set(tt, ts, 10);
+
+  EXPECT_EQ(1, ts.n_transfers_);
+  auto const& transfers = ts.at(0U, 1U);
+  ASSERT_EQ(1, transfers.size());
+  auto const& t = transfers[0];
+  EXPECT_EQ(transport_idx_t{1U}, t.transport_idx_to_);
+  EXPECT_EQ(0U, t.stop_idx_to_);
+  EXPECT_EQ(bitfield_idx_t{0U}, t.bitfield_idx_);
+  EXPECT_EQ(1, t.passes_midnight_);
+  bitfield const bf_exp{"100000"};
+  EXPECT_EQ(bf_exp, tt.bitfields_[t.get_bitfield_idx()]);
+}
+
 TEST(build_transfer_set, from_long_transfer) {
   // load timetable
   timetable tt;
