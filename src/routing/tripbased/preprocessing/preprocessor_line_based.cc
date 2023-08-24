@@ -134,7 +134,7 @@ void preprocessor::build_part(preprocessor* const pp) {
           auto const sigma_t = static_cast<std::int8_t>(tau_arr_t_i.days());
           auto const tau_q = static_cast<std::uint16_t>(
               alpha + neighbor.footpath_length_.count());
-          auto const tau_q_tod = tau_q % 1400;
+          auto const tau_q_tod = tau_q % 1440;
           auto sigma_fpw = static_cast<std::int8_t>(tau_q / 1440);
 
 #ifndef NDEBUG
