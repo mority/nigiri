@@ -484,8 +484,10 @@ void preprocessor::build_part(preprocessor* const pp) {
               }
             }
 
+            std::swap(transfer->bf_, impr);
+
             // if the transfer offers no improvement
-            if (impr.none()) {
+            if (transfer->bf_.none()) {
               // remove it
               transfer = part.second[i].erase(transfer);
             } else {
