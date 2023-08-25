@@ -32,6 +32,13 @@ query_engine::query_engine(timetable const& tt,
       lb_{lb},
       base_{base} {
 
+#ifdef TB_CACHE_PRESSURE_REDUCTION
+  stats_.cache_pressure_reduction_ = true;
+#endif
+#ifdef TB_LOWERBOUND
+  stats_.lower_bound_pruning_ = true;
+#endif
+
   // reset state for new query
   state_.reset(base);
 
@@ -162,6 +169,8 @@ void query_engine::execute(unixtime_t const start_time,
     }
 #endif
   }
+
+  stats_.n_segments_enqueued_ += state_.q_n_.size();
 }
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
@@ -227,6 +236,7 @@ void query_engine::seg_dest(unixtime_t const start_time,
       j.transfer_class_sum_ = seg.transfer_class_sum_;
 #endif
       results.add(std::move(j));
+      ++stats_.n_journeys_found_;
 #else
       if (t_cur < state_.t_min_[n] && t_cur < worst_time_at_dest) {
         state_.t_min_[n] = t_cur;
@@ -249,6 +259,7 @@ void query_engine::seg_dest(unixtime_t const start_time,
         }
 #else
         results.add(std::move(j));
+        ++stats_.n_journeys_found_;
 #endif
       }
 #endif
@@ -433,6 +444,8 @@ void query_engine::seg_transfers(std::uint8_t const n,
         }
       }
     }
+  } else {
+    ++stats_.n_segments_pruned_;
   }
 }
 
@@ -516,6 +529,7 @@ void query_engine::handle_segment(unixtime_t const start_time,
       j.transfer_class_sum_ = reached_transfer_class_sum;
 #endif
       results.add(std::move(j));
+      ++stats_.n_journeys_found_;
 #else
       if (t_cur < state_.t_min_[n] && t_cur < worst_time_at_dest) {
         state_.t_min_[n] = t_cur;
@@ -538,6 +552,7 @@ void query_engine::handle_segment(unixtime_t const start_time,
         }
 #else
         results.add(std::move(j));
+        ++stats_.n_journeys_found_;
 #endif
       }
 #endif
@@ -711,6 +726,8 @@ void query_engine::handle_segment(unixtime_t const start_time,
         }
       }
     }
+  } else {
+    ++stats_.n_segments_pruned_;
   }
 }
 
