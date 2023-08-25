@@ -25,6 +25,8 @@ using namespace std::chrono_literals;
 
 void preprocessor::build_part(preprocessor* const pp) {
 
+  preprocessing_stats prepro_stats;
+
   // days of transport that still require a connection
   bitfield omega;
 
@@ -40,7 +42,7 @@ void preprocessor::build_part(preprocessor* const pp) {
   neighborhood.reserve(pp->route_max_length_ * 10);
 
   // earliest transport per stop index
-  reached_line_based et;
+  reached_line_based rlb;
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   reached_reduction rr_arr;
@@ -99,11 +101,11 @@ void preprocessor::build_part(preprocessor* const pp) {
         auto stop_seq_to = pp->tt_.route_location_seq_[route_to_prev];
         // initial reset of earliest transport
 #ifdef TB_MIN_WALK
-        et.reset_walk(stop_seq_to.size());
+        rlb.reset_walk(stop_seq_to.size());
 #elifdef TB_TRANSFER_CLASS
-        et.reset_class(stop_seq_to.size());
+        rlb.reset_class(stop_seq_to.size());
 #else
-        et.reset(stop_seq_to.size());
+        rlb.reset(stop_seq_to.size());
 #endif
         // iterate entries in route neighborhood
         for (auto const& neighbor : neighborhood) {
@@ -113,11 +115,11 @@ void preprocessor::build_part(preprocessor* const pp) {
             route_to_prev = neighbor.route_idx_to_;
             stop_seq_to = pp->tt_.route_location_seq_[route_to_prev];
 #ifdef TB_MIN_WALK
-            et.reset_walk(stop_seq_to.size());
+            rlb.reset_walk(stop_seq_to.size());
 #elifdef TB_TRANSFER_CLASS
-            et.reset_class(stop_seq_to.size());
+            rlb.reset_class(stop_seq_to.size());
 #else
-            et.reset(stop_seq_to.size());
+            rlb.reset(stop_seq_to.size());
 #endif
           }
 
@@ -234,12 +236,12 @@ void preprocessor::build_part(preprocessor* const pp) {
               // compute walking time between the stops
               auto const walk_time = pp->walk_time(p_t_i, p_u_j);
 
-              et.update_walk(neighbor.stop_idx_to_, otid, walk_time, theta);
+              rlb.update_walk(neighbor.stop_idx_to_, otid, walk_time, theta);
 #elifdef TB_TRANSFER_CLASS
-              et.update_class(neighbor.stop_idx_to_, otid, kappa, theta);
+              rlb.update_class(neighbor.stop_idx_to_, otid, kappa, theta);
 #else
-              et.update(neighbor.stop_idx_to_, sigma_t + sigma_fpw - sigma_u,
-                        pp->tt_.event_mam(u, 0, event_type::kDep).mam_, theta);
+              rlb.update(neighbor.stop_idx_to_, sigma_t + sigma_fpw - sigma_u,
+                         pp->tt_.event_mam(u, 0, event_type::kDep).mam_, theta);
 #endif
               // recheck theta
               if (theta.any()) {
@@ -253,15 +255,17 @@ void preprocessor::build_part(preprocessor* const pp) {
                 part.second[neighbor.stop_idx_from_].emplace_back(
                     theta, u, neighbor.stop_idx_to_, sigma_fpw);
 
+                ++prepro_stats.n_transfers_initial_;
+
                 // add earliest transport entry
 #ifdef TB_MIN_WALK
-                et.transports_[neighbor.stop_idx_to_].emplace_back(
+                rlb.transports_[neighbor.stop_idx_to_].emplace_back(
                     otid, walk_time, theta);
 #elifdef TB_TRANSFER_CLASS
-                et.transports_[neighbor.stop_idx_to_].emplace_back(otid, kappa,
-                                                                   theta);
+                rlb.transports_[neighbor.stop_idx_to_].emplace_back(otid, kappa,
+                                                                    theta);
 #else
-                et.transports_[neighbor.stop_idx_to_].emplace_back(
+                rlb.transports_[neighbor.stop_idx_to_].emplace_back(
                     sigma_t + sigma_fpw - sigma_u,
                     pp->tt_.event_mam(u, 0, event_type::kDep).mam_, theta);
 #endif
@@ -270,23 +274,23 @@ void preprocessor::build_part(preprocessor* const pp) {
                      j_prime < stop_seq_to.size(); ++j_prime) {
                   theta_prime = theta;
 #ifdef TB_MIN_WALK
-                  et.update_walk(j_prime, otid, walk_time, theta_prime);
+                  rlb.update_walk(j_prime, otid, walk_time, theta_prime);
 #elifdef TB_TRANSFER_CLASS
-                  et.update_class(j_prime, otid, kappa, theta_prime);
+                  rlb.update_class(j_prime, otid, kappa, theta_prime);
 #else
-                  et.update(j_prime, sigma_t + sigma_fpw - sigma_u,
-                            pp->tt_.event_mam(u, 0, event_type::kDep).mam_,
-                            theta_prime);
+                  rlb.update(j_prime, sigma_t + sigma_fpw - sigma_u,
+                             pp->tt_.event_mam(u, 0, event_type::kDep).mam_,
+                             theta_prime);
 #endif
                   if (theta_prime.any()) {
 #ifdef TB_MIN_WALK
-                    et.transports_[j_prime].emplace_back(otid, walk_time,
-                                                         theta_prime);
+                    rlb.transports_[j_prime].emplace_back(otid, walk_time,
+                                                          theta_prime);
 #elifdef TB_TRANSFER_CLASS
-                    et.transports_[j_prime].emplace_back(otid, kappa,
-                                                         theta_prime);
+                    rlb.transports_[j_prime].emplace_back(otid, kappa,
+                                                          theta_prime);
 #else
-                    et.transports_[j_prime].emplace_back(
+                    rlb.transports_[j_prime].emplace_back(
                         sigma_t + sigma_fpw - sigma_u,
                         pp->tt_.event_mam(u, 0, event_type::kDep).mam_,
                         theta_prime);
@@ -490,6 +494,7 @@ void preprocessor::build_part(preprocessor* const pp) {
             if (transfer->bf_.none()) {
               // remove it
               transfer = part.second[i].erase(transfer);
+              ++prepro_stats.n_transfers_reduced_;
             } else {
               ++transfer;
             }
@@ -503,6 +508,13 @@ void preprocessor::build_part(preprocessor* const pp) {
         pp->parts_.push_back(std::move(part));
       }
     }
+  }
+  // write stats
+  {
+    std::lock_guard<std::mutex> const lock(pp->stats_mutex_);
+    pp->prepro_stats_.n_transfers_initial_ += prepro_stats.n_transfers_initial_;
+    pp->prepro_stats_.n_u_turn_transfers_ += prepro_stats.n_u_turn_transfers_;
+    pp->prepro_stats_.n_transfers_reduced_ += prepro_stats.n_transfers_reduced_;
   }
 }
 
@@ -591,13 +603,13 @@ void preprocessor::line_transfers_fp(
         if (!is_uturn) {
           // add to neighborhood
           neighborhood.emplace_back(i, route_to, j, fp.duration());
-        }
+        } else {
+          ++prepro_stats_.n_u_turn_transfers_;
 #ifndef NDEBUG
-        else {
           TBDL << "Discarded U-turn transfer: (" << i << ", " << route_to
                << ", " << j << ", " << fp.duration() << ")\n";
-        }
 #endif
+        }
       }
     }
   }

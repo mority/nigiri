@@ -91,13 +91,15 @@ void preprocessor::build(transfer_set& ts, const std::uint16_t sleep_duration) {
     t.join();
   }
 
-  std::cout << "Found " << n_transfers_ << " transfers, occupying "
-            << n_transfers_ * sizeof(transfer) << " bytes\n";
+  prepro_stats_.n_transfers_final_ = n_transfers_;
+
+  prepro_stats_.print(std::cout);
 
   ts.tt_hash_ = hash_tt(tt_);
   ts.num_el_con_ = num_el_con_;
   ts.route_max_length_ = route_max_length_;
   ts.transfer_time_max_ = transfer_time_max_;
   ts.n_transfers_ = n_transfers_;
+  ts.prepro_stats_ = prepro_stats_;
   ts.ready_ = true;
 }

@@ -76,7 +76,7 @@ struct preprocessor {
   }
 #endif
 
-  explicit preprocessor(timetable& tt, std::int32_t transfer_time_max = 1440)
+  explicit preprocessor(timetable& tt, std::uint16_t transfer_time_max = 1440)
       : tt_(tt), transfer_time_max_(transfer_time_max) {
     {
       auto const timer = scoped_timer("trip-based preprocessing: init");
@@ -118,6 +118,16 @@ struct preprocessor {
         bitfield_to_bitfield_idx_.emplace(tt_.bitfields_[bfi], bfi);
       }
 
+#ifdef TB_PREPRO_LB_PRUNING
+      prepro_stats_.line_based_pruning = true;
+#endif
+#ifdef TB_PREPRO_UTURN_REMOVAL
+      prepro_stats_.u_turn_removal = true;
+#endif
+#ifdef TB_PREPRO_TRANSFER_REDUCTION
+      prepro_stats_.transfer_reduction = true;
+#endif
+
       // number of expected transfers
       //    auto const num_exp_transfers = num_el_con_;
       // reserve space for transfer set
@@ -142,25 +152,28 @@ struct preprocessor {
   timetable& tt_;
 
   // the number of elementary connections in the timetable
-  unsigned num_el_con_ = 0U;
+  unsigned long num_el_con_{0U};
 
   // length of the longest route
-  std::size_t route_max_length_ = 0U;
+  std::size_t route_max_length_{0U};
 
   // max. look-ahead
-  std::int32_t const transfer_time_max_;
+  std::uint16_t const transfer_time_max_;
 
   // the number of transfers found
-  unsigned n_transfers_ = 0U;
+  std::uint64_t n_transfers_{0U};
+
+  preprocessing_stats prepro_stats_;
+  std::mutex stats_mutex_;
 
 #ifndef TB_PREPRO_LB_PRUNING
   // next transport idx for which to compute transfers
-  std::uint32_t next_transport_ = 0U;
+  std::uint32_t next_transport_{0U};
   std::mutex next_transport_mutex_;
 #endif
 #ifdef TB_PREPRO_LB_PRUNING
   // next route idx for which to compute transfers
-  std::uint32_t next_route_ = 0U;
+  std::uint32_t next_route_{0U};
   std::mutex next_route_mutex_;
 #endif
 
@@ -203,7 +216,7 @@ static inline std::size_t hash_tt(timetable const& tt) {
   boost::hash_combine(res, tt.trip_direction_strings_.size());
   boost::hash_combine(res, tt.trip_directions_.size());
 
-  int num_bf = 0;
+  std::uint_fast8_t num_bf = 0U;
   for (auto bf = tt.bitfields_.rbegin(); bf != tt.bitfields_.rend(); ++bf) {
     for (auto const& block : bf->blocks_) {
       boost::hash_combine(res, block);

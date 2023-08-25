@@ -26,6 +26,8 @@ using namespace std::chrono_literals;
 
 void preprocessor::build_part(preprocessor* const pp) {
 
+  preprocessing_stats prepro_stats;
+
   // days of transport that still require a connection
   bitfield omega;
 
@@ -149,7 +151,8 @@ void preprocessor::build_part(preprocessor* const pp) {
                         &p_t_i,
 #endif
 #endif
-                        &omega, &theta, &part, &beta_t](footpath const& fp) {
+                        &omega, &theta, &part, &beta_t,
+                        &prepro_stats](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
 
@@ -260,6 +263,9 @@ void preprocessor::build_part(preprocessor* const pp) {
 
                   // check for match
                   if (theta.any()) {
+
+                    // transfer initially computed
+                    ++prepro_stats.n_transfers_initial_;
 
 #ifdef TB_TRANSFER_CLASS
                     auto const kappa =
@@ -400,9 +406,15 @@ void preprocessor::build_part(preprocessor* const pp) {
                         part.second[i].emplace_back(theta, u, j, sigma);
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
+                      } else {
+                        // transfer reduction removed trasnfer
+                        ++prepro_stats.n_transfers_reduced_;
                       }
 #endif
 #ifdef TB_PREPRO_UTURN_REMOVAL
+                    } else {
+                      // u-turn transfer removed
+                      ++prepro_stats.n_u_turn_transfers_;
                     }
 #endif
                   }
@@ -440,6 +452,14 @@ void preprocessor::build_part(preprocessor* const pp) {
       std::lock_guard<std::mutex> const lock(pp->parts_mutex_);
       pp->parts_.push_back(std::move(part));
     }
+  }
+
+  // write stats
+  {
+    std::lock_guard<std::mutex> const lock(pp->stats_mutex_);
+    pp->prepro_stats_.n_transfers_initial_ += prepro_stats.n_transfers_initial_;
+    pp->prepro_stats_.n_u_turn_transfers_ += prepro_stats.n_u_turn_transfers_;
+    pp->prepro_stats_.n_transfers_reduced_ += prepro_stats.n_transfers_reduced_;
   }
 }
 
