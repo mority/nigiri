@@ -20,7 +20,11 @@ struct query_engine {
   using algo_state_t = query_state;
   using algo_stats_t = query_stats;
 
+#ifdef TB_LOWER_BOUND
+  static constexpr bool kUseLowerBounds = true;
+#else
   static constexpr bool kUseLowerBounds = false;
+#endif
 
   query_engine(timetable const& tt,
                rt_timetable const* rtt,

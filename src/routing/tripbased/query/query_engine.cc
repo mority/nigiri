@@ -262,9 +262,20 @@ void query_engine::seg_dest(unixtime_t const start_time,
           .count() -
       tau_dep_t_b;
 
-  // the unix time at the next stop of the transport segment
-  seg.time_prune_ = tt_.to_unixtime(
+  auto const unix_time_next = tt_.to_unixtime(
       base_, minutes_after_midnight_t{tau_d + travel_time_next});
+#ifdef TB_LOWER_BOUND
+  auto const location_next =
+      stop{
+          tt_.route_location_seq_[tt_.transport_route_[seg.get_transport_idx()]]
+                                 [seg.stop_idx_start_ + 1]}
+          .location_idx();
+  // arrival plus lowest possible travel time to destination
+  seg.time_prune_ = unix_time_next + duration_t{lb_[location_next.v_]};
+#else
+  // the unix time at the next stop of the transport segment
+  seg.time_prune_ = unix_time_next;
+#endif
 }
 
 void query_engine::seg_prune(
@@ -549,7 +560,16 @@ void query_engine::handle_segment(unixtime_t const start_time,
   if (no_prune) {
     journey tentative_j{};
     tentative_j.start_time_ = start_time;
+#ifdef TB_LOWER_BOUND
+    auto const location_next =
+        stop{tt_.route_location_seq_
+                 [tt_.transport_route_[seg.get_transport_idx()]]
+                 [seg.stop_idx_start_ + 1]}
+            .location_idx();
+    tentative_j.dest_time_ = unix_time_next + duration_t{lb_[location_next.v_]};
+#else
     tentative_j.dest_time_ = unix_time_next;
+#endif
     tentative_j.transfers_ = n + 1;
 #ifdef TB_MIN_WALK
     tentative_j.time_walk_ = reached_walk;
@@ -565,7 +585,20 @@ void query_engine::handle_segment(unixtime_t const start_time,
     }
   }
 #else
+#ifdef TB_LOWER_BOUND
+  auto const location_next =
+      stop{
+          tt_.route_location_seq_[tt_.transport_route_[seg.get_transport_idx()]]
+                                 [seg.stop_idx_start_ + 1]}
+          .location_idx();
+  // check if arrival plus lowest possible travel time to destination would
+  // already be dominated
+  no_prune = no_prune && unix_time_next + duration_t{lb_[location_next.v_]} <
+                             state_.t_min_[n];
+#else
+  // check if arrival at next stop of the segment would already be dominated
   no_prune = no_prune && unix_time_next < state_.t_min_[n];
+#endif
 #endif
   // transfer out of current transport segment?
   if (no_prune) {

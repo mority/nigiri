@@ -18,6 +18,7 @@
 
 // query engine options
 // #define TB_CACHE_PRESSURE_REDUCTION
+// #define TB_LOWER_BOUND
 
 // system limits - number of bits
 #define BITFIELD_IDX_BITS 25U
