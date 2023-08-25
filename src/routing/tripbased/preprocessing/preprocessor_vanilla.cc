@@ -226,8 +226,6 @@ void preprocessor::build_part(preprocessor* const pp) {
                         .route_transport_ranges_[route_u]
                                                 [static_cast<std::size_t>(k)];
 
-                auto const transport_to_name = pp->tt_.transport_name(u);
-
                 // check conditions for required transfer
                 // 1. different route OR
                 // 2. earlier stop    OR
