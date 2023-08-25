@@ -79,9 +79,7 @@ void reached_reduction::update_walk(location_idx_t location,
   }
 }
 
-#else
-
-#ifdef TB_TRANSFER_CLASS
+#elifdef TB_TRANSFER_CLASS
 void reached_reduction::update_class(location_idx_t location,
                                      std::uint16_t time_new,
                                      std::uint8_t transfer_class_new,
@@ -208,7 +206,6 @@ void reached_reduction::update(location_idx_t location,
     }
   }
 }
-#endif
 
 #endif
 
