@@ -58,6 +58,8 @@ void preprocessor::build_part(preprocessor* const pp) {
 
     transport_idx_t t{part.first};
 
+    auto const transport_from_name = pp->tt_.transport_name(t);
+
     // route index of the current transport
     auto const route_t = pp->tt_.transport_route_[t];
 
@@ -87,6 +89,8 @@ void preprocessor::build_part(preprocessor* const pp) {
 
       // the location index from which we are transferring
       auto const p_t_i = stop{stop_seq_t[i]}.location_idx();
+
+      auto const location_from_name = location_name(pp->tt_, p_t_i);
 
       // time of day for tau_arr(t,i)
       std::uint16_t const alpha =
@@ -149,9 +153,12 @@ void preprocessor::build_part(preprocessor* const pp) {
                         &p_t_i,
 #endif
 #endif
-                        &omega, &theta, &part, &beta_t](footpath const& fp) {
+                        &omega, &theta, &part, &beta_t, &transport_from_name,
+                        &location_from_name](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
+
+        auto const location_to_name = location_name(pp->tt_, q);
 
         // arrival at stop q in alpha time scale
         std::uint16_t const tau_q = alpha + fp.duration_;
@@ -226,6 +233,15 @@ void preprocessor::build_part(preprocessor* const pp) {
                         .route_transport_ranges_[route_u]
                                                 [static_cast<std::size_t>(k)];
 
+                auto const transport_to_name = pp->tt_.transport_name(u);
+
+                if (transport_from_name == "BUS 1772" &&
+                    location_from_name == "Mönchengladbach, Hbf" &&
+                    transport_to_name == "BUS 1787" &&
+                    location_to_name == "Mönchengladbach, Hbf") {
+                  std::cout << "found transfer, ";
+                }
+
                 // check conditions for required transfer
                 // 1. different route OR
                 // 2. earlier stop    OR
@@ -239,6 +255,14 @@ void preprocessor::build_part(preprocessor* const pp) {
                       alpha));
 
                 if (req) {
+
+                  if (transport_from_name == "BUS 1772" &&
+                      location_from_name == "Mönchengladbach, Hbf" &&
+                      transport_to_name == "BUS 1787" &&
+                      location_to_name == "Mönchengladbach, Hbf") {
+                    std::cout << "req = true, ";
+                  }
+
                   // shift amount due to number of times transport u passed
                   // midnight
                   std::int8_t const sigma_u = tau_dep_u_j->days_;
@@ -259,6 +283,13 @@ void preprocessor::build_part(preprocessor* const pp) {
 
                   // check for match
                   if (theta.any()) {
+
+                    if (transport_from_name == "BUS 1772" &&
+                        location_from_name == "Mönchengladbach, Hbf" &&
+                        transport_to_name == "BUS 1787" &&
+                        location_to_name == "Mönchengladbach, Hbf") {
+                      std::cout << "theta match, ";
+                    }
 
 #ifdef TB_TRANSFER_CLASS
                     auto const kappa =
@@ -283,12 +314,14 @@ void preprocessor::build_part(preprocessor* const pp) {
                         // check if next stop of u is the previous stop
                         // of t
                         auto const p_u_next =
-                            stop{pp->tt_.route_location_seq_[route_u][j + 1]}
-                                .location_idx();
+                            stop{pp->tt_.route_location_seq_[route_u][j + 1]};
                         auto const p_t_prev =
-                            stop{pp->tt_.route_location_seq_[route_t][i - 1]}
-                                .location_idx();
-                        if (p_u_next == p_t_prev) {
+                            stop{pp->tt_.route_location_seq_[route_t][i - 1]};
+                        // check if exiting t and entering u is allowed at the
+                        // stop
+                        if (p_u_next.location_idx() ==
+                                p_t_prev.location_idx() &&
+                            p_t_prev.out_allowed() && p_u_next.in_allowed()) {
                           // check if u is already reachable at the
                           // previous stop of t
                           std::uint16_t const tau_dep_alpha_u_next =
@@ -307,7 +340,8 @@ void preprocessor::build_part(preprocessor* const pp) {
                                       .count());
                           auto const min_change_time =
                               static_cast<std::uint16_t>(
-                                  pp->tt_.locations_.transfer_time_[p_t_prev]
+                                  pp->tt_.locations_
+                                      .transfer_time_[p_t_prev.location_idx()]
                                       .count());
                           return tau_arr_alpha_t_prev + min_change_time <=
                                  tau_dep_alpha_u_next;
@@ -316,6 +350,14 @@ void preprocessor::build_part(preprocessor* const pp) {
                       return false;
                     };
                     if (!check_uturn()) {
+
+                      if (transport_from_name == "BUS 1772" &&
+                          location_from_name == "Mönchengladbach, Hbf" &&
+                          transport_to_name == "BUS 1787" &&
+                          location_to_name == "Mönchengladbach, Hbf") {
+                        std::cout << "not a U-turn, ";
+                      }
+
 #endif
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
                       impr.reset();
@@ -394,10 +436,32 @@ void preprocessor::build_part(preprocessor* const pp) {
                         // add transfer to transfers of this transport
                         part.second[i].emplace_back(theta, u, j, sigma);
 
+                        if (transport_from_name == "BUS 1772" &&
+                            location_from_name == "Mönchengladbach, Hbf" &&
+                            transport_to_name == "BUS 1787" &&
+                            location_to_name == "Mönchengladbach, Hbf") {
+                          std::cout << "transfer added\n";
+                        }
+
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
+                      } else {
+                        if (transport_from_name == "BUS 1772" &&
+                            location_from_name == "Mönchengladbach, Hbf" &&
+                            transport_to_name == "BUS 1787" &&
+                            location_to_name == "Mönchengladbach, Hbf") {
+                          std::cout << "but removed by transfer reduction\n";
+                        }
                       }
+
 #endif
 #ifdef TB_PREPRO_UTURN_REMOVAL
+                    } else {
+                      if (transport_from_name == "BUS 1772" &&
+                          location_from_name == "Mönchengladbach, Hbf" &&
+                          transport_to_name == "BUS 1787" &&
+                          location_to_name == "Mönchengladbach, Hbf") {
+                        std::cout << "but removed by U-turn removal\n";
+                      }
                     }
 #endif
                   }

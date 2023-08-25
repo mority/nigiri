@@ -570,18 +570,21 @@ void preprocessor::line_transfers_fp(
         // check for U-turn transfer
         bool is_uturn = false;
         if (j + 1 < stop_seq_to.size() - 1) {
-          auto const location_from_prev =
-              stop{stop_seq_from[i - 1]}.location_idx();
-          auto const location_to_next = stop{stop_seq_to[j + 1]}.location_idx();
+          auto const location_from_prev = stop{stop_seq_from[i - 1]};
+          auto const location_to_next = stop{stop_seq_to[j + 1]};
           // next location of route_to is previous location of route_from?
-          if (location_from_prev == location_to_next) {
+          if (location_from_prev.location_idx() ==
+                  location_to_next.location_idx() &&
+              location_from_prev.out_allowed() &&
+              location_to_next.in_allowed()) {
 #ifndef NDEBUG
             TBDL << "Next location of route_to is previous location of "
                     "route_from\n";
 #endif
             // check if change time of alternative transfer is equal or
             // less
-            is_uturn = tt_.locations_.transfer_time_[location_from_prev] <=
+            is_uturn = tt_.locations_
+                           .transfer_time_[location_from_prev.location_idx()] <=
                        fp.duration();
           }
         }
