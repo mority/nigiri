@@ -314,12 +314,12 @@ void query_engine::seg_prune(
 #endif
     for (auto const& existing_j : results) {
       if (existing_j.dominates(tentative_j)) {
-        seg.no_prune_ = false;
+        no_prune = false;
         break;
       }
     }
-    seg.no_prune_ = true;
   }
+  seg.no_prune_ = no_prune;
 #else
   seg.no_prune_ = no_prune && seg.time_prune_ < state_.t_min_[n];
 #endif
