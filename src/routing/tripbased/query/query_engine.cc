@@ -328,7 +328,7 @@ void query_engine::seg_prune(
 void query_engine::seg_transfers(std::uint8_t const n,
                                  queue_idx_t const q_cur) {
 
-  auto const& seg = state_.q_n_[q_cur];
+  auto const seg = state_.q_n_[q_cur];
 
   // transfer out of current transport segment?
   if (seg.no_prune_) {
