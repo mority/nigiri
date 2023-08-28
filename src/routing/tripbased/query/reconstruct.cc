@@ -59,6 +59,8 @@ void query_engine::reconstruct(query const& q, journey& j) const {
     if (!seg.has_value()) {
       std::cerr
           << "Journey reconstruction failed: Could not reconstruct transfer\n";
+      std::reverse(j.legs_.begin(), j.legs_.end());
+      return;
     }
 
     // add journey leg for current segment
