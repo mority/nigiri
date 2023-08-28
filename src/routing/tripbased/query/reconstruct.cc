@@ -326,6 +326,7 @@ std::optional<transport_segment> query_engine::reconstruct_transfer(
                  tt_.locations_.footpaths_out_[exit_location_idx.value()]) {
               if (fp.target() == target_location_idx) {
                 fp_transfer = fp;
+                break;
               }
             }
           }
