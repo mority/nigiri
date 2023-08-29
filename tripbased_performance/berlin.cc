@@ -3,6 +3,7 @@
 #include "nigiri/loader/gtfs/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
 #include "nigiri/routing/tripbased/preprocessing/preprocessor.h"
+#include "nigiri/routing/tripbased/settings.h"
 #include "nigiri/routing/tripbased/transfer_set.h"
 #include "nigiri/timetable.h"
 #include "./paths.h"
@@ -28,7 +29,9 @@ int main() {
   load_timetable(loader_config{0, "Europe/Berlin"}, src, berlin_dir, tt);
   finalize(tt);
 
+#ifndef ONLY_LOAD_TT
   // run preprocessing
   transfer_set ts;
   build_transfer_set(tt, ts);
+#endif
 }
