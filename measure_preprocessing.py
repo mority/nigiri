@@ -1,0 +1,117 @@
+#! /usr/bin/env python
+
+import datetime
+import os
+import shutil
+import subprocess
+
+log_file_str = "measure_preprocessing_log.txt"
+results_file_str = "measure_preprocessing_results.txt"
+path_file_str = "../tripbased_performance/paths.h"
+aachen_path_str = "/home/mo/uni/thesis/data/input/aachen"
+berlin_path_str = "/home/mo/uni/thesis/data/input/berlin"
+period_file_str = "../tripbased_performance/periods.h"
+settings_file_str = "../include/nigiri/routing/tripbased/settings.h"
+build_dir_str = "build_measure_preprocessing"
+c_compiler_str = "-DCMAKE_C_COMPILER=/usr/bin/clang"
+cxx_compiler_str = "-DCMAKE_CXX_COMPILER=/usr/bin/clang++"
+cxx_flags_str = "-DCMAKE_CXX_FLAGS=\"-fcolor-diagnostics -stdlib=libc++ -mtune=native -march=native\""
+generator_str = "-GNinja"
+build_type_str = "-DCMAKE_BUILD_TYPE=Release"
+
+n_samples = 3
+
+
+def log(str):
+    with open(log_file_str, "a") as log_file:
+        log_file.write(str + "\n")
+
+
+def result(str):
+    with open(results_file_str, "a") as result_file:
+        result_file.write(str + "\n")
+
+
+def configure():
+    reset_ch_build_dir()
+    subprocess.run(cmake_cmd_str(), shell=True)
+
+
+def build():
+    subprocess.run("ninja", shell=True)
+
+
+def write_paths(*, aachen_path, berlin_path):
+    file_content_str = "#pragma once\n#include \"nigiri/loader/dir.h\"\nnamespace nigiri::routing::tripbased::performance {\nloader::fs_dir const aachen_dir{\"" + aachen_path + "\"};\nloader::fs_dir const berlin_dir{\"" + berlin_path + "\"};\n}  // namespace nigiri::routing::tripbased::performance"
+    with open(path_file_str, "w") as path_file:
+        path_file.write(file_content_str)
+
+
+def write_settings(*, line_based_pruning, u_turn_removal, transfer_reduction,
+                   cache_pressure_reduction, lower_bound_pruning, min_walk, transfer_class):
+    file_content_str = "#pragma once\n"
+
+    file_content_str += "//additional criteria\n"
+    if (min_walk):
+        file_content_str += "#define TB_MIN_WALK\n"
+    elif (transfer_class):
+        file_content_str += "#define TB_TRANSFER_CLASS\n"
+        file_content_str += "#define TB_TRANSFER_CLASS0 15\n"
+        file_content_str += "#define TB_TRANSFER_CLASS1 5\n"
+
+    file_content_str += "// preprocessing options\n"
+    if (line_based_pruning):
+        file_content_str += "#define TB_PREPRO_LB_PRUNING\n"
+    file_content_str += "#ifndef TB_PREPRO_LB_PRUNING\n#define TB_PREPRO_VANILLA\n#endif\n"
+    if (u_turn_removal):
+        file_content_str += "#define TB_PREPRO_UTURN_REMOVAL\n"
+    if (transfer_reduction):
+        file_content_str += "#define TB_PREPRO_TRANSFER_REDUCTION\n"
+
+    file_content_str += "// query engine options\n"
+    if (cache_pressure_reduction):
+        file_content_str += "#define TB_CACHE_PRESSURE_REDUCTION\n"
+    if (lower_bound_pruning):
+        file_content_str += "#define TB_LOWER_BOUND\n"
+
+    file_content_str += ("// system limits - number of bits\n#define BITFIELD_IDX_BITS 25U\n#define TRANSPORT_IDX_BITS "
+                         "26U\n#define STOP_IDX_BITS 10U\n#define DAY_IDX_BITS 9U\n#define NUM_TRANSFERS_BITS "
+                         "5U\n#define DAY_OFFSET_BITS 3U\n// the position of the query day in the day offset\n#define "
+                         "QUERY_DAY_SHIFT 5\nnamespace nigiri::routing::tripbased {\nconstexpr unsigned const "
+                         "kBitfieldIdxMax = 1U << BITFIELD_IDX_BITS;\nconstexpr unsigned const kTransportIdxMax = 1U "
+                         "<< TRANSPORT_IDX_BITS;\nconstexpr unsigned const kStopIdxMax = 1U << "
+                         "STOP_IDX_BITS;\nconstexpr unsigned const kDayIdxMax = 1U << DAY_IDX_BITS;\nconstexpr "
+                         "unsigned const kNumTransfersMax = 1U << NUM_TRANSFERS_BITS;\nconstexpr unsigned const "
+                         "kDayOffsetMax = 1U << DAY_OFFSET_BITS;\n}  // namespace nigiri::routing::tripbased")
+
+    with open(settings_file_str, "w") as settings_file:
+        settings_file.write(file_content_str)
+
+
+def reset_ch_build_dir():
+    if os.path.exists(build_dir_str):
+        shutil.rmtree(build_dir_str)
+    os.makedirs(build_dir_str)
+    os.chdir(build_dir_str)
+
+
+def cmake_cmd_str():
+    return "cmake " + c_compiler_str + " " + cxx_compiler_str + " " + cxx_flags_str + " " + generator_str + " " + build_type_str + " .."
+
+
+def main():
+    configure()
+
+    init_time_str = datetime.datetime.now().strftime("%Y-%b-%d %I:%M")
+    result("Results from " + init_time_str)
+    log("Measuring preprocessing, " + init_time_str)
+
+    # line-based pruning: OFF, U-turn removal: OFF, transfer reduction: OFF
+    log("building vanilla")
+    write_settings(line_based_pruning=False, u_turn_removal=False, transfer_reduction=False,
+                   cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
+    build()
+
+
+if __name__ == "__main__":
+    main()
