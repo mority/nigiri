@@ -92,18 +92,11 @@ private:
                              footpath const);
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
-#if !defined(TB_MIN_WALK) && !defined(TB_TRANSFER_CLASS)
   void seg_dest(unixtime_t const start_time,
                 pareto_set<journey>& results,
                 unixtime_t worst_time_at_dest,
                 std::uint8_t const n,
                 transport_segment& seg);
-#else
-  void seg_dest(unixtime_t const start_time,
-                pareto_set<journey>& results,
-                std::uint8_t const n,
-                transport_segment& seg);
-#endif
 
 #if defined(TB_MIN_WALK) || defined(TB_TRANSFER_CLASS)
   void seg_prune(unixtime_t const start_time,
