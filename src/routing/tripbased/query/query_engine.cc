@@ -415,7 +415,7 @@ void query_engine::seg_transfers(std::uint8_t const n,
                   .location_idx();
 
           std::uint16_t walk_time = seg.time_walk_;
-          if (p_t_i != p_u_j) {
+          if (!matches(tt_, location_match_mode::kEquivalent, p_t_i, p_u_j)) {
             for (auto const& fp : tt_.locations_.footpaths_out_[p_t_i]) {
               if (fp.target() == p_u_j) {
                 walk_time += fp.duration_;
