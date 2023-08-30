@@ -1,3 +1,4 @@
+#include "nigiri/routing/for_each_meta.h"
 #include "nigiri/routing/tripbased/settings.h"
 
 #ifdef TB_PREPRO_LB_PRUNING
@@ -233,8 +234,19 @@ void preprocessor::build_part(preprocessor* const pp) {
                   stop{stop_seq_from[neighbor.stop_idx_from_]}.location_idx();
               auto const p_u_j =
                   stop{stop_seq_to[neighbor.stop_idx_to_]}.location_idx();
+
               // compute walking time between the stops
-              auto const walk_time = pp->walk_time(p_t_i, p_u_j);
+              std::uint16_t walk_time{0U};  // zero if they are equivalent
+              if (!matches(pp->tt_, location_match_mode::kEquivalent, p_t_i,
+                           p_u_j)) {
+                for (auto const& fp :
+                     pp->tt_.locations_.footpaths_out_[p_t_i]) {
+                  if (fp.target() == p_u_j) {
+                    walk_time = fp.duration_;
+                    break;
+                  }
+                }
+              }
 
               rlb.update_walk(neighbor.stop_idx_to_, otid, walk_time, theta);
 #elifdef TB_TRANSFER_CLASS
@@ -419,7 +431,8 @@ void preprocessor::build_part(preprocessor* const pp) {
 
 #ifdef TB_MIN_WALK
               std::uint16_t walk_time_l{0U};
-              if (p_t_i != p_u_j) {
+              if (!matches(pp->tt_, location_match_mode::kEquivalent, p_t_i,
+                           p_u_j)) {
                 // changed stations during transfer -> find footpath of transfer
                 for (auto const& fp :
                      pp->tt_.locations_.footpaths_out_[p_t_i]) {
@@ -471,7 +484,11 @@ void preprocessor::build_part(preprocessor* const pp) {
                    pp->tt_.locations_.footpaths_out_[p_u_l]) {
                 std::uint16_t const eta = tau_arr_t_u_l + fp_r.duration_;
 #ifdef TB_MIN_WALK
-                std::uint16_t const walk_time_r = walk_time_l + fp_r.duration_;
+                std::uint16_t const walk_time_r =
+                    matches(pp->tt_, location_match_mode::kEquivalent, p_u_l,
+                            fp_r.target())
+                        ? walk_time_l
+                        : walk_time_l + fp_r.duration_;
                 rr_arr.update_walk(fp_r.target(), eta, walk_time_r,
                                    transfer->bf_, &impr);
                 rr_ch.update_walk(fp_r.target(), eta, walk_time_r,

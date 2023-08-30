@@ -1,3 +1,4 @@
+#include "nigiri/routing/for_each_meta.h"
 #include "nigiri/routing/tripbased/settings.h"
 
 #ifdef TB_PREPRO_VANILLA
@@ -346,7 +347,10 @@ void preprocessor::build_part(preprocessor* const pp) {
                                 .location_idx();
 #ifdef TB_MIN_WALK
                         std::uint16_t const walk_time_l =
-                            p_t_i == p_u_j ? 0 : fp.duration_;
+                            matches(pp->tt_, location_match_mode::kEquivalent,
+                                    p_t_i, p_u_j)
+                                ? 0
+                                : fp.duration_;
                         rr_arr_.update_walk(p_u_l, tau_arr_t_u_l, walk_time_l,
                                             theta, &impr);
                         rr_ch_.update_walk(
@@ -379,7 +383,10 @@ void preprocessor::build_part(preprocessor* const pp) {
 
 #ifdef TB_MIN_WALK
                           std::uint16_t const walk_time_r =
-                              walk_time_l + fp_r.duration_;
+                              matches(pp->tt_, location_match_mode::kEquivalent,
+                                      p_u_l, fp_r.target())
+                                  ? walk_time_l
+                                  : walk_time_l + fp_r.duration_;
                           rr_arr_.update_walk(fp_r.target(), eta, walk_time_r,
                                               theta, &impr);
                           rr_ch_.update_walk(fp_r.target(), eta, walk_time_r,
