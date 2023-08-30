@@ -136,11 +136,7 @@ void query_engine::execute(unixtime_t const start_time,
     // (1)  destination reached?
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
-#if !defined(TB_MIN_WALK) && !defined(TB_TRANSFER_CLASS)
       seg_dest(start_time, results, worst_time_at_dest, n, state_.q_n_[q_cur]);
-#else
-      seg_dest(start_time, results, n, state_.q_n_[q_cur]);
-#endif
     }
     // (2) pruning?
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
