@@ -697,7 +697,7 @@ void query_engine::handle_segment(unixtime_t const start_time,
 
           std::uint16_t walk_time = state_.r_.walk(seg.transport_segment_idx_,
                                                    n, seg.stop_idx_start_);
-          if (p_t_i != p_u_j) {
+          if (!matches(tt_, location_match_mode::kEquivalent, p_t_i, p_u_j)) {
             for (auto const& fp : tt_.locations_.footpaths_out_[p_t_i]) {
               if (fp.target() == p_u_j) {
                 walk_time += fp.duration_;
