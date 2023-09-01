@@ -180,6 +180,9 @@ TEST(earliest_arrival_query, early_train) {
     ss << "\n\n";
   }
 
+  std::cout << "---------------- ACTUAL --------------------\n"
+            << ss.str() << "-----------------------------------------------\n";
+
   EXPECT_EQ(std::string_view{early_train_journeys}, ss.str());
 }
 
@@ -441,6 +444,33 @@ TEST(earliest_arrival_query, transfer_class) {
   }
 
   EXPECT_EQ(std::string_view{transfer_class_journeys}, ss.str());
+}
+
+TEST(earliest_arrival_query, transfer_class2) {
+  // load timetable
+  timetable tt;
+  tt.date_range_ = gtfs_full_period();
+  register_special_stations(tt);
+  constexpr auto const src = source_idx_t{0U};
+  load_timetable(loader_config{0, "Etc/UTC"}, src, transfer_class_2_files(),
+                 tt);
+  finalize(tt);
+
+  auto const results = tripbased_search(
+      tt, "A", "C", unixtime_t{sys_days{February / 28 / 2021} + 23h});
+
+  std::stringstream ss;
+  ss << "\n";
+  for (auto const& x : results) {
+    x.print(ss, tt);
+    ss << "\n\n";
+  }
+
+  std::cout << "--------------------- ACTUAL -----------------------------"
+            << ss.str()
+            << "\n------------------------------------------------\n";
+
+  // EXPECT_EQ(std::string_view{transfer_class_journeys}, ss.str());
 }
 
 #ifdef TB_TRANSFER_CLASS

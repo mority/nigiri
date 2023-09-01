@@ -583,16 +583,6 @@ loader::mem_dir early_train_files() {
        {path{kStopTimesFile}, std::string{early_train_stop_times_content}}}};
 }
 
-constexpr auto const coord_stops_file_content = std::string_view{
-    R"(stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
-S0,S0,S0,,,,,
-S1,S1,S1,,,,,
-S2,S2,S2,,,,,
-S3,S3,S3,,,,,
-S4,S4,S4,,,,,
-S5,S5,S5,,,,,
-)"};
-
 constexpr auto const min_walk_transfers_file_content =
     std::string_view{R"(from_stop_id,to_stop_id,transfer_type,min_transfer_time
 S1,S2,2,1800
@@ -631,7 +621,7 @@ R3,05:00:00,05:00:00,S5,1,0,0
 loader::mem_dir min_walk_files() {
   using std::filesystem::path;
   return {{{path{kAgencyFile}, std::string{agency_file_content}},
-           {path{kStopFile}, std::string{coord_stops_file_content}},
+           {path{kStopFile}, std::string{six_stops_file_content}},
            {path{kCalenderFile}, std::string{calendar_file_content}},
            {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
            {path{kTransfersFile}, std::string{min_walk_transfers_file_content}},
@@ -686,6 +676,40 @@ loader::mem_dir transfer_class_files() {
        {path{kFrequenciesFile}, std::string{frequencies_file_content}},
        {path{kTripsFile}, std::string{transfer_class_trips_content}},
        {path{kStopTimesFile}, std::string{transfer_class_stop_times_content}}}};
+}
+
+constexpr auto const transfer_class_trips_2_content =
+    R"(route_id,service_id,trip_id,trip_headsign,block_id
+R1,DLY,R1_0,R1_0,1
+R2,DLY,R1_1,R1_1,2
+R2,DLY,R1_2,R1_2,3
+R2,DLY,R2_0,R2_0,4
+)";
+
+constexpr auto const transfer_class_stop_times_2_content =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R1_0,01:00:00,01:00:00,A,0,0,0
+R1_0,04:55:00,04:55:00,B,1,0,0
+R1_1,02:00:00,02:00:00,A,0,0,0
+R1_1,04:50:00,04:50:00,B,1,0,0
+R1_2,03:00:00,03:00:00,A,0,0,0
+R1_2,04:40:00,04:40:00,B,1,0,0
+R2_0,50:00:00,05:00:00,B,0,0,0
+R2_0,06:00:00,06:00:00,C,1,0,0
+)";
+
+loader::mem_dir transfer_class_2_files() {
+  using std::filesystem::path;
+  return {{{path{kAgencyFile}, std::string{agency_file_content}},
+           {path{kStopFile}, std::string{transfer_class_stops_content}},
+           {path{kCalenderFile}, std::string{calendar_file_content}},
+           {path{kCalendarDatesFile}, std::string{calendar_dates_file_content}},
+           {path{kTransfersFile}, std::string{transfers_file_content}},
+           {path{kRoutesFile}, std::string{transfer_class_routes_content}},
+           {path{kFrequenciesFile}, std::string{frequencies_file_content}},
+           {path{kTripsFile}, std::string{transfer_class_trips_2_content}},
+           {path{kStopTimesFile},
+            std::string{transfer_class_stop_times_2_content}}}};
 }
 
 }  // namespace nigiri::routing::tripbased::test

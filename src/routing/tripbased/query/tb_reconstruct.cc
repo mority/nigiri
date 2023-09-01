@@ -273,8 +273,6 @@ std::optional<transport_segment> query_engine::reconstruct_transfer(
   // data on target of transfer
   auto const target_transport_idx =
       std::get<journey::run_enter_exit>(j.legs_.back().uses_).r_.t_.t_idx_;
-  auto const target_stop_idx =
-      std::get<journey::run_enter_exit>(j.legs_.back().uses_).stop_range_.from_;
   auto const target_location_idx = j.legs_.back().from_;
   auto const target_day_idx = seg_next.get_transport_day(base_);
 
@@ -305,106 +303,119 @@ std::optional<transport_segment> query_engine::reconstruct_transfer(
       // iterate transfers at each stop
       for (auto const& transfer :
            state_.ts_.at(seg.get_transport_idx().v_, stop_idx_exit)) {
+
+        // check transport idx matches
         auto const transfer_transport_idx = transfer.get_transport_idx_to();
+        if (transfer_transport_idx != target_transport_idx) {
+          continue;
+        }
+
+        // check location idx matches
         auto const transfer_stop_idx = transfer.get_stop_idx_to();
         auto const transfer_location_idx =
             stop{tt_.route_location_seq_
                      [tt_.transport_route_[transfer_transport_idx]]
                      [transfer_stop_idx]}
                 .location_idx();
+        if (transfer_location_idx != target_location_idx) {
+          continue;
+        }
+
+        // check transport day matches
         auto const transfer_day_idx = day_idx_t{
             static_cast<std::int16_t>(seg.get_transport_day(base_).v_) +
-            tt_.event_mam(seg.get_transport_idx(), transfer_stop_idx,
+            tt_.event_mam(seg.get_transport_idx(), stop_idx_exit,
                           event_type::kArr)
                 .days() -
-            tt_.event_mam(target_transport_idx, target_stop_idx,
+            tt_.event_mam(transfer_transport_idx, transfer_stop_idx,
                           event_type::kDep)
                 .days() +
             static_cast<std::int16_t>(transfer.get_passes_midnight().v_)};
-        // target of transfer matches and transfer is active on the day of the
-        // segment
-        if (transfer_transport_idx == target_transport_idx &&
-            transfer_location_idx == target_location_idx &&
-            transfer_day_idx == target_day_idx &&
-            tt_.bitfields_[transfer.get_bitfield_idx()].test(
+        if (transfer_day_idx != target_day_idx) {
+          continue;
+        }
+
+        // check if transfer is active on the day of the segment
+        if (!tt_.bitfields_[transfer.get_bitfield_idx()].test(
                 seg.get_transport_day(base_).v_)) {
-          if (exit_location_idx == target_location_idx) {
-            // exit and target are equal -> use minimum transfer time
-            fp_transfer = footpath{
-                exit_location_idx.value(),
-                tt_.locations_.transfer_time_[exit_location_idx.value()]};
-          } else {
-            for (auto const& fp :
-                 tt_.locations_.footpaths_out_[exit_location_idx.value()]) {
-              if (fp.target() == target_location_idx) {
-                fp_transfer = fp;
-                break;
-              }
+          continue;
+        }
+
+        // reconstruct footpath between stops
+        if (exit_location_idx == target_location_idx) {
+          // exit and target are equal -> use minimum transfer time
+          fp_transfer = footpath{
+              exit_location_idx.value(),
+              tt_.locations_.transfer_time_[exit_location_idx.value()]};
+        } else {
+          for (auto const& fp :
+               tt_.locations_.footpaths_out_[exit_location_idx.value()]) {
+            if (fp.target() == target_location_idx) {
+              fp_transfer = fp;
+              break;
             }
           }
+        }
 
 // check if additional criteria match
 #ifndef TB_CACHE_PRESSURE_REDUCTION
-          // if cache pressure reduction is ON, the walking time and transfer
-          // class is stored with each segment. Hence, there can be no reading
-          // of a clobbered value from reached
+        // if cache pressure reduction is ON, the walking time and transfer
+        // class is stored with each segment. Hence, there can be no reading
+        // of a clobbered value from reached
 #ifdef TB_MIN_WALK
-          auto const reached_walk = state_.r_.walk(seg.transport_segment_idx_,
-                                                   n, seg.stop_idx_start_);
-          auto const reached_walk_next =
-              state_.r_.walk(seg_next.transport_segment_idx_, n + 1U,
-                             seg_next.stop_idx_start_);
+        auto const reached_walk =
+            state_.r_.walk(seg.transport_segment_idx_, n, seg.stop_idx_start_);
+        auto const reached_walk_next = state_.r_.walk(
+            seg_next.transport_segment_idx_, n + 1U, seg_next.stop_idx_start_);
 
-          auto const transfer_walk =
-              exit_location_idx.value() == target_location_idx
-                  ? 0U
-                  : static_cast<std::uint16_t>(fp_transfer->duration().count());
+        auto const transfer_walk =
+            exit_location_idx.value() == target_location_idx
+                ? 0U
+                : static_cast<std::uint16_t>(fp_transfer->duration().count());
 
-          if (reached_walk + transfer_walk != reached_walk_next) {
+        if (reached_walk + transfer_walk != reached_walk_next) {
 #ifndef NDEBUG
-            TBDL << "Walking time criterion mismatch, continuing scan..\n";
+          TBDL << "Walking time criterion mismatch, continuing scan..\n";
 #endif
-            // walking time does not match, continue scanning for another
-            // transfer that caused the improved walking time
-            fp_transfer = std::nullopt;
-            continue;
-          }
-#elifdef TB_TRANSFER_CLASS
-          auto const reached_transfer_class = state_.r_.transfer_class(
-              seg.transport_segment_idx_, n, seg.stop_idx_start_);
-          auto const reached_transfer_class_max = reached_transfer_class.first;
-          auto const reached_transfer_class_sum = reached_transfer_class.second;
-
-          auto const reached_transfer_class_next =
-              state_.r_.transfer_class(seg_next.transport_segment_idx_, n + 1U,
-                                       seg_next.stop_idx_start_);
-          auto const reached_transfer_class_max_next =
-              reached_transfer_class_next.first;
-          auto const reached_transfer_class_sum_next =
-              reached_transfer_class_next.second;
-
-          auto const candidate_transfer_class = transfer_class(transfer_wait(
-              tt_, seg.get_transport_idx(), exit_stop_idx.value(),
-              seg_next.get_transport_idx(), seg_next.stop_idx_start_,
-              seg.get_transport_day(base_).v_,
-              seg_next.get_transport_day(base_).v_));
-
-          if (reached_transfer_class_max > reached_transfer_class_max_next ||
-              candidate_transfer_class > reached_transfer_class_max_next ||
-              reached_transfer_class_sum + candidate_transfer_class !=
-                  reached_transfer_class_sum_next) {
-#ifndef NDEBUG
-            TBDL << "Transfer class criteria mismatch, continuing scan..\n";
-#endif
-            // transfer class criteria do not match, continue scanning for
-            // another transfer that caused the improved transfer class criteria
-            fp_transfer = std::nullopt;
-            continue;
-          }
-#endif
-#endif
-          goto found_footpath;
+          // walking time does not match, continue scanning for another
+          // transfer that caused the improved walking time
+          fp_transfer = std::nullopt;
+          continue;
         }
+#elifdef TB_TRANSFER_CLASS
+        auto const reached_transfer_class = state_.r_.transfer_class(
+            seg.transport_segment_idx_, n, seg.stop_idx_start_);
+        auto const reached_transfer_class_max = reached_transfer_class.first;
+        auto const reached_transfer_class_sum = reached_transfer_class.second;
+
+        auto const reached_transfer_class_next = state_.r_.transfer_class(
+            seg_next.transport_segment_idx_, n + 1U, seg_next.stop_idx_start_);
+        auto const reached_transfer_class_max_next =
+            reached_transfer_class_next.first;
+        auto const reached_transfer_class_sum_next =
+            reached_transfer_class_next.second;
+
+        auto const candidate_transfer_class = transfer_class(transfer_wait(
+            tt_, seg.get_transport_idx(), exit_stop_idx.value(),
+            seg_next.get_transport_idx(), seg_next.stop_idx_start_,
+            seg.get_transport_day(base_).v_,
+            seg_next.get_transport_day(base_).v_));
+
+        if (reached_transfer_class_max > reached_transfer_class_max_next ||
+            candidate_transfer_class > reached_transfer_class_max_next ||
+            reached_transfer_class_sum + candidate_transfer_class !=
+                reached_transfer_class_sum_next) {
+#ifndef NDEBUG
+          TBDL << "Transfer class criteria mismatch, continuing scan...\n";
+#endif
+          // transfer class criteria do not match, continue scanning for
+          // another transfer that caused the improved transfer class criteria
+          fp_transfer = std::nullopt;
+          continue;
+        }
+#endif
+#endif
+        goto found_footpath;
       }
     }
     if (!fp_transfer.has_value()) {
