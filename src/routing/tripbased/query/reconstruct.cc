@@ -276,6 +276,7 @@ std::optional<transport_segment> query_engine::reconstruct_transfer(
   auto const target_stop_idx =
       std::get<journey::run_enter_exit>(j.legs_.back().uses_).stop_range_.from_;
   auto const target_location_idx = j.legs_.back().from_;
+  auto const target_day_idx = seg_next.get_transport_day(base_);
 
   // reconstruct footpath
   std::optional<footpath> fp_transfer = std::nullopt;
@@ -311,11 +312,20 @@ std::optional<transport_segment> query_engine::reconstruct_transfer(
                      [tt_.transport_route_[transfer_transport_idx]]
                      [transfer_stop_idx]}
                 .location_idx();
+        auto const transfer_day_idx = day_idx_t{
+            static_cast<std::int16_t>(seg.get_transport_day(base_).v_) +
+            tt_.event_mam(seg.get_transport_idx(), transfer_stop_idx,
+                          event_type::kArr)
+                .days() -
+            tt_.event_mam(target_transport_idx, target_stop_idx,
+                          event_type::kDep)
+                .days() +
+            static_cast<std::int16_t>(transfer.get_passes_midnight().v_)};
         // target of transfer matches and transfer is active on the day of the
         // segment
         if (transfer_transport_idx == target_transport_idx &&
-            transfer_stop_idx == target_stop_idx &&
             transfer_location_idx == target_location_idx &&
+            transfer_day_idx == target_day_idx &&
             tt_.bitfields_[transfer.get_bitfield_idx()].test(
                 seg.get_transport_day(base_).v_)) {
           if (exit_location_idx == target_location_idx) {
