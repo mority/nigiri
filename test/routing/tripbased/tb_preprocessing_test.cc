@@ -58,7 +58,7 @@ TEST(build_transfer_set, no_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
   EXPECT_EQ(0, ts.n_transfers_);
 }
@@ -74,7 +74,7 @@ TEST(build_transfer_set, same_day_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const& transfers = ts.at(0U, 1U);
@@ -99,7 +99,7 @@ TEST(build_transfer_set, next_day_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const& transfers = ts.at(0U, 1U);
@@ -123,7 +123,7 @@ TEST(build_transfer_set, from_long_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const transfers = ts.at(0U, 1U);
@@ -148,7 +148,7 @@ TEST(build_transfer_set, weekday_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const transfers = ts.at(0U, 1U);
@@ -172,7 +172,7 @@ TEST(build_transfer_set, daily_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
   EXPECT_EQ(1, ts.n_transfers_);
   auto const& transfers = ts.at(0U, 1U);
@@ -197,7 +197,7 @@ TEST(build_transfer_set, earlier_stop_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
 #if defined(TB_PREPRO_LB_PRUNING) && !defined(TB_PREPRO_TRANSFER_REDUCTION)
   EXPECT_EQ(3, ts.n_transfers_);
@@ -226,7 +226,7 @@ TEST(build_transfer_set, earlier_transport_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
 #if defined(TB_PREPRO_LB_PRUNING) && !defined(TB_PREPRO_TRANSFER_REDUCTION)
   EXPECT_EQ(6, ts.n_transfers_);
@@ -254,7 +254,7 @@ TEST(build_transfer_set, uturn_transfer) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
   // transfer reduction removes a transfer of the test case on its own
 #if defined(TB_PREPRO_UTURN_REMOVAL) || defined(TB_PREPRO_TRANSFER_REDUCTION)
@@ -307,7 +307,7 @@ TEST(build_transfer_set, unnecessary_transfer0) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   EXPECT_EQ(0, ts.n_transfers_);
@@ -336,7 +336,7 @@ TEST(build_transfer_set, unnecessary_transfer1) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
 #ifdef TB_PREPRO_TRANSFER_REDUCTION
   EXPECT_EQ(1, ts.n_transfers_);
@@ -384,7 +384,7 @@ TEST(build_transfer_set, min_walk) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
 #if defined(TB_MIN_WALK) || !defined(TB_PREPRO_TRANSFER_REDUCTION)
   EXPECT_EQ(3, ts.n_transfers_);
@@ -405,7 +405,7 @@ TEST(build_transfer_set, transfer_class) {
 
   // run preprocessing
   transfer_set ts;
-  build_transfer_set(tt, ts, 10);
+  build_transfer_set(tt, ts);
 
 #ifdef TB_TRANSFER_CLASS
   EXPECT_EQ(3, ts.n_transfers_);

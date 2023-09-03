@@ -22,9 +22,8 @@ bitfield_idx_t preprocessor::get_or_create_bfi(bitfield const& bf) {
   });
 }
 
-void preprocessor::build(transfer_set& ts, const std::uint16_t sleep_duration) {
+void preprocessor::build(transfer_set& ts) {
   auto const num_transports = tt_.transport_traffic_days_.size();
-  auto const num_threads = std::thread::hardware_concurrency();
 
   // progress tracker
   auto progress_tracker = utl::get_active_progress_tracker();
@@ -33,14 +32,16 @@ void preprocessor::build(transfer_set& ts, const std::uint16_t sleep_duration) {
       .in_high(num_transports);
 
   // parallel_for
-  interval<transport_idx_t> const transport_idx_interval = {
-      transport_idx_t{0}, transport_idx_t{num_transports}};
-  utl::parallel_for(transport_idx_interval, )
+  interval<std::uint32_t> const transport_idx_interval = {0, num_transports};
+  utl::parallel_for(
+      transport_idx_interval,
+      [&](auto const t) { build_part(transport_idx_t{t}); },
+      progress_tracker->update_fn());
 
-      // deduplicate
-      progress_tracker->status("Deduplicating bitfields")
-          .reset_bounds()
-          .in_high(num_transports);
+  // deduplicate
+  progress_tracker->status("Deduplicating bitfields")
+      .reset_bounds()
+      .in_high(num_transports);
   std::vector<std::vector<transfer>> transfers_per_stop;
   transfers_per_stop.resize(route_max_length_);
 

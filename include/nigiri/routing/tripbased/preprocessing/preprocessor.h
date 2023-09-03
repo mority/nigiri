@@ -14,12 +14,6 @@
 
 namespace nigiri::routing::tripbased {
 
-using part_t =
-    std::pair<std::uint32_t, std::vector<std::vector<expanded_transfer>>>;
-using queue_t = std::list<part_t>;
-
-struct expanded_transfer;
-
 struct preprocessor {
 
 #ifdef TB_PREPRO_LB_PRUNING
@@ -143,7 +137,7 @@ struct preprocessor {
     }
   }
 
-  void build(transfer_set& ts, const std::uint16_t sleep_duration);
+  void build(transfer_set&);
 
   void build_part(transport_idx_t const);
 
@@ -175,14 +169,11 @@ struct preprocessor {
   std::vector<std::vector<std::vector<expanded_transfer>>> expanded_transfers_;
 };
 
-static inline void build_transfer_set(
-    timetable& tt,
-    transfer_set& ts,
-    const std::uint16_t sleep_duration = 1000) {
+static inline void build_transfer_set(timetable& tt, transfer_set& ts) {
   {
     auto const timer = scoped_timer("trip-based preprocessing");
     preprocessor tbp(tt);
-    tbp.build(ts, sleep_duration);
+    tbp.build(ts);
   }
 }
 
