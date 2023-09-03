@@ -128,18 +128,24 @@ struct preprocessor {
       prepro_stats_.transfer_reduction = true;
 #endif
 
-      // number of expected transfers
-      //    auto const num_exp_transfers = num_el_con_;
-      // reserve space for transfer set
-      //    std::cout << "Reserving " << num_exp_transfers * sizeof(transfer)
-      //              << " bytes for " << num_exp_transfers << " expected
-      //              transfers\n";
+      // allocate for each transport
+      expanded_transfers_.resize(tt_.transport_route_.size());
+      for (size_t i = 0; i != expanded_transfers_.size(); ++i) {
+        // allocate for each stop of the transport
+        expanded_transfers_[i].resize(
+            tt_.route_location_seq_[tt_.transport_route_[transport_idx_t{i}]]
+                .size());
+        for (auto& transfer_vec : expanded_transfers_[i]) {
+          // reserve space for transfers at each stop
+          transfer_vec.reserve(64);
+        }
+      }
     }
   }
 
   void build(transfer_set& ts, const std::uint16_t sleep_duration);
 
-  static void build_part(preprocessor* const);
+  void build_part(transport_idx_t const);
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
@@ -164,23 +170,9 @@ struct preprocessor {
   std::uint64_t n_transfers_{0U};
 
   preprocessing_stats prepro_stats_;
-  std::mutex stats_mutex_;
 
-#ifndef TB_PREPRO_LB_PRUNING
-  // next transport idx for which to compute transfers
-  std::uint32_t next_transport_{0U};
-  std::mutex next_transport_mutex_;
-#endif
-#ifdef TB_PREPRO_LB_PRUNING
-  // next route idx for which to compute transfers
-  std::uint32_t next_route_{0U};
-  std::mutex next_route_mutex_;
-#endif
-
-  // pair.first: first transport idx in this partial transfer set, pair.second:
-  // partial expanded transfer set
-  queue_t parts_;
-  std::mutex parts_mutex_;
+  // the expanded transfer set, i.e., before bitfield deduplication
+  std::vector<std::vector<std::vector<expanded_transfer>>> expanded_transfers_;
 };
 
 static inline void build_transfer_set(

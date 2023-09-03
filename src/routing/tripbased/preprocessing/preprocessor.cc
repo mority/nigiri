@@ -1,4 +1,5 @@
 #include "utl/get_or_create.h"
+#include "utl/parallel_for.h"
 #include "utl/progress_tracker.h"
 
 #include "nigiri/logging.h"
@@ -31,64 +32,42 @@ void preprocessor::build(transfer_set& ts, const std::uint16_t sleep_duration) {
       .reset_bounds()
       .in_high(num_transports);
 
-  std::vector<std::thread> threads;
+  // parallel_for
+  interval<transport_idx_t> const transport_idx_interval = {
+      transport_idx_t{0}, transport_idx_t{num_transports}};
+  utl::parallel_for(transport_idx_interval, )
 
-  // start worker threads
-  for (unsigned i = 0; i != num_threads; ++i) {
-    threads.emplace_back(build_part, this);
-  }
+      // deduplicate
+      progress_tracker->status("Deduplicating bitfields")
+          .reset_bounds()
+          .in_high(num_transports);
+  std::vector<std::vector<transfer>> transfers_per_stop;
+  transfers_per_stop.resize(route_max_length_);
 
-  std::vector<std::vector<transfer>> transfers_per_transport;
-  transfers_per_transport.resize(route_max_length_);
-
-  // next transport idx for which to deduplicate bitfields
-  std::uint32_t next_deduplicate = 0U;
-  while (next_deduplicate != num_transports) {
-    std::this_thread::sleep_for(
-        std::chrono::duration<std::uint16_t, std::milli>(sleep_duration));
-
-    // check if next part is ready
-    for (auto part = parts_.begin(); part != parts_.end();) {
-      if (part->first == next_deduplicate) {
-
-        // deduplicate
-        for (unsigned s = 0U; s != part->second.size(); ++s) {
-          for (auto const& exp_transfer : part->second[s]) {
-            transfers_per_transport[s].emplace_back(
-                get_or_create_bfi(exp_transfer.bf_).v_,
-                exp_transfer.transport_idx_to_.v_, exp_transfer.stop_idx_to_,
-                exp_transfer.passes_midnight_);
-            ++n_transfers_;
-          }
-        }
-        // add transfers of this transport to transfer set
-        ts.data_.emplace_back(
-            it_range{transfers_per_transport.cbegin(),
-                     transfers_per_transport.cbegin() +
-                         static_cast<std::int64_t>(part->second.size())});
-        // clean up
-        for (unsigned s = 0U; s != part->second.size(); ++s) {
-          transfers_per_transport[s].clear();
-        }
-
-        ++next_deduplicate;
-        progress_tracker->increment();
-
-        // remove processed part
-        std::lock_guard<std::mutex> const lock(parts_mutex_);
-        parts_.erase(part);
-        // start from begin, next part maybe more towards the front of the
-        // queue
-        part = parts_.begin();
-      } else {
-        ++part;
+  // iterate stop vectors of all transports
+  for (auto& stop_vec : expanded_transfers_) {
+    // deduplicate bitfield of each transfer
+    for (unsigned s = 0U; s != stop_vec.size(); ++s) {
+      for (auto const& exp_transfer : stop_vec[s]) {
+        transfers_per_stop[s].emplace_back(
+            get_or_create_bfi(exp_transfer.bf_).v_,
+            exp_transfer.transport_idx_to_.v_, exp_transfer.stop_idx_to_,
+            exp_transfer.passes_midnight_);
+        ++n_transfers_;
       }
     }
-  }
 
-  // join worker threads
-  for (auto& t : threads) {
-    t.join();
+    // add transfers of this transport to transfer set
+    ts.data_.emplace_back(
+        it_range{transfers_per_stop.cbegin(),
+                 transfers_per_stop.cbegin() +
+                     static_cast<std::int64_t>(stop_vec.size())});
+    // clean up
+    for (unsigned s = 0U; s != stop_vec.size(); ++s) {
+      transfers_per_stop[s].clear();
+    }
+
+    progress_tracker->increment();
   }
 
   prepro_stats_.n_transfers_final_ = n_transfers_;
