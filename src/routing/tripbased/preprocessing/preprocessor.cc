@@ -23,32 +23,23 @@ bitfield_idx_t preprocessor::get_or_create_bfi(bitfield const& bf) {
 }
 
 void preprocessor::build(transfer_set& ts) {
-  auto const num_transports = tt_.transport_traffic_days_.size();
 
   // progress tracker
   auto progress_tracker = utl::get_active_progress_tracker();
   progress_tracker->status("Building Transfer Set")
       .reset_bounds()
-      .in_high(num_transports);
+      .in_high(tt_.n_routes());
 
   // parallel_for
-#ifdef TB_PREPRO_LB_PRUNING
   interval<std::uint32_t> const route_idx_interval = {0, tt_.n_routes()};
   utl::parallel_for(
       route_idx_interval, [&](auto const r) { build_part(route_idx_t{r}); },
       progress_tracker->update_fn());
-#else
-  interval<std::uint32_t> const transport_idx_interval = {0, num_transports};
-  utl::parallel_for(
-      transport_idx_interval,
-      [&](auto const t) { build_part(transport_idx_t{t}); },
-      progress_tracker->update_fn());
-#endif
 
   // deduplicate
   progress_tracker->status("Deduplicating bitfields")
       .reset_bounds()
-      .in_high(num_transports);
+      .in_high(tt_.transport_traffic_days_.size());
   std::vector<std::vector<transfer>> transfers_per_stop;
   transfers_per_stop.resize(route_max_length_);
 
