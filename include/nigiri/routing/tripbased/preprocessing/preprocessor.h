@@ -139,7 +139,11 @@ struct preprocessor {
 
   void build(transfer_set&);
 
+#ifdef TB_PREPRO_LB_PRUNING
+  void build_part(route_idx_t const);
+#else
   void build_part(transport_idx_t const);
+#endif
 
   // wrapper for utl::get_or_create
   bitfield_idx_t get_or_create_bfi(bitfield const& bf);
