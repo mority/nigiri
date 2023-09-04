@@ -30,7 +30,7 @@ aachen_n_bits = [64, 128, 256, 512, 512]
 berlin_periods_to = ["2023_y / August / 8", "2023_y / October / 11", "2023_y / December / 9"]
 berlin_n_bits = [64, 128, 256]
 
-n_samples = 3
+n_samples = 2
 
 
 def log(text2log):
