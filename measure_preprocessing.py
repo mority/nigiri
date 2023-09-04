@@ -45,11 +45,11 @@ def result(result2log):
 
 def configure():
     reset_ch_build_dir()
-    subprocess.run(cmake_cmd_str(), shell=True)
+    subprocess.run(cmake_cmd_str(), shell=True, check=True)
 
 
 def build():
-    subprocess.run("ninja", shell=True)
+    subprocess.run("ninja", shell=True, check=True)
 
 
 def write_paths(*, aachen_path, berlin_path):
@@ -178,49 +178,49 @@ def main():
     # baseline: load timetable without trip-based preprocessing
     write_settings(only_load_tt=True, line_based_pruning=False, u_turn_removal=False, transfer_reduction=False,
                    cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("baseline aachen")
+    result("\nbaseline aachen")
     measure_aachen()
-    result("baseline berlin")
+    result("\nbaseline berlin")
     measure_berlin()
 
     # line-based pruning: OFF, U-turn removal: OFF, transfer reduction: OFF
     write_settings(only_load_tt=False, line_based_pruning=False, u_turn_removal=False, transfer_reduction=False,
                    cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("vanilla aachen")
+    result("\nvanilla aachen")
     measure_aachen()
-    result("vanilla berlin")
+    result("\nvanilla berlin")
     measure_berlin()
 
     # line-based pruning: OFF, U-turn removal: ON, transfer reduction: OFF
     write_settings(only_load_tt=False, line_based_pruning=False, u_turn_removal=True, transfer_reduction=False,
                    cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("vanilla u-turn aachen")
+    result("\nvanilla u-turn aachen")
     measure_aachen()
-    result("vanilla u-turn berlin")
+    result("\nvanilla u-turn berlin")
     measure_berlin()
 
     # line-based pruning: OFF, U-turn removal: ON, transfer reduction: ON
     write_settings(only_load_tt=False, line_based_pruning=False, u_turn_removal=True, transfer_reduction=True,
                    cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("vanilla u-turn transfer reduction aachen")
+    result("\nvanilla u-turn transfer reduction aachen")
     measure_aachen()
-    result("vanilla u-turn transfer reduction berlin")
+    result("\nvanilla u-turn transfer reduction berlin")
     measure_berlin()
 
     # line-based pruning: ON, U-turn removal: ON, transfer reduction: OFF
     write_settings(only_load_tt=False, line_based_pruning=True, u_turn_removal=True, transfer_reduction=False,
                    cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("line-based pruning u-turn aachen")
+    result("\nline-based pruning u-turn aachen")
     measure_aachen()
-    result("line-based pruning u-turn berlin")
+    result("\nline-based pruning u-turn berlin")
     measure_berlin()
 
     # line-based pruning: ON, U-turn removal: ON, transfer reduction: ON
     write_settings(only_load_tt=False, line_based_pruning=True, u_turn_removal=True, transfer_reduction=False,
                    cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("line-based pruning u-turn transfer reduction aachen")
+    result("\nline-based pruning u-turn transfer reduction aachen")
     measure_aachen()
-    result("line-based pruning u-turn transer reduction berlin")
+    result("\nline-based pruning u-turn transer reduction berlin")
     measure_berlin()
 
 
