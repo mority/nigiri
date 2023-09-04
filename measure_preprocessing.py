@@ -27,11 +27,15 @@ aachen_periods_to = ["2021_y / January / 11", "2021_y / March / 11", "2021_y / J
                      "2021_y / December / 11"]
 aachen_n_bits = [64, 128, 256, 512, 512]
 
-berlin_periods_to = ["2023_y / July / 9", "2023_y / August / 9", "2023_y / September / 9", "2023_y / October / 9",
-                     "2023_y / November / 9", "2023_y / December / 9"]
-berlin_n_bits = [64, 64, 128, 128, 256, 256]
+berlin_periods_to = ["2023_y / August / 8", "2023_y / October / 11", "2023_y / December / 9"]
+berlin_n_bits = [64, 128, 256]
 
-n_samples = 10
+n_samples = 3
+
+
+def log(text2log):
+    with open(log_file_str, "a") as log_file:
+        log_file.write(text2log + "\n")
 
 
 def result(result2log):
@@ -139,7 +143,8 @@ def measure_aachen():
         samples = []
         for i in range(0, n_samples):
             start = perf_counter()
-            subprocess.run("./aachen", shell=True)
+            with open(log_file_str, "w") as log_file:
+                subprocess.run("./aachen", shell=True, stderr=subprocess.STDOUT, stdout=log_file)
             samples.append(perf_counter() - start)
             result(str(samples[i]))
         result("average of " + str(n_samples) + " runs: " + str(statistics.mean(samples)))
@@ -155,7 +160,8 @@ def measure_berlin():
         samples = []
         for i in range(0, n_samples):
             start = perf_counter()
-            subprocess.run("./berlin", shell=True)
+            with open(log_file_str, "w") as log_file:
+                subprocess.run("./berlin", shell=True, stderr=subprocess.STDOUT, stdout=log_file)
             samples.append(perf_counter() - start)
             result(str(samples[i]))
         result("average of " + str(n_samples) + " runs: " + str(statistics.mean(samples)))
@@ -167,6 +173,7 @@ def main():
 
     init_time_str = datetime.datetime.now().strftime("%Y-%b-%d %H:%M:%S")
     result("Results from " + init_time_str)
+    log("Log Begin: " + init_time_str)
 
     # baseline: load timetable without trip-based preprocessing
     write_settings(only_load_tt=True, line_based_pruning=False, u_turn_removal=False, transfer_reduction=False,
