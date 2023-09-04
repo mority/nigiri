@@ -11,10 +11,9 @@ constexpr interval<std::chrono::sys_days> aachen_period() {
   constexpr auto const to = (2021_y / December / 11).operator sys_days();
   return {from, to};
 }
-
-constexpr interval<std::chrono::sys_days> berlin_period() {
+constexpr interval<std::chrono::sys_days> vbb_period() {
   using namespace date;
-  constexpr auto const from = (2023_y / June / 15).operator sys_days();
+  constexpr auto const from = (2022_y / December / 9).operator sys_days();
   constexpr auto const to = (2023_y / December / 9).operator sys_days();
   return {from, to};
 }
