@@ -8,14 +8,17 @@ namespace nigiri::routing::tripbased {
 
 struct preprocessing_stats {
   void print(std::ostream& out) const {
-    out << "--- Preprocessing Stats ---\nLine-based Pruning: "
-        << (line_based_pruning ? "ON\n" : "OFF\n")
-        << "U-turn Removal: " << (u_turn_removal ? "ON\n" : "OFF\n")
-        << "Transfer Reduction: " << (transfer_reduction ? "ON\n" : "OFF\n")
-        << "Initial Number of Transfers: " << n_transfers_initial_
-        << "\nRemoved U-turn transfers: " << n_u_turn_transfers_
-        << "\nRemoved by Transfer Reduction: " << n_transfers_reduced_
-        << "\nFinal Number of Transfers: " << n_transfers_final_ << "\n---\n";
+    std::stringstream ss;
+    ss << "--- Preprocessing Stats ---\nLine-based Pruning: "
+       << (line_based_pruning ? "ON\n" : "OFF\n")
+       << "U-turn Removal: " << (u_turn_removal ? "ON\n" : "OFF\n")
+       << "Transfer Reduction: " << (transfer_reduction ? "ON\n" : "OFF\n")
+       << "Initial Number of Transfers: " << n_transfers_initial_
+       << "\nRemoved U-turn transfers: " << n_u_turn_transfers_
+       << "\nRemoved by Transfer Reduction: " << n_transfers_reduced_
+       << "\nFinal Number of Transfers: " << n_transfers_final_
+       << "\n-----------------------\n";
+    out << ss.str();
   }
 
   // if line-based pruning was used

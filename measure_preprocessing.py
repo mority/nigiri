@@ -11,7 +11,7 @@ log_file_str = "measure_preprocessing_log.txt"
 results_file_str = "measure_preprocessing_results.txt"
 path_file_str = "../tripbased_performance/paths.h"
 aachen_path_str = "/home/mo/uni/thesis/data/input/aachen"
-berlin_path_str = "/home/mo/uni/thesis/data/input/berlin"
+vbb_path_str = "/home/mo/uni/thesis/data/input/vbb"
 period_file_str = "../tripbased_performance/periods.h"
 types_file_str = "../include/nigiri/types.h"
 types_file_copy_str = "../include/nigiri/types.h.copy"
@@ -23,14 +23,37 @@ cxx_flags_str = "-DCMAKE_CXX_FLAGS=\"-fcolor-diagnostics -stdlib=libc++ -mtune=n
 generator_str = "-GNinja"
 build_type_str = "-DCMAKE_BUILD_TYPE=Release"
 
-aachen_periods_to = ["2021_y / January / 11", "2021_y / March / 11", "2021_y / June / 11", "2021_y / September / 11",
+default_settings = {"max_days": 512,
+                    "aachen_to": "(2021_y / December / 11)",
+                    "vbb_to": "(2023_y / December / 9)",
+                    "germany_to": "(2019_y / December / 14)",
+                    "only_load_tt": False,
+                    "line_based_pruning": False,
+                    "u_turn_removal": False,
+                    "transfer_reduction": False,
+                    "cache_pressure_reduction": False,
+                    "lower_bound_pruning": False,
+                    "min_walk": False,
+                    "transfer_class": False}
+
+
+def settings_str(s):
+    result_str = "| "
+    for key, value in s.items():
+        result_str += " " + key + ": " + str(value) + " |"
+    return result_str
+
+
+n_bits_list = [64, 128, 256, 384, 512]
+
+aachen_periods_to = ["2021_y / February / 11", "2021_y / April / 16", "2021_y / August / 22", "2021_y / December / 11",
                      "2021_y / December / 11"]
-aachen_n_bits = [64, 128, 256, 512, 512]
+vbb_periods_to = ["2023_y / February / 6", "2023_y / April / 11", "2023_y / August / 17", "2023_y / December / 9",
+                  "2023_y / December / 9"]
+germany_periods_to = ["2019_y / February / 6", "2019_y / April / 11", "2019_y / August / 17", "2019_y / December / 14",
+                      "2023_y / December / 14"]
 
-berlin_periods_to = ["2023_y / August / 8", "2023_y / October / 11", "2023_y / December / 9"]
-berlin_n_bits = [64, 128, 256]
-
-n_samples = 2
+n_samples = 1
 
 
 def log(text2log):
@@ -52,61 +75,42 @@ def build():
     subprocess.run("ninja", shell=True, check=True)
 
 
-def write_paths(*, aachen_path, berlin_path):
-    file_content_str = "#pragma once\n#include \"nigiri/loader/dir.h\"\nnamespace nigiri::routing::tripbased::performance {\nloader::fs_dir const aachen_dir{\"" + aachen_path + "\"};\nloader::fs_dir const berlin_dir{\"" + berlin_path + "\"};\n}  // namespace nigiri::routing::tripbased::performance"
+def write_paths(*, aachen_path, vbb_path):
+    file_content_str = "#pragma once\n#include \"nigiri/loader/dir.h\"\nnamespace nigiri::routing::tripbased::performance {\nloader::fs_dir const aachen_dir{\"" + aachen_path + "\"};\nloader::fs_dir const vbb_dir{\"" + vbb_path + "\"};\n}  // namespace nigiri::routing::tripbased::performance"
     with open(path_file_str, "w") as path_file:
         path_file.write(file_content_str)
 
 
-def write_periods(*, aachen_to, berlin_to):
-    file_content_str = "#pragma once\n#include \"nigiri/common/interval.h\"\n#include \"date/date.h\"\nnamespace nigiri::routing::tripbased::performance {\nconstexpr interval<std::chrono::sys_days> aachen_period() {\nusing namespace date;\nconstexpr auto const from = (2020_y / December / 14).operator sys_days();\nconstexpr auto const to = (" + aachen_to + ").operator sys_days();\nreturn {from, to};\n}\nconstexpr interval<std::chrono::sys_days> berlin_period() {\nusing namespace date;\nconstexpr auto const from = (2023_y / June / 15).operator sys_days();\nconstexpr auto const to = (" + berlin_to + ").operator sys_days();\nreturn {from, to};\n}\n}  // namespace nigiri::routing::tripbased::performance"
-    with open(period_file_str, "w") as period_file:
-        period_file.write(file_content_str)
-
-
-def write_n_bits(*, n_bits):
-    shutil.copyfile(types_file_str, types_file_copy_str)
-    target_str = "constexpr auto const kMaxDays = 512;"
-    replacement_str = "constexpr auto const kMaxDays = " + str(n_bits) + ";"
-    with open(types_file_str, "r") as types_file:
-        file_content_str = types_file.read()
-    file_content_str = file_content_str.replace(target_str, replacement_str)
-    with open(types_file_str, "w") as types_file:
-        types_file.write(file_content_str)
-
-
-def reset_types_file():
-    shutil.copyfile(types_file_copy_str, types_file_str)
-
-
-def write_settings(*, only_load_tt, line_based_pruning, u_turn_removal, transfer_reduction,
-                   cache_pressure_reduction, lower_bound_pruning, min_walk, transfer_class):
-    file_content_str = "#pragma once\n"
-
-    if (only_load_tt):
+def write_settings(s):
+    file_content_str = "#pragma once\n// timetable length\n"
+    file_content_str += "#define MAX_DAYS " + str(s["max_days"]) + "\n"
+    file_content_str += "#define AACHEN_TO (" + s["aachen_to"] + ")\n"
+    file_content_str += "#define VBB_TO (" + s["vbb_to"] + ")\n"
+    file_content_str += "#define GERMANY_TO (" + s["germany_to"] + ")\n"
+    if (s["only_load_tt"]):
         file_content_str += "#define ONLY_LOAD_TT\n"
 
     file_content_str += "//additional criteria\n"
-    if (min_walk):
+    if (s["min_walk"]):
         file_content_str += "#define TB_MIN_WALK\n"
-    elif (transfer_class):
+    elif (s["transfer_class"]):
         file_content_str += "#define TB_TRANSFER_CLASS\n"
         file_content_str += "#define TB_TRANSFER_CLASS0 15\n"
         file_content_str += "#define TB_TRANSFER_CLASS1 5\n"
 
     file_content_str += "// preprocessing options\n"
-    if (line_based_pruning):
+    if (s["line_based_pruning"]):
         file_content_str += "#define TB_PREPRO_LB_PRUNING\n"
     file_content_str += "#ifndef TB_PREPRO_LB_PRUNING\n#define TB_PREPRO_VANILLA\n#endif\n"
-    if (u_turn_removal):
+    if (s["u_turn_removal"]):
         file_content_str += "#define TB_PREPRO_UTURN_REMOVAL\n"
-    if (transfer_reduction):
+    if (s["transfer_reduction"]):
         file_content_str += "#define TB_PREPRO_TRANSFER_REDUCTION\n"
 
     file_content_str += "// query engine options\n"
-    if (cache_pressure_reduction):
+    if (s["cache_pressure_reduction"]):
         file_content_str += "#define TB_CACHE_PRESSURE_REDUCTION\n"
-    if (lower_bound_pruning):
+    if (s["lower_bound_pruning"]):
         file_content_str += "#define TB_LOWER_BOUND\n"
 
     file_content_str += ("// system limits - number of bits\n#define BITFIELD_IDX_BITS 25U\n#define TRANSPORT_IDX_BITS "
@@ -135,37 +139,45 @@ def cmake_cmd_str():
 
 
 def measure_aachen():
-    for (aachen_to, n_bits) in zip(aachen_periods_to, aachen_n_bits):
-        write_periods(aachen_to=aachen_to, berlin_to=berlin_periods_to[0])
-        write_n_bits(n_bits=n_bits)
-        build()
-        result("aachen - until " + aachen_to + ", n_bits: " + str(n_bits))
-        samples = []
-        for i in range(0, n_samples):
-            start = perf_counter()
-            with open(log_file_str, "w") as log_file:
-                subprocess.run("./aachen", shell=True, stderr=subprocess.STDOUT, stdout=log_file)
-            samples.append(perf_counter() - start)
-            result(str(samples[i]))
+    build()
+    samples = []
+    result("aachen")
+    for i in range(0, n_samples):
+        start = perf_counter()
+        with open(log_file_str, "a") as log_file:
+            subprocess.run("./aachen", shell=True, check=True, stderr=subprocess.STDOUT, stdout=log_file)
+        samples.append(perf_counter() - start)
+        result(str(samples[i]))
+    if n_samples > 1:
         result("average of " + str(n_samples) + " runs: " + str(statistics.mean(samples)))
-        reset_types_file()
 
 
-def measure_berlin():
-    for (berlin_to, n_bits) in zip(berlin_periods_to, berlin_n_bits):
-        write_periods(aachen_to=aachen_periods_to[0], berlin_to=berlin_to)
-        write_n_bits(n_bits=n_bits)
-        build()
-        result("berlin - until " + berlin_to + ", n_bits: " + str(n_bits))
-        samples = []
-        for i in range(0, n_samples):
-            start = perf_counter()
-            with open(log_file_str, "w") as log_file:
-                subprocess.run("./berlin", shell=True, stderr=subprocess.STDOUT, stdout=log_file)
-            samples.append(perf_counter() - start)
-            result(str(samples[i]))
+def measure_vbb():
+    build()
+    samples = []
+    result("vbb")
+    for i in range(0, n_samples):
+        start = perf_counter()
+        with open(log_file_str, "a") as log_file:
+            subprocess.run("./vbb", shell=True, check=True, stderr=subprocess.STDOUT, stdout=log_file)
+        samples.append(perf_counter() - start)
+        result(str(samples[i]))
+    if n_samples > 1:
         result("average of " + str(n_samples) + " runs: " + str(statistics.mean(samples)))
-        reset_types_file()
+
+
+def measure_germany():
+    build()
+    samples = []
+    result("germany")
+    for i in range(0, n_samples):
+        start = perf_counter()
+        with open(log_file_str, "a") as log_file:
+            subprocess.run("./germany", shell=True, check=True, stderr=subprocess.STDOUT, stdout=log_file)
+        samples.append(perf_counter() - start)
+        result(str(samples[i]))
+    if n_samples > 1:
+        result("average of " + str(n_samples) + " runs: " + str(statistics.mean(samples)))
 
 
 def main():
@@ -176,52 +188,29 @@ def main():
     log("Log Begin: " + init_time_str)
 
     # baseline: load timetable without trip-based preprocessing
-    write_settings(only_load_tt=True, line_based_pruning=False, u_turn_removal=False, transfer_reduction=False,
-                   cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("\nbaseline aachen")
-    measure_aachen()
-    result("\nbaseline berlin")
-    measure_berlin()
+    settings = default_settings.copy()
+    settings["only_load_tt"] = True
+    for n_bits, aachen_to, vbb_to, germany_to in zip(n_bits_list, aachen_periods_to, vbb_periods_to,
+                                                     germany_periods_to):
+        settings["max_days"] = n_bits
+        settings["aachen_to"] = aachen_to
+        settings["vbb_to"] = vbb_to
+        settings["germany_to"] = germany_to
+        result(settings_str(settings))
+        write_settings(settings)
+        measure_aachen()
+        measure_vbb()
+        measure_germany()
 
     # line-based pruning: OFF, U-turn removal: OFF, transfer reduction: OFF
-    write_settings(only_load_tt=False, line_based_pruning=False, u_turn_removal=False, transfer_reduction=False,
-                   cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("\nvanilla aachen")
-    measure_aachen()
-    result("\nvanilla berlin")
-    measure_berlin()
 
     # line-based pruning: OFF, U-turn removal: ON, transfer reduction: OFF
-    write_settings(only_load_tt=False, line_based_pruning=False, u_turn_removal=True, transfer_reduction=False,
-                   cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("\nvanilla u-turn aachen")
-    measure_aachen()
-    result("\nvanilla u-turn berlin")
-    measure_berlin()
 
     # line-based pruning: OFF, U-turn removal: ON, transfer reduction: ON
-    write_settings(only_load_tt=False, line_based_pruning=False, u_turn_removal=True, transfer_reduction=True,
-                   cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("\nvanilla u-turn transfer reduction aachen")
-    measure_aachen()
-    result("\nvanilla u-turn transfer reduction berlin")
-    measure_berlin()
 
     # line-based pruning: ON, U-turn removal: ON, transfer reduction: OFF
-    write_settings(only_load_tt=False, line_based_pruning=True, u_turn_removal=True, transfer_reduction=False,
-                   cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("\nline-based pruning u-turn aachen")
-    measure_aachen()
-    result("\nline-based pruning u-turn berlin")
-    measure_berlin()
 
     # line-based pruning: ON, U-turn removal: ON, transfer reduction: ON
-    write_settings(only_load_tt=False, line_based_pruning=True, u_turn_removal=True, transfer_reduction=False,
-                   cache_pressure_reduction=False, lower_bound_pruning=False, min_walk=False, transfer_class=False)
-    result("\nline-based pruning u-turn transfer reduction aachen")
-    measure_aachen()
-    result("\nline-based pruning u-turn transer reduction berlin")
-    measure_berlin()
 
 
 if __name__ == "__main__":

@@ -25,6 +25,11 @@
 
 #include "nigiri/common/interval.h"
 
+#include "nigiri/routing/tripbased/settings.h"
+#ifndef MAX_DAYS
+#define MAX_DAYS 512
+#endif
+
 namespace nigiri {
 
 // Extend interval by one day. This is required due to the departure/arrival
@@ -45,7 +50,7 @@ constexpr auto const kTimetableOffset =
 template <size_t Size>
 using bitset = cista::bitset<Size>;
 
-constexpr auto const kMaxDays = 512;
+constexpr auto const kMaxDays = MAX_DAYS;
 using bitfield = bitset<kMaxDays>;
 
 using bitvec = cista::raw::bitvec;

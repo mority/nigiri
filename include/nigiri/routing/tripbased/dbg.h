@@ -62,4 +62,14 @@ static inline std::string transfer_str(timetable const& tt,
          location_name(tt, location_idx_to) + " )";
 }
 
+static inline void print_tt_stats(timetable const& tt) {
+  std::stringstream ss;
+  ss << "\n--- Timetable Stats ---\n"
+     << "Days: " << tt.date_range_.size().count()
+     << "\nStops: " << tt.n_locations() << "\nRoutes: " << tt.n_routes()
+     << "\nTransports: " << tt.transport_route_.size()
+     << "\n-----------------------\n";
+  std::cout << ss.str();
+}
+
 }  // namespace nigiri::routing::tripbased
