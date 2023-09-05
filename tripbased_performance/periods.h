@@ -17,5 +17,10 @@ constexpr interval<std::chrono::sys_days> vbb_period() {
   constexpr auto const to = (2023_y / December / 9).operator sys_days();
   return {from, to};
 }
-
+constexpr interval<std::chrono::sys_days> germany_period() {
+  using namespace date;
+  constexpr auto const from = (2018_y / December / 9).operator sys_days();
+  constexpr auto const to = (2019_y / December / 14).operator sys_days();
+  return {from, to};
+}
 }  // namespace nigiri::routing::tripbased::performance
