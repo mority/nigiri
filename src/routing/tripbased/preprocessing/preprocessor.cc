@@ -22,6 +22,10 @@ bitfield_idx_t preprocessor::get_or_create_bfi(bitfield const& bf) {
 }
 
 void preprocessor::build(transfer_set& ts, const std::uint16_t sleep_duration) {
+  using namespace std::chrono;
+  auto const start_time = steady_clock::now();
+
+  auto const num_bitfields_initial = tt_.bitfields_.size();
   auto const num_transports = tt_.transport_traffic_days_.size();
   auto const num_threads = std::thread::hardware_concurrency();
 
@@ -91,8 +95,13 @@ void preprocessor::build(transfer_set& ts, const std::uint16_t sleep_duration) {
     t.join();
   }
 
-  prepro_stats_.n_transfers_final_ = n_transfers_;
+  auto const stop_time = steady_clock::now();
+  prepro_stats_.time_ =
+      std::chrono::duration<double, std::ratio<1>>(stop_time - start_time);
 
+  prepro_stats_.n_transfers_final_ = n_transfers_;
+  prepro_stats_.n_new_bitfields_ =
+      tt_.bitfields_.size() - num_bitfields_initial;
   prepro_stats_.print(std::cout);
 
   ts.tt_hash_ = hash_tt(tt_);

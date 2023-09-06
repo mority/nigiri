@@ -1,5 +1,6 @@
 #pragma once
 
+#include "nigiri/routing/tripbased/preprocessing/expanded_transfer.h"
 #include "nigiri/routing/tripbased/transfer.h"
 #include <filesystem>
 #include "cista/memory_holder.h"
@@ -7,6 +8,24 @@
 namespace nigiri::routing::tripbased {
 
 struct preprocessing_stats {
+  std::string hh_mm_ss_str() const {
+    std::uint32_t uint_time = std::round(time_.count());
+    std::uint32_t hours = 0, minutes = 0;
+    while (uint_time > 3600) {
+      uint_time -= 3600;
+      ++hours;
+    }
+    while (uint_time > 60) {
+      uint_time -= 60;
+      ++minutes;
+    }
+    std::stringstream ss;
+    ss << std::setw(2) << std::setfill('0') << hours << ":" << std::setw(2)
+       << std::setfill('0') << minutes << ":" << std::setw(2)
+       << std::setfill('0') << uint_time;
+    return ss.str();
+  }
+
   void print(std::ostream& out) const {
     std::stringstream ss;
     ss << "--- Preprocessing Stats ---\nLine-based Pruning: "
@@ -19,8 +38,14 @@ struct preprocessing_stats {
        << "\nFinal Number of Transfers: " << n_transfers_final_
        << "\nRequired Storage Space: "
        << static_cast<double>(n_transfers_final_ * sizeof(transfer)) / 1e9
-       << " Gigabyte"
-       << "\n-----------------------\n";
+       << " Gigabyte\nNew unique bitfields: " << n_new_bitfields_
+       << "\nBitfield deduplication storage savings: "
+       << static_cast<double>((n_transfers_final_ * sizeof(expanded_transfer)) -
+                              (n_transfers_final_ * sizeof(transfer)) +
+                              (n_new_bitfields_ * sizeof(bitfield))) /
+              1e9
+       << " Gigabyte\nPreprocessing time [hh:mm:ss]: " << hh_mm_ss_str()
+       << "\n";
     out << ss.str();
   }
 
@@ -38,6 +63,10 @@ struct preprocessing_stats {
   std::uint64_t n_transfers_reduced_{0U};
   // final number of transfers
   std::uint64_t n_transfers_final_{0U};
+  // number of unique, new bitfields for transfers
+  std::uint64_t n_new_bitfields_{0U};
+  // time that war required to build this transfer set
+  std::chrono::duration<double, std::ratio<1>> time_;
 };
 
 struct transfer_set {
