@@ -17,6 +17,9 @@ struct preprocessing_stats {
        << "\nRemoved U-turn transfers: " << n_u_turn_transfers_
        << "\nRemoved by Transfer Reduction: " << n_transfers_reduced_
        << "\nFinal Number of Transfers: " << n_transfers_final_
+       << "\nRequired Storage Space: "
+       << static_cast<double>(n_transfers_final_ * sizeof(transfer)) / 1e9
+       << " Gigabyte"
        << "\n-----------------------\n";
     out << ss.str();
   }
