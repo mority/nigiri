@@ -45,7 +45,8 @@ struct preprocessing_stats {
                               (n_new_bitfields_ * sizeof(bitfield))) /
               1e9
        << " Gigabyte\nPreprocessing time [hh:mm:ss]: " << hh_mm_ss_str()
-       << "\nPeak memory usage: " << peak_memory_usage_ << " Gigabyte\n";
+       << "\nPeak memory usage: " << peak_memory_usage_
+       << " Gigabyte\n--------------------------\n";
     out << ss.str();
   }
 
