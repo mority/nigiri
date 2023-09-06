@@ -11,6 +11,8 @@
 #include "./periods.h"
 #include "utl/progress_tracker.h"
 
+#include <sys/resource.h>
+
 using namespace nigiri;
 using namespace nigiri::loader;
 using namespace nigiri::routing;
@@ -35,4 +37,9 @@ int main() {
   transfer_set ts;
   build_transfer_set(tt, ts);
 #endif
+
+  rusage r_usage;
+  getrusage(RUSAGE_SELF, &r_usage);
+  std::cout << "Peak memory usage = "
+            << static_cast<double>(r_usage.ru_maxrss) / 1e6 << " Gigabyte\n";
 }
