@@ -45,7 +45,7 @@ struct preprocessing_stats {
                               (n_new_bitfields_ * sizeof(bitfield))) /
               1e9
        << " Gigabyte\nPreprocessing time [hh:mm:ss]: " << hh_mm_ss_str()
-       << "\n";
+       << "\nPeak memory usage: " << peak_memory_usage_ << " Gigabyte\n";
     out << ss.str();
   }
 
@@ -67,6 +67,8 @@ struct preprocessing_stats {
   std::uint64_t n_new_bitfields_{0U};
   // time that war required to build this transfer set
   std::chrono::duration<double, std::ratio<1>> time_;
+  // peak memory usage in Gigabyte
+  double peak_memory_usage_ = 0;
 };
 
 struct transfer_set {
