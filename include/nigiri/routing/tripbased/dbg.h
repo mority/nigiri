@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sys/resource.h>
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
 #include <format>
@@ -62,13 +63,19 @@ static inline std::string transfer_str(timetable const& tt,
          location_name(tt, location_idx_to) + " )";
 }
 
-static inline void print_tt_stats(timetable const& tt) {
+static inline void print_tt_stats(
+    timetable const& tt, std::chrono::duration<double, std::ratio<1>> time) {
+  rusage r_usage;
+  getrusage(RUSAGE_SELF, &r_usage);
+  auto const peak_memory_usage = static_cast<double>(r_usage.ru_maxrss) / 1e6;
   std::stringstream ss;
   ss << "\n--- Timetable Stats ---\n"
      << "Days: " << tt.date_range_.size().count()
      << "\nStops: " << tt.n_locations() << "\nRoutes: " << tt.n_routes()
      << "\nTransports: " << tt.transport_route_.size()
-     << "\n-----------------------\n";
+     << "\nPeak memory usage: " << peak_memory_usage << " Gigabyte"
+     << "\nLoading time: " << time.count()
+     << " seconds\n-----------------------\n";
   std::cout << ss.str();
 }
 

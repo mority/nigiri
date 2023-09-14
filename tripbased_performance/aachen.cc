@@ -2,6 +2,7 @@
 
 #include "nigiri/loader/hrd/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
+#include "nigiri/loader/loader_interface.h"
 #include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/preprocessing/preprocessor.h"
 #include "nigiri/routing/tripbased/settings.h"
@@ -21,15 +22,24 @@ int main() {
   auto bars = utl::global_progress_bars{false};
   auto progress_tracker = utl::activate_progress_tracker("aachen");
 
+#ifdef ONLY_LOAD_TT
+  using namespace std::chrono;
+  auto const start_time = steady_clock::now();
+#endif
+
   // init timetable
   timetable tt;
   tt.date_range_ = aachen_period();
+  register_special_stations(tt);
   constexpr auto const src = source_idx_t{0U};
   load_timetable(src, loader::hrd::hrd_5_20_avv, aachen_dir, tt);
   finalize(tt);
 
 #ifdef ONLY_LOAD_TT
-  print_tt_stats(tt);
+  auto const stop_time = steady_clock::now();
+  auto const time =
+      std::chrono::duration<double, std::ratio<1>>(stop_time - start_time);
+  print_tt_stats(tt, time);
 #else
   // run preprocessing
   transfer_set ts;
