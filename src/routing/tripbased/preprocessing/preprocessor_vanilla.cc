@@ -29,8 +29,12 @@ void preprocessor::build_part(preprocessor* const pp) {
 
   preprocessing_stats prepro_stats;
 
+#ifdef TB_TRANSFER_CLASS
+  std::array<bitfield, 3> omegas;
+#else
   // days of transport that still require a connection
   bitfield omega;
+#endif
 
   // active days of current transfer
   bitfield theta;
@@ -150,9 +154,13 @@ void preprocessor::build_part(preprocessor* const pp) {
                         &tau_arr_t_i, &rr_arr_, &rr_ch_, &impr,
 #ifdef TB_MIN_WALK
                         &p_t_i,
+#elifdef TB_TRANSFER_CLASS
+                        &omegas,
+#else
+                        &omega,
 #endif
 #endif
-                        &omega, &theta, &part, &beta_t,
+                        &theta, &part, &beta_t,
                         &prepro_stats](footpath const& fp) {
         // q: location index of destination of footpath
         auto const q = fp.target();
@@ -201,15 +209,21 @@ void preprocessor::build_part(preprocessor* const pp) {
                     event_times.begin();  // with the earliest transport
               }
 
+#ifdef TB_TRANSFER_CLASS
+              omegas[0] = beta_t;
+              omegas[1] = beta_t;
+              omegas[2] = beta_t;
+#else
               // days of t that still require connection
               omega = beta_t;
-
+#endif
               // check if any bit in omega is set to 1 and maximum waiting
               // time not exceeded
+#ifdef TB_TRANSFER_CLASS
+              while (omegas[0].any()) {
+#else
               while (omega.any()) {
-                // init theta
-                theta = omega;
-
+#endif
                 // departure time of current transport in relation to time
                 // alpha
                 std::uint16_t const tau_dep_alpha_u_j =
@@ -220,6 +234,13 @@ void preprocessor::build_part(preprocessor* const pp) {
                 if (tau_dep_alpha_u_j - alpha > pp->transfer_time_max_) {
                   break;
                 }
+
+#ifdef TB_TRANSFER_CLASS
+                auto const kappa = transfer_class(tau_dep_alpha_u_j - tau_q);
+                auto& omega = omegas[kappa];
+                bool const transfer_class_skip =
+                    kappa > 0 ? omega.none() : false;
+#endif
 
                 // offset from begin of tp_to interval
                 auto const k = std::distance(event_times.begin(), tau_dep_u_j);
@@ -241,9 +262,11 @@ void preprocessor::build_part(preprocessor* const pp) {
                           (pp->tt_.event_mam(u, j, event_type::kDep).count() -
                            pp->tt_.event_mam(u, i, event_type::kArr).count()) <
                       alpha));
-
+#ifdef TB_TRANSFER_CLASS
+                if (req && !transfer_class_skip) {
+#else
                 if (req) {
-
+#endif
                   // shift amount due to number of times transport u passed
                   // midnight
                   std::int8_t const sigma_u = tau_dep_u_j->days_;
@@ -254,6 +277,9 @@ void preprocessor::build_part(preprocessor* const pp) {
                   // bitfield transport to
                   auto const& beta_u =
                       pp->tt_.bitfields_[pp->tt_.transport_traffic_days_[u]];
+
+                  // init theta
+                  theta = omega;
 
                   // align bitfields and perform AND
                   if (sigma_total < 0) {
@@ -268,17 +294,9 @@ void preprocessor::build_part(preprocessor* const pp) {
                     // transfer initially computed
                     ++prepro_stats.n_transfers_initial_;
 
-#ifdef TB_TRANSFER_CLASS
-                    auto const kappa =
-                        transfer_class(tau_dep_alpha_u_j - tau_q);
-                    if (kappa == 0U) {
-#endif
-                      // remove days that are covered by this transfer from
-                      // omega
-                      omega &= ~theta;
-#ifdef TB_TRANSFER_CLASS
-                    }
-#endif
+                    // remove days that are covered by this transfer from
+                    // omega
+                    omega &= ~theta;
 
 #ifdef TB_PREPRO_UTURN_REMOVAL
                     auto const check_uturn = [&j, &route_u, &i, &route_t,
