@@ -11,11 +11,11 @@ struct preprocessing_stats {
   std::string hh_mm_ss_str() const {
     std::uint32_t uint_time = std::round(time_.count());
     std::uint32_t hours = 0, minutes = 0;
-    while (uint_time > 3600) {
+    while (uint_time >= 3600) {
       uint_time -= 3600;
       ++hours;
     }
-    while (uint_time > 60) {
+    while (uint_time >= 60) {
       uint_time -= 60;
       ++minutes;
     }
