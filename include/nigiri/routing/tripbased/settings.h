@@ -1,5 +1,9 @@
 #pragma once
 
+#define MAX_DAYS 384
+
+// #define ONLY_LOAD_TT
+
 // additional criteria
 // #define TB_MIN_WALK
 // #define TB_TRANSFER_CLASS
@@ -9,7 +13,7 @@
 #endif
 
 // preprocessing options
-// #define TB_PREPRO_LB_PRUNING
+#define TB_PREPRO_LB_PRUNING
 #ifndef TB_PREPRO_LB_PRUNING
 #define TB_PREPRO_VANILLA
 #endif
