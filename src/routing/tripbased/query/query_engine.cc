@@ -277,8 +277,11 @@ void query_engine::seg_dest(unixtime_t const start_time,
           tt_.route_location_seq_[tt_.transport_route_[seg.get_transport_idx()]]
                                  [seg.stop_idx_start_ + 1]}
           .location_idx();
+  auto const lb = lb_[location_next.v_];
   // arrival plus lowest possible travel time to destination
-  seg.time_prune_ = unix_time_next + duration_t{lb_[location_next.v_]};
+  seg.time_prune_ = lb == std::numeric_limits<std::uint16_t>::max()
+                        ? std::numeric_limits<unixtime_t>::max()
+                        : unix_time_next + duration_t{lb};
 #else
   // the unix time at the next stop of the transport segment
   seg.time_prune_ = unix_time_next;
