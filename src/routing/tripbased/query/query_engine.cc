@@ -35,7 +35,7 @@ query_engine::query_engine(timetable const& tt,
 #ifdef TB_CACHE_PRESSURE_REDUCTION
   stats_.cache_pressure_reduction_ = true;
 #endif
-#ifdef TB_LOWERBOUND
+#ifdef TB_LOWER_BOUND
   stats_.lower_bound_pruning_ = true;
 #endif
 
@@ -126,8 +126,8 @@ void query_engine::execute(unixtime_t const start_time,
 
   // process all Q_n in ascending order, i.e., transport segments reached after
   // n transfers
-  for (std::uint8_t n = 0U; n != state_.q_n_.start_.size() && n < max_transfers;
-       ++n) {
+  std::uint8_t n = 0U;
+  for (; n != state_.q_n_.start_.size() && n < max_transfers; ++n) {
 #ifndef NDEBUG
     TBDL << "Processing segments of Q_" << std::to_string(n) << ":\n";
 #endif
@@ -167,6 +167,8 @@ void query_engine::execute(unixtime_t const start_time,
   }
 
   stats_.n_segments_enqueued_ += state_.q_n_.size();
+  stats_.empty_n_ = n;
+  stats_.max_transfers_reached_ = n == max_transfers;
 }
 
 #ifdef TB_CACHE_PRESSURE_REDUCTION
@@ -279,9 +281,8 @@ void query_engine::seg_dest(unixtime_t const start_time,
           .location_idx();
   auto const lb = lb_[location_next.v_];
   // arrival plus lowest possible travel time to destination
-  seg.time_prune_ = lb == std::numeric_limits<std::uint16_t>::max()
-                        ? std::numeric_limits<unixtime_t>::max()
-                        : unix_time_next + duration_t{lb};
+  seg.time_prune_ = lb == kUnreachable ? std::numeric_limits<unixtime_t>::max()
+                                       : unix_time_next + duration_t{lb};
 #else
   // the unix time at the next stop of the transport segment
   seg.time_prune_ = unix_time_next;

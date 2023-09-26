@@ -29,6 +29,8 @@ struct query_stats {
   std::uint64_t n_segments_enqueued_{0U};
   std::uint64_t n_segments_pruned_{0U};
   std::uint64_t n_journeys_found_{0U};
+  std::uint64_t empty_n_{0U};
+  bool max_transfers_reached_{false};
 };
 
 struct query_engine {
@@ -37,6 +39,8 @@ struct query_engine {
 
 #ifdef TB_LOWER_BOUND
   static constexpr bool kUseLowerBounds = true;
+  static constexpr auto const kUnreachable =
+      std::numeric_limits<std::uint16_t>::max();
 #else
   static constexpr bool kUseLowerBounds = false;
 #endif
