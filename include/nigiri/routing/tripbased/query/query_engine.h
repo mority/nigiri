@@ -15,19 +15,11 @@ struct timetable;
 namespace nigiri::routing::tripbased {
 
 struct query_stats {
-  void print(std::ostream& out) const {
-    out << "--- Query Stats ---\nCache-Pressure Reduction: "
-        << (cache_pressure_reduction_ ? "ON\n" : "OFF\n")
-        << "Lower Bound Pruning: " << (lower_bound_pruning_ ? "ON\n" : "OFF\n")
-        << "Number of Segments enqueued: " << n_segments_enqueued_
-        << "\nNumber of Segments pruned: " << n_segments_pruned_
-        << "\nNumber of Journeys found: " << n_journeys_found_ << "\n---\n";
-  }
-
   bool cache_pressure_reduction_{false};
   bool lower_bound_pruning_{false};
   std::uint64_t n_segments_enqueued_{0U};
   std::uint64_t n_segments_pruned_{0U};
+  std::uint64_t n_enqueue_prevented_by_reached_{0U};
   std::uint64_t n_journeys_found_{0U};
   std::uint64_t empty_n_{0U};
   bool max_transfers_reached_{false};

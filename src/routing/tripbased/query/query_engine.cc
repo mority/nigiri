@@ -437,9 +437,12 @@ void query_engine::seg_transfers(std::uint8_t const n,
                                     std::max(kappa, seg.transfer_class_max_),
                                     seg.transfer_class_sum_ + kappa, q_cur);
 #else
-          state_.q_n_.enqueue(static_cast<std::uint16_t>(d_tr),
-                              transfer.get_transport_idx_to(),
-                              transfer.get_stop_idx_to(), n + 1U, q_cur);
+          bool enq = state_.q_n_.enqueue(
+              static_cast<std::uint16_t>(d_tr), transfer.get_transport_idx_to(),
+              transfer.get_stop_idx_to(), n + 1U, q_cur);
+          if (!enq) {
+            ++stats_.n_enqueue_prevented_by_reached_;
+          }
 #endif
         }
       }

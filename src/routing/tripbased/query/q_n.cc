@@ -141,7 +141,7 @@ void q_n::enqueue_class(std::uint16_t const transport_day,
 }
 
 #else
-void q_n::enqueue(std::uint16_t const transport_day,
+bool q_n::enqueue(std::uint16_t const transport_day,
                   transport_idx_t const transport_idx,
                   std::uint16_t const stop_idx,
                   std::uint16_t const n_transfers,
@@ -181,8 +181,10 @@ void q_n::enqueue(std::uint16_t const transport_day,
 
       // update reached
       r_.update(transport_segment_idx, stop_idx, n_transfers);
+      return true;
     }
   }
+  return false;
 }
 #endif
 

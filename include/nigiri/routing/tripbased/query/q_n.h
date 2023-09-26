@@ -35,7 +35,7 @@ struct q_n {
 
 #else
 
-  void enqueue(std::uint16_t const transport_day,
+  bool enqueue(std::uint16_t const transport_day,
                transport_idx_t const,
                std::uint16_t const stop_idx,
                std::uint16_t const n_transfers,
