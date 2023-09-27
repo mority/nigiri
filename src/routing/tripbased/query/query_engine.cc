@@ -498,10 +498,11 @@ void query_engine::handle_segment(unixtime_t const start_time,
   auto const reached_transfer_class_sum = reached_transfer_class.second;
 #endif
 
+  auto const seg_route_idx = tt_.transport_route_[seg.get_transport_idx()];
+
   // check if target location is reached from current transport segment
-  for (auto const& le : state_.route_dest_) {
-    if (le.route_idx_ == tt_.transport_route_[seg.get_transport_idx()] &&
-        seg.stop_idx_start_ < le.stop_idx_ &&
+  for (auto const& le : state_.route_dest_[seg_route_idx.v_]) {
+    if (seg.stop_idx_start_ < le.stop_idx_ &&
         le.stop_idx_ <= seg.stop_idx_end_) {
       // the time it takes to travel on this transport segment
       auto const travel_time_seg =
@@ -543,7 +544,7 @@ void query_engine::handle_segment(unixtime_t const start_time,
         journey j{};
         j.start_time_ = start_time;
         j.dest_time_ = t_cur;
-        j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
+        j.dest_ = stop{tt_.route_location_seq_[seg_route_idx][le.stop_idx_]}
                       .location_idx();
         j.transfers_ = n;
         // add journey to pareto set (removes dominated entries)
