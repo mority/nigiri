@@ -224,7 +224,7 @@ void query_engine::seg_dest(unixtime_t const start_time,
         journey j{};
         j.start_time_ = start_time;
         j.dest_time_ = t_cur;
-        j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
+        j.dest_ = stop{tt_.route_location_seq_[seg_route_idx][le.stop_idx_]}
                       .location_idx();
         j.transfers_ = n;
 #ifdef TB_MIN_WALK
@@ -525,7 +525,7 @@ void query_engine::handle_segment(unixtime_t const start_time,
         journey j{};
         j.start_time_ = start_time;
         j.dest_time_ = t_cur;
-        j.dest_ = stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
+        j.dest_ = stop{tt_.route_location_seq_[seg_route_idx][le.stop_idx_]}
                       .location_idx();
         j.transfers_ = n;
 #ifdef TB_MIN_WALK
