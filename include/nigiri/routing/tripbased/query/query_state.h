@@ -14,10 +14,8 @@ namespace nigiri::routing::tripbased {
 
 // a route that reaches the destination
 struct route_dest {
-  route_dest(route_idx_t route_idx, std::uint16_t stop_idx, std::uint16_t time)
-      : route_idx_(route_idx), stop_idx_(stop_idx), time_(time) {}
-  // the route index of the route that reaches the target location
-  route_idx_t route_idx_;
+  route_dest(std::uint16_t stop_idx, std::uint16_t time)
+      : stop_idx_(stop_idx), time_(time) {}
   // the stop index at which the route reaches the target location
   std::uint16_t stop_idx_;
   // the time in it takes after exiting the route until the target location is
@@ -43,20 +41,23 @@ struct query_state {
     q_n_.end_.reserve(kNumTransfersMax);
     q_n_.segments_.reserve(10000);
     query_starts_.reserve(20);
+    route_dest_.resize(tt.n_routes());
   }
 
   void reset(day_idx_t new_base) {
-    route_dest_.clear();
     std::fill(t_min_.begin(), t_min_.end(), unixtime_t::max());
     r_.reset();
     q_n_.reset(new_base);
+    for (auto& inner_vec : route_dest_) {
+      inner_vec.clear();
+    }
   }
 
   // transfer set built by preprocessor
   transfer_set const& ts_;
 
   // routes that reach the target stop
-  std::vector<route_dest> route_dest_;
+  std::vector<std::vector<route_dest>> route_dest_;
 
   // reached stops per transport
   reached r_;

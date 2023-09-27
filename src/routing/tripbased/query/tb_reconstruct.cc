@@ -92,9 +92,9 @@ std::optional<query_engine::journey_end> query_engine::reconstruct_journey_end(
     auto const route_idx = tt_.transport_route_[seg.get_transport_idx()];
 
     // find matching entry in l_
-    for (auto const& le : state_.route_dest_) {
+    for (auto const& le : state_.route_dest_[route_idx.v_]) {
       // check if route and stop indices match
-      if (le.route_idx_ == route_idx && seg.stop_idx_start_ < le.stop_idx_ &&
+      if (seg.stop_idx_start_ < le.stop_idx_ &&
           le.stop_idx_ <= seg.stop_idx_end_) {
         // transport day of the segment
         auto const transport_day = seg.get_transport_day(base_);
@@ -114,7 +114,7 @@ std::optional<query_engine::journey_end> query_engine::reconstruct_journey_end(
         if (seg_unix_dest == j.dest_time_) {
           // the location specified by the l_entry
           auto const le_location_idx =
-              stop{tt_.route_location_seq_[le.route_idx_][le.stop_idx_]}
+              stop{tt_.route_location_seq_[route_idx][le.stop_idx_]}
                   .location_idx();
 
           // to station
