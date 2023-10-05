@@ -3,15 +3,18 @@
 #include "nigiri/routing/for_each_meta.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/tripbased/dbg.h"
+#include "nigiri/routing/tripbased/query/query_engine.h"
 #include "nigiri/routing/tripbased/settings.h"
+#include "nigiri/rt/frun.h"
+#include "nigiri/special_stations.h"
 
 #ifdef TB_TRANSFER_CLASS
 #include "nigiri/routing/tripbased/transfer_class.h"
 #endif
 
-#include "nigiri/routing/tripbased/query/query_engine.h"
-#include "nigiri/rt/frun.h"
-#include "nigiri/special_stations.h"
+#ifdef TB_QUERY_DAY_EXTRACTION
+#include "nigiri/routing/tripbased/query/query_day_extraction.h"
+#endif
 
 using namespace nigiri;
 using namespace nigiri::routing;
@@ -123,6 +126,11 @@ void query_engine::execute(unixtime_t const start_time,
     handle_start(qs);
   }
 
+#ifdef TB_QUERY_DAY_EXTRACTION
+  extracted_transfer_set query_day_transfers(tt_, state_.ts_, base_);
+  extracted_transfer_set next_day_transfers(tt_, state_.ts_, base_ + 1);
+#endif
+
   // process all Q_n in ascending order, i.e., transport segments reached after
   // n transfers
   std::uint8_t n = 0U;
@@ -149,7 +157,11 @@ void query_engine::execute(unixtime_t const start_time,
     // (3) process transfers & enqueue segments
     for (auto q_cur = state_.q_n_.start_[n]; q_cur != state_.q_n_.end_[n];
          ++q_cur) {
+#ifdef TB_QUERY_DAY_EXTRACTION
+      seg_transfers(n, q_cur, query_day_transfers, next_day_transfers);
+#else
       seg_transfers(n, q_cur);
+#endif
     }
 
 #else
@@ -326,8 +338,15 @@ void query_engine::seg_prune(
 #endif
 }
 
-void query_engine::seg_transfers(std::uint8_t const n,
-                                 queue_idx_t const q_cur) {
+void query_engine::seg_transfers(
+    std::uint8_t const n,
+    queue_idx_t const q_cur
+#ifdef TB_QUERY_DAY_EXTRACTION
+    ,
+    extracted_transfer_set const& query_day_transfers,
+    extracted_transfer_set const& next_day_transfers
+#endif
+) {
 
   auto const seg = state_.q_n_[q_cur];
 
@@ -360,6 +379,28 @@ void query_engine::seg_transfers(std::uint8_t const n,
            << ", processing transfers...\n";
 #endif
 
+#ifdef TB_QUERY_DAY_EXTRACTION
+      auto const event_day =
+          d_seg +
+          tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr).days();
+#ifndef NDEBUG
+      TBDL << "event_day = " << event_day << ", query_day = " << base_.v_
+           << "\n";
+#endif
+
+      extracted_transfer_set const* transfer_set = &query_day_transfers;
+      if (event_day == base_.v_ + 1) {
+        transfer_set = &next_day_transfers;
+      }
+      auto const& transfers =
+          transfer_set->data_.at(seg.get_transport_idx().v_, i);
+
+#ifndef NDEBUG
+      TBDL << transfers.size() << " transfers at stop_idx = " << i << "\n";
+#endif
+
+      for (auto const& transfer : transfers) {
+#else
       // get transfers for this transport/stop
       auto const& transfers =
           state_.ts_.data_.at(seg.get_transport_idx().v_, i);
@@ -370,63 +411,66 @@ void query_engine::seg_transfers(std::uint8_t const n,
         auto const& theta = tt_.bitfields_[transfer.get_bitfield_idx()];
         // enqueue if transfer is possible
         if (theta.test(static_cast<std::size_t>(d_seg))) {
-          // arrival time at start location of transfer
-          auto const tau_arr_t_i =
-              tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr)
-                  .count();
-          // departure time at end location of transfer
-          auto const tau_dep_u_j =
-              tt_.event_mam(transfer.get_transport_idx_to(),
-                            transfer.stop_idx_to_, event_type::kDep)
-                  .count();
+#endif
 
-          auto const d_tr = d_seg + tau_arr_t_i / 1440 - tau_dep_u_j / 1440 +
-                            transfer.passes_midnight_;
+        // arrival time at start location of transfer
+        auto const tau_arr_t_i =
+            tt_.event_mam(seg.get_transport_idx(), i, event_type::kArr).count();
+
+        // departure time at end location of transfer
+        auto const tau_dep_u_j =
+            tt_.event_mam(transfer.get_transport_idx_to(),
+                          transfer.stop_idx_to_, event_type::kDep)
+                .count();
+
+        auto const d_tr = d_seg + tau_arr_t_i / 1440 - tau_dep_u_j / 1440 +
+                          transfer.passes_midnight_;
 #ifndef NDEBUG
-          TBDL << "Found a transfer to transport "
-               << transfer.get_transport_idx_to() << ": "
-               << tt_.transport_name(transfer.get_transport_idx_to())
-               << " at its stop " << transfer.stop_idx_to_ << ": "
-               << location_name(tt_,
-                                stop{tt_.route_location_seq_
-                                         [tt_.transport_route_
-                                              [transfer.get_transport_idx_to()]]
-                                         [transfer.get_stop_idx_to()]}
-                                    .location_idx())
-               << ", departing at "
-               << unix_dhhmm(tt_,
-                             tt_.to_unixtime(
-                                 day_idx_t{d_tr},
-                                 tt_.event_mam(transfer.get_transport_idx_to(),
-                                               transfer.get_stop_idx_to(),
-                                               event_type::kDep)
-                                     .as_duration()))
-               << "\n";
+        TBDL << "Found a transfer to transport "
+             << transfer.get_transport_idx_to() << ": "
+             << tt_.transport_name(transfer.get_transport_idx_to())
+             << " at its stop " << transfer.stop_idx_to_ << ": "
+             << location_name(
+                    tt_,
+                    stop{tt_.route_location_seq_
+                             [tt_.transport_route_[transfer
+                                                       .get_transport_idx_to()]]
+                             [transfer.get_stop_idx_to()]}
+                        .location_idx())
+             << ", departing at "
+             << unix_dhhmm(tt_,
+                           tt_.to_unixtime(
+                               day_idx_t{d_tr},
+                               tt_.event_mam(transfer.get_transport_idx_to(),
+                                             transfer.get_stop_idx_to(),
+                                             event_type::kDep)
+                                   .as_duration()))
+             << "\n";
 #endif
 
 #ifdef TB_MIN_WALK
-          auto const p_t_i =
-              stop{tt_.route_location_seq_
-                       [tt_.transport_route_[seg.get_transport_idx()]][i]}
-                  .location_idx();
-          auto const p_u_j =
-              stop{tt_.route_location_seq_
-                       [tt_.transport_route_[transfer.get_transport_idx_to()]]
-                       [transfer.get_stop_idx_to()]}
-                  .location_idx();
+        auto const p_t_i =
+            stop{tt_.route_location_seq_
+                     [tt_.transport_route_[seg.get_transport_idx()]][i]}
+                .location_idx();
+        auto const p_u_j =
+            stop{tt_.route_location_seq_
+                     [tt_.transport_route_[transfer.get_transport_idx_to()]]
+                     [transfer.get_stop_idx_to()]}
+                .location_idx();
 
-          std::uint16_t walk_time = seg.time_walk_;
-          if (!matches(tt_, location_match_mode::kEquivalent, p_t_i, p_u_j)) {
-            for (auto const& fp : tt_.locations_.footpaths_out_[p_t_i]) {
-              if (fp.target() == p_u_j) {
-                walk_time += fp.duration_;
-              }
+        std::uint16_t walk_time = seg.time_walk_;
+        if (!matches(tt_, location_match_mode::kEquivalent, p_t_i, p_u_j)) {
+          for (auto const& fp : tt_.locations_.footpaths_out_[p_t_i]) {
+            if (fp.target() == p_u_j) {
+              walk_time += fp.duration_;
             }
           }
+        }
 
-          state_.q_n_.enqueue_walk(
-              static_cast<std::uint16_t>(d_tr), transfer.get_transport_idx_to(),
-              transfer.get_stop_idx_to(), n + 1U, walk_time, q_cur);
+        state_.q_n_.enqueue_walk(
+            static_cast<std::uint16_t>(d_tr), transfer.get_transport_idx_to(),
+            transfer.get_stop_idx_to(), n + 1U, walk_time, q_cur);
 #elifdef TB_TRANSFER_CLASS
           auto const kappa = transfer_class(transfer_wait(
               tt_, seg.get_transport_idx(), i, transfer.get_transport_idx_to(),
@@ -438,19 +482,23 @@ void query_engine::seg_transfers(std::uint8_t const n,
                                     std::max(kappa, seg.transfer_class_max_),
                                     seg.transfer_class_sum_ + kappa, q_cur);
 #else
-          bool enq = state_.q_n_.enqueue(
-              static_cast<std::uint16_t>(d_tr), transfer.get_transport_idx_to(),
-              transfer.get_stop_idx_to(), n + 1U, q_cur);
-          if (!enq) {
-            ++stats_.n_enqueue_prevented_by_reached_;
-          }
-#endif
-        }
+      bool enq = state_.q_n_.enqueue(static_cast<std::uint16_t>(d_tr),
+                                     transfer.get_transport_idx_to(),
+                                     transfer.get_stop_idx_to(), n + 1U, q_cur);
+      if (!enq) {
+        ++stats_.n_enqueue_prevented_by_reached_;
       }
+#endif
+
+#ifndef TB_QUERY_DAY_EXTRACTION
+      }
+#endif
     }
-  } else {
-    ++stats_.n_segments_pruned_;
   }
+}
+else {
+  ++stats_.n_segments_pruned_;
+}
 }
 
 #else

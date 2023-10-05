@@ -21,8 +21,9 @@
 #define TB_PREPRO_TRANSFER_REDUCTION
 
 // query engine options
-// #define TB_CACHE_PRESSURE_REDUCTION
-// #define TB_LOWER_BOUND
+#define TB_CACHE_PRESSURE_REDUCTION
+#define TB_LOWER_BOUND
+#define TB_QUERY_DAY_EXTRACTION
 
 // system limits - number of bits
 #define BITFIELD_IDX_BITS 25U

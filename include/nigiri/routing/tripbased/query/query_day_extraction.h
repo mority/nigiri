@@ -8,6 +8,13 @@
 namespace nigiri::routing::tripbased {
 
 struct extracted_transfer {
+  extracted_transfer(std::uint32_t const& transport_idx_to,
+                     std::uint16_t const& stop_idx_to,
+                     std::uint16_t const& passes_midnight)
+      : transport_idx_to_(transport_idx_to),
+        stop_idx_to_(stop_idx_to),
+        passes_midnight_(passes_midnight) {}
+
   // the transport that is the target of the transfer
   transport_idx_t get_transport_idx_to() const {
     return transport_idx_t{transport_idx_to_};

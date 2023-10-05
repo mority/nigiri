@@ -8,6 +8,10 @@
 #include "nigiri/routing/tripbased/dbg.h"
 #include "query_state.h"
 
+#ifdef TB_QUERY_DAY_EXTRACTION
+#include "nigiri/routing/tripbased/query/query_day_extraction.h"
+#endif
+
 namespace nigiri {
 struct timetable;
 }  // namespace nigiri
@@ -106,7 +110,14 @@ private:
                  transport_segment& seg);
 #endif
 
+#ifdef TB_QUERY_DAY_EXTRACTION
+  void seg_transfers(std::uint8_t const n,
+                     queue_idx_t const q_cur,
+                     extracted_transfer_set const& query_day_transfers,
+                     extracted_transfer_set const& next_day_transfers);
+#else
   void seg_transfers(std::uint8_t const n, queue_idx_t const q_cur);
+#endif
 
 #else
 
