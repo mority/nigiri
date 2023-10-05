@@ -8,10 +8,14 @@
 namespace nigiri::routing::tripbased {
 
 struct extracted_transfer {
-  extracted_transfer(std::uint32_t const& transport_idx_to,
+  extracted_transfer(std::uint16_t query_day_active,
+                     std::uint16_t next_day_active,
+                     std::uint32_t const& transport_idx_to,
                      std::uint16_t const& stop_idx_to,
                      std::uint16_t const& passes_midnight)
-      : transport_idx_to_(transport_idx_to),
+      : query_day_active_(query_day_active),
+        next_day_active_(next_day_active),
+        transport_idx_to_(transport_idx_to),
         stop_idx_to_(stop_idx_to),
         passes_midnight_(passes_midnight) {}
 
@@ -27,6 +31,9 @@ struct extracted_transfer {
 
   // bit: 1 -> the transfer passes midnight
   day_idx_t get_passes_midnight() const { return day_idx_t{passes_midnight_}; }
+
+  std::uint64_t query_day_active_ : 1;
+  std::uint64_t next_day_active_ : 1;
 
   // the transport that is the target of the transfer
   std::uint64_t transport_idx_to_ : TRANSPORT_IDX_BITS;
@@ -53,10 +60,14 @@ struct extracted_transfer_set {
           auto const sigma =
               tt.event_mam(transport_idx, stop_idx, event_type::kArr).days_;
           auto const& beta = tt.bitfields_[transfer.get_bitfield_idx()];
-          if (beta.test(d.v_ - sigma)) {
-            stop_transfers[stop_idx].emplace_back(transfer.transport_idx_to_,
-                                                  transfer.stop_idx_to_,
-                                                  transfer.passes_midnight_);
+          std::uint16_t const query_day_active =
+              beta.test(d.v_ - sigma) ? 1 : 0;
+          std::uint16_t const next_day_active =
+              beta.test(d.v_ + 1 - sigma) ? 1 : 0;
+          if (query_day_active == 1 || next_day_active == 1) {
+            stop_transfers[stop_idx].emplace_back(
+                query_day_active, next_day_active, transfer.transport_idx_to_,
+                transfer.stop_idx_to_, transfer.passes_midnight_);
           }
         }
       }

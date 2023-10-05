@@ -114,8 +114,7 @@ private:
 #ifdef TB_QUERY_DAY_EXTRACTION
   void seg_transfers(std::uint8_t const n,
                      queue_idx_t const q_cur,
-                     extracted_transfer_set const& query_day_transfers,
-                     extracted_transfer_set const& next_day_transfers);
+                     extracted_transfer_set const& extracted_transfers);
 #else
   void seg_transfers(std::uint8_t const n, queue_idx_t const q_cur);
 #endif
