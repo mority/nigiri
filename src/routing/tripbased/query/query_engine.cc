@@ -127,8 +127,14 @@ void query_engine::execute(unixtime_t const start_time,
   }
 
 #ifdef TB_QUERY_DAY_EXTRACTION
+  using namespace std::chrono;
+  auto const extraction_start = steady_clock::now();
   extracted_transfer_set query_day_transfers(tt_, state_.ts_, base_);
   extracted_transfer_set next_day_transfers(tt_, state_.ts_, base_ + 1);
+  auto const extraction_stop = steady_clock::now();
+  stats_.query_day_extraction_time_ =
+      std::chrono::duration<double, std::ratio<1>>(extraction_start -
+                                                   extraction_stop);
 #endif
 
   // process all Q_n in ascending order, i.e., transport segments reached after

@@ -26,6 +26,7 @@ struct query_stats {
   std::uint64_t n_enqueue_prevented_by_reached_{0U};
   std::uint64_t n_journeys_found_{0U};
   std::uint64_t empty_n_{0U};
+  std::chrono::duration<double, std::ratio<1>> query_day_extraction_time_{0};
   bool max_transfers_reached_{false};
 };
 
