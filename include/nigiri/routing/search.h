@@ -197,12 +197,14 @@ struct search {
 
       state_.starts_.clear();
 
+      auto const interval_extension = estimate_interval_extension(q_.min_connection_count_ - n_results_in_interval());
+
       auto const new_interval = interval{
           q_.extend_interval_earlier_ ? tt_.external_interval().clamp(
-                                            search_interval_.from_ - 60_minutes)
+                                            search_interval_.from_ - interval_extension)
                                       : search_interval_.from_,
           q_.extend_interval_later_
-              ? tt_.external_interval().clamp(search_interval_.to_ + 60_minutes)
+              ? tt_.external_interval().clamp(search_interval_.to_ + interval_extension)
               : search_interval_.to_};
       trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
 
@@ -344,6 +346,41 @@ private:
             }
           }
         });
+  }
+
+  duration_t estimate_interval_extension(unsigned const num_con_req) {
+
+    auto min_arr_per_day{std::numeric_limits<unsigned>::max()};
+    for(auto u{0U}; u < state_.is_destination_.size(); ++u) {
+      if(state_.is_destination_[u]) {
+        auto arr_per_day{0U};
+        auto const query_day_idx = day_idx_t{
+            std::chrono::duration_cast<date::days>(
+                search_interval_.from_ - tt_.internal_interval().from_)
+                .count()};
+        auto const routes = tt_.location_routes_[location_idx_t{u}];
+        for (auto const route_idx : routes) {
+          auto const transports = tt_.route_transport_ranges_[route_idx];
+          for (auto const transport_idx : transports) {
+            auto const bitfield_idx =
+                tt_.transport_traffic_days_[transport_idx];
+            auto const& bitfield = tt_.bitfields_[bitfield_idx];
+            if (bitfield.test(query_day_idx.v_)) {
+              ++arr_per_day;
+            }
+          }
+        }
+        if(arr_per_day < min_arr_per_day) {
+          min_arr_per_day = arr_per_day;
+        }
+      }
+    }
+
+    if(min_arr_per_day == 0U || min_arr_per_day == std::numeric_limits<unsigned>::max()) {
+      min_arr_per_day = 1U;
+    }
+
+    return duration_t{60U + static_cast<unsigned>((float(num_con_req) / float(min_arr_per_day)) * 1440U)};
   }
 
   timetable const& tt_;
