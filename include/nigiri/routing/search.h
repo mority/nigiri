@@ -348,12 +348,12 @@ private:
         });
   }
 
+  // Heuristic 2
   duration_t estimate_interval_extension(unsigned const num_con_req) {
 
-    auto min_arr_per_day{std::numeric_limits<unsigned>::max()};
+    auto arr_per_day{0U};
     for(auto u{0U}; u < state_.is_destination_.size(); ++u) {
       if(state_.is_destination_[u]) {
-        auto arr_per_day{0U};
         auto const query_day_idx = day_idx_t{
             std::chrono::duration_cast<date::days>(
                 search_interval_.from_ - tt_.internal_interval().from_)
@@ -370,17 +370,14 @@ private:
             }
           }
         }
-        if(arr_per_day < min_arr_per_day) {
-          min_arr_per_day = arr_per_day;
-        }
       }
     }
 
-    if(min_arr_per_day == 0U || min_arr_per_day == std::numeric_limits<unsigned>::max()) {
-      min_arr_per_day = 1U;
+    if(arr_per_day == 0U) {
+      arr_per_day = 1U;
     }
 
-    return duration_t{60U + static_cast<unsigned>((float(num_con_req) / float(min_arr_per_day)) * 1440U)};
+    return duration_t{60U + static_cast<unsigned>((float(num_con_req) / float(arr_per_day) * 0.25f) * 1440U)};
   }
 
   timetable const& tt_;
