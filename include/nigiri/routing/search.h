@@ -351,14 +351,33 @@ private:
   // Heuristic 2
   duration_t estimate_interval_extension(unsigned const num_con_req) {
 
+    auto const query_day_idx = day_idx_t{
+        std::chrono::duration_cast<date::days>(
+            search_interval_.from_ - tt_.internal_interval().from_)
+            .count()};
+
+    // Calculate daily departures at sources
+    auto dep_per_day{0U};
+    for(auto& o : q_.start_) {
+      auto const& routes = tt_.location_routes_[o.target()];
+      for (auto const route_idx : routes) {
+        auto const transports = tt_.route_transport_ranges_[route_idx];
+        for (auto const transport_idx : transports) {
+          auto const bitfield_idx =
+              tt_.transport_traffic_days_[transport_idx];
+          auto const& bitfield = tt_.bitfields_[bitfield_idx];
+          if (bitfield.test(query_day_idx.v_)) {
+            ++dep_per_day;
+          }
+        }
+      }
+    }
+
+    // Calculate daily arrivals at destinations
     auto arr_per_day{0U};
     for(auto u{0U}; u < state_.is_destination_.size(); ++u) {
       if(state_.is_destination_[u]) {
-        auto const query_day_idx = day_idx_t{
-            std::chrono::duration_cast<date::days>(
-                search_interval_.from_ - tt_.internal_interval().from_)
-                .count()};
-        auto const routes = tt_.location_routes_[location_idx_t{u}];
+        auto const& routes = tt_.location_routes_[location_idx_t{u}];
         for (auto const route_idx : routes) {
           auto const transports = tt_.route_transport_ranges_[route_idx];
           for (auto const transport_idx : transports) {
@@ -373,11 +392,12 @@ private:
       }
     }
 
-    if(arr_per_day == 0U) {
-      arr_per_day = 1U;
+    auto per_day = dep_per_day < arr_per_day ? dep_per_day : arr_per_day;
+    if(per_day == 0U) {
+      per_day = 1U;
     }
 
-    return duration_t{60U + static_cast<unsigned>((float(num_con_req) / float(arr_per_day) * 0.25f) * 1440U)};
+    return duration_t{60U + static_cast<unsigned>((float(num_con_req) / float(per_day) * 0.25f) * 1440U)};
   }
 
   timetable const& tt_;
