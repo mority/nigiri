@@ -149,7 +149,54 @@ struct search {
       return false;
     };
 
+    // perform initial interval extension if a minimum number of connections is required
+    auto extend_interval = q_.min_connection_count_ > 0;
     while (true) {
+
+      if(extend_interval) {
+        auto interval_extension = estimate_interval_extension(
+            q_.min_connection_count_ - n_results_in_interval());
+
+        // double the interval extension if it is only allowed in one direction
+        if(q_.extend_interval_earlier_ != q_.extend_interval_later_) {
+          interval_extension *= 2;
+        }
+
+        auto const new_interval =
+            interval{q_.extend_interval_earlier_
+                         ? tt_.external_interval().clamp(
+                               search_interval_.from_ - interval_extension)
+                         : search_interval_.from_,
+                     q_.extend_interval_later_
+                         ? tt_.external_interval().clamp(search_interval_.to_ +
+                                                         interval_extension)
+                         : search_interval_.to_};
+        trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
+
+        if (new_interval.from_ != search_interval_.from_) {
+          add_start_labels(interval{new_interval.from_, search_interval_.from_},
+                           kBwd);
+          if constexpr (kBwd) {
+            trace("dir=BWD, interval extension earlier -> reset state\n");
+            algo_.reset_arrivals();
+            remove_ontrip_results();
+          }
+        }
+
+        if (new_interval.to_ != search_interval_.to_) {
+          add_start_labels(interval{search_interval_.to_, new_interval.to_},
+                           kFwd);
+          if constexpr (kFwd) {
+            trace("dir=BWD, interval extension later -> reset state\n");
+            algo_.reset_arrivals();
+            remove_ontrip_results();
+          }
+        }
+
+        search_interval_ = new_interval;
+      }
+
+
       trace("start_time={}\n", search_interval_);
 
       search_interval();
@@ -196,41 +243,8 @@ struct search {
       }
 
       state_.starts_.clear();
-
-      auto const interval_extension = estimate_interval_extension(q_.min_connection_count_ - n_results_in_interval());
-
-      auto const new_interval = interval{
-          q_.extend_interval_earlier_ ? tt_.external_interval().clamp(
-                                            search_interval_.from_ - interval_extension)
-                                      : search_interval_.from_,
-          q_.extend_interval_later_
-              ? tt_.external_interval().clamp(search_interval_.to_ + interval_extension)
-              : search_interval_.to_};
-      trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
-
-      if (new_interval.from_ != search_interval_.from_) {
-        add_start_labels(interval{new_interval.from_, search_interval_.from_},
-                         kBwd);
-        if constexpr (kBwd) {
-          trace("dir=BWD, interval extension earlier -> reset state\n");
-          algo_.reset_arrivals();
-          remove_ontrip_results();
-        }
-      }
-
-      if (new_interval.to_ != search_interval_.to_) {
-        add_start_labels(interval{search_interval_.to_, new_interval.to_},
-                         kFwd);
-        if constexpr (kFwd) {
-          trace("dir=BWD, interval extension later -> reset state\n");
-          algo_.reset_arrivals();
-          remove_ontrip_results();
-        }
-      }
-
-      search_interval_ = new_interval;
-
       ++stats_.search_iterations_;
+      extend_interval = true;
     }
 
     if (is_pretrip()) {
@@ -348,7 +362,7 @@ private:
         });
   }
 
-  // Heuristic 2
+  // Heuristic 3
   duration_t estimate_interval_extension(unsigned const num_con_req) {
 
     auto const query_day_idx = day_idx_t{
