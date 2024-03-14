@@ -158,9 +158,6 @@ struct search {
               : std::tuple<duration_t, duration_t>{duration_t{0U},
                                                    duration_t{0U}};
 
-      std::cout << "Estimate: (-" << std::get<0>(interval_extension) << ", +"
-                << std::get<1>(interval_extension) << ")\n";
-
       auto const new_interval = interval{
           q_.extend_interval_earlier_
               ? tt_.external_interval().clamp(search_interval_.from_ -
@@ -388,14 +385,26 @@ private:
     // events at src
     float events_src = 0.0f;
     for (auto& o : q_.start_) {
+      std::vector<char> name;
+      for (auto c : tt_.locations_.names_.at(o.target())) {
+        name.emplace_back(c);
+      }
+      std::cerr << "Adding events at source " << std::string_view(name) << "...\n";
       events_src += events_loc(day_idx, o.target());
+      std::cerr << "events_src = " << events_src << "\n";
     }
 
     // events at destination
     float events_dest = 0.0f;
     for (auto u{0U}; u < state_.is_destination_.size(); ++u) {
       if (state_.is_destination_[u]) {
+        std::vector<char> name;
+        for (auto c : tt_.locations_.names_.at(location_idx_t{u})) {
+          name.emplace_back(c);
+        }
+        std::cerr << "Adding events at destination " << std::string_view(name) << "...\n";
         events_dest += events_loc(day_idx, location_idx_t{u});
+        std::cerr << "events_dest = " << events_dest << "\n";
       }
     }
 
@@ -414,6 +423,7 @@ private:
                                              : search_interval_.to_ + i32_minutes{n_days * 1440U};
 
       if (!tt_.external_interval().contains(new_interval_endpoint)) {
+        std::cerr << "end of timetable reached\n";
         return dir == time_dir::earlier
                    ? search_interval_.from_ - tt_.external_interval().from_
                    : tt_.external_interval().to_ - search_interval_.to_;
@@ -424,8 +434,6 @@ private:
           day_idx_t{std::chrono::duration_cast<date::days>(
                         new_interval_endpoint - tt_.internal_interval().from_)
                         .count()});
-
-      std::cout << "day " << n_days << ", events = " << events << "\n";
 
       ++n_days;
     }
@@ -438,11 +446,13 @@ private:
   std::tuple<duration_t, duration_t> estimate_interval_extension(
       unsigned const num_con_req) {
 
+    std::cerr << "estimate_earlier\n";
     auto estimate_earlier =
         q_.extend_interval_earlier_
             ? estimate_time_dir(num_con_req, time_dir::earlier)
             : duration_t{0U};
 
+    std::cerr << "estimate_later\n";
     auto estimate_later = q_.extend_interval_later_
                               ? estimate_time_dir(num_con_req, time_dir::later)
                               : duration_t{0U};
