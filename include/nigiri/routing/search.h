@@ -151,42 +151,48 @@ struct search {
 
     while (true) {
 
-        auto const interval_extension = n_results_in_interval() < q_.min_connection_count_ ? estimate_interval_extension(q_.min_connection_count_ -
-                                               n_results_in_interval()) : std::tuple<duration_t, duration_t>{duration_t{0U}, duration_t{0U}};
+      auto const interval_extension =
+          n_results_in_interval() < q_.min_connection_count_
+              ? estimate_interval_extension(q_.min_connection_count_ -
+                                            n_results_in_interval())
+              : std::tuple<duration_t, duration_t>{duration_t{0U},
+                                                   duration_t{0U}};
 
-        auto const new_interval =
-            interval{q_.extend_interval_earlier_
-                         ? tt_.external_interval().clamp(
-                               search_interval_.from_ - std::get<0>(interval_extension))
-                         : search_interval_.from_,
-                     q_.extend_interval_later_
-                         ? tt_.external_interval().clamp(search_interval_.to_ +
-                                                         std::get<1>(interval_extension))
-                         : search_interval_.to_};
-        trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
+      std::cout << "Estimate: (-" << std::get<0>(interval_extension) << ", +"
+                << std::get<1>(interval_extension) << ")\n";
 
-        if (new_interval.from_ != search_interval_.from_) {
-          add_start_labels(interval{new_interval.from_, search_interval_.from_},
-                           kBwd);
-          if constexpr (kBwd) {
-            trace("dir=BWD, interval extension earlier -> reset state\n");
-            algo_.reset_arrivals();
-            remove_ontrip_results();
-          }
+      auto const new_interval = interval{
+          q_.extend_interval_earlier_
+              ? tt_.external_interval().clamp(search_interval_.from_ -
+                                              std::get<0>(interval_extension))
+              : search_interval_.from_,
+          q_.extend_interval_later_
+              ? tt_.external_interval().clamp(search_interval_.to_ +
+                                              std::get<1>(interval_extension))
+              : search_interval_.to_};
+      trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
+
+      if (new_interval.from_ != search_interval_.from_) {
+        add_start_labels(interval{new_interval.from_, search_interval_.from_},
+                         kBwd);
+        if constexpr (kBwd) {
+          trace("dir=BWD, interval extension earlier -> reset state\n");
+          algo_.reset_arrivals();
+          remove_ontrip_results();
         }
+      }
 
-        if (new_interval.to_ != search_interval_.to_) {
-          add_start_labels(interval{search_interval_.to_, new_interval.to_},
-                           kFwd);
-          if constexpr (kFwd) {
-            trace("dir=BWD, interval extension later -> reset state\n");
-            algo_.reset_arrivals();
-            remove_ontrip_results();
-          }
+      if (new_interval.to_ != search_interval_.to_) {
+        add_start_labels(interval{search_interval_.to_, new_interval.to_},
+                         kFwd);
+        if constexpr (kFwd) {
+          trace("dir=BWD, interval extension later -> reset state\n");
+          algo_.reset_arrivals();
+          remove_ontrip_results();
         }
+      }
 
-        search_interval_ = new_interval;
-
+      search_interval_ = new_interval;
 
       trace("start_time={}\n", search_interval_);
 
@@ -352,8 +358,7 @@ private:
         });
   }
 
-
-  float endpoints_loc(day_idx_t day_idx, location_idx_t loc_idx) {
+  float events_loc(day_idx_t day_idx, location_idx_t loc_idx) {
     auto n_transports = 0U;
     auto n_routes = 0U;
 
@@ -366,7 +371,7 @@ private:
         auto const& bitfield = tt_.bitfields_[bitfield_idx];
         if (bitfield.test(day_idx.v_)) {
           ++n_transports;
-          if(count_route) {
+          if (count_route) {
             ++n_routes;
             count_route = false;
           }
@@ -374,52 +379,73 @@ private:
       }
     }
 
-    return n_routes == 0U ? 0.0f : static_cast<float>(n_transports) / static_cast<float>(n_routes);
+    return n_routes == 0U ? 0.0f
+                          : static_cast<float>(n_transports) /
+                                static_cast<float>(n_routes);
   }
 
-  float endpoints_src_dest(day_idx_t day_idx) {
-    // endpoints at source
-    float endpoints_src = 0.0f;
+  float events_src_dest(day_idx_t day_idx) {
+    // events at src
+    float events_src = 0.0f;
     for (auto& o : q_.start_) {
-      endpoints_src += endpoints_loc(day_idx, o.target());
+      events_src += events_loc(day_idx, o.target());
     }
 
-    // endpoints at destination
-    float endpoints_dest = 0.0f;
+    // events at destination
+    float events_dest = 0.0f;
     for (auto u{0U}; u < state_.is_destination_.size(); ++u) {
       if (state_.is_destination_[u]) {
-        endpoints_dest += endpoints_loc(day_idx, location_idx_t{u});
+        events_dest += events_loc(day_idx, location_idx_t{u});
       }
     }
 
     // return minimum
-    return endpoints_src < endpoints_dest ? endpoints_src : endpoints_dest;
+    return events_src < events_dest ? events_src : events_dest;
   }
 
-  enum time_dir {earlier, later};
+  enum time_dir { earlier, later };
 
   duration_t estimate_time_dir(unsigned const num_con_req, time_dir dir) {
-    auto start = dir == time_dir::earlier ? search_interval_.from_ : search_interval_.to_;
-    auto dir_factor = time_dir::earlier ? -1 : 1;
-    float endpoints = 0.0f;
+    float events = 0.0f;
     auto n_days = 0U;
-    while(endpoints < static_cast<float>(num_con_req)) {
-      auto const day_idx =
+    while (events < static_cast<float>(num_con_req)) {
+      auto const new_interval_endpoint = dir == time_dir::earlier
+                                             ? search_interval_.from_ - i32_minutes{n_days * 1440U}
+                                             : search_interval_.to_ + i32_minutes{n_days * 1440U};
+
+      if (!tt_.external_interval().contains(new_interval_endpoint)) {
+        return dir == time_dir::earlier
+                   ? search_interval_.from_ - tt_.external_interval().from_
+                   : tt_.external_interval().to_ - search_interval_.to_;
+      }
+
+
+      events += events_src_dest(
           day_idx_t{std::chrono::duration_cast<date::days>(
-                        start + (n_days * dir_factor) - tt_.internal_interval().from_)
-                        .count()};
-      endpoints += endpoints_src_dest(day_idx);
+                        new_interval_endpoint - tt_.internal_interval().from_)
+                        .count()});
+
+      std::cout << "day " << n_days << ", events = " << events << "\n";
+
       ++n_days;
     }
-    return n_days == 1 ? duration_t{static_cast<unsigned>(
-                             (static_cast<float>(num_con_req) / endpoints) * 1440.0f)} : duration_t{n_days * 1440U};
+    return n_days == 1
+               ? duration_t{static_cast<unsigned>(
+                     (static_cast<float>(num_con_req) / events) * 1440.0f)}
+               : duration_t{n_days * 1440U};
   }
 
-  std::tuple<duration_t, duration_t> estimate_interval_extension(unsigned const num_con_req) {
+  std::tuple<duration_t, duration_t> estimate_interval_extension(
+      unsigned const num_con_req) {
 
-    auto estimate_earlier = q_.extend_interval_earlier_ ? estimate_time_dir(num_con_req, time_dir::ealier) : duration_t{0U};
+    auto estimate_earlier =
+        q_.extend_interval_earlier_
+            ? estimate_time_dir(num_con_req, time_dir::earlier)
+            : duration_t{0U};
 
-    auto estimate_later = q_.extend_interval_later_ ? estimate_time_dir(num_con_req, time_dir::later) : duration_t{0U};
+    auto estimate_later = q_.extend_interval_later_
+                              ? estimate_time_dir(num_con_req, time_dir::later)
+                              : duration_t{0U};
 
     return {estimate_earlier, estimate_later};
   }
