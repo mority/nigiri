@@ -117,13 +117,13 @@ struct search {
         state_{s},
         q_{std::move(q)},
         search_interval_{std::visit(
-            utl::overloaded{
-                [](interval<unixtime_t> const start_interval) {
-                  return start_interval;
-                },
-                [](unixtime_t const start_time) {
-                  return interval<unixtime_t>{start_time, start_time};
-                }},
+            utl::overloaded{[](interval<unixtime_t> const start_interval) {
+                              return start_interval;
+                            },
+                            [](unixtime_t const start_time) {
+                              return interval<unixtime_t>{start_time,
+                                                          start_time};
+                            }},
             q_.start_time_)},
         fastest_direct_{get_fastest_direct(tt_, q_, SearchDir)},
         algo_{init(q_.allowed_claszes_, algo_state)},
@@ -131,6 +131,10 @@ struct search {
 
   routing_result<algo_stats_t> execute() {
     state_.results_.clear();
+
+    if constexpr (Algo::kUseAdHocTransferPatterns) {
+      algo_.reset_transfer_patterns();
+    }
 
     if (start_dest_overlap()) {
       return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
@@ -152,6 +156,15 @@ struct search {
     while (true) {
       trace("start_time={}\n", search_interval_);
 
+      if constexpr (Algo::kUseAdHocTransferPatterns) {
+        if (state_.results_.size() > 0) {
+          algo_.mark_transfer_patterns(state_.results_);
+          search_interval<true>();
+          algo_.reset_arrivals();
+          remove_ontrip_results();
+        }
+      }
+
       search_interval();
 
       if (is_ontrip() || max_interval_reached() ||
@@ -165,13 +178,13 @@ struct search {
             is_ontrip(), max_interval_reached(), q_.extend_interval_earlier_,
             q_.extend_interval_later_,
             std::visit(
-                utl::overloaded{
-                    [](interval<unixtime_t> const& start_interval) {
-                      return start_interval;
-                    },
-                    [](unixtime_t const start_time) {
-                      return interval<unixtime_t>{start_time, start_time};
-                    }},
+                utl::overloaded{[](interval<unixtime_t> const& start_interval) {
+                                  return start_interval;
+                                },
+                                [](unixtime_t const start_time) {
+                                  return interval<unixtime_t>{start_time,
+                                                              start_time};
+                                }},
                 q_.start_time_),
             search_interval_, tt_.external_interval(), n_results_in_interval(),
             is_timeout_reached());
@@ -184,13 +197,13 @@ struct search {
             max_interval_reached(), q_.extend_interval_earlier_,
             q_.extend_interval_later_,
             std::visit(
-                utl::overloaded{
-                    [](interval<unixtime_t> const& start_interval) {
-                      return start_interval;
-                    },
-                    [](unixtime_t const start_time) {
-                      return interval<unixtime_t>{start_time, start_time};
-                    }},
+                utl::overloaded{[](interval<unixtime_t> const& start_interval) {
+                                  return start_interval;
+                                },
+                                [](unixtime_t const start_time) {
+                                  return interval<unixtime_t>{start_time,
+                                                              start_time};
+                                }},
                 q_.start_time_),
             search_interval_, tt_.external_interval(), n_results_in_interval());
       }
@@ -315,6 +328,7 @@ private:
     });
   }
 
+  template <bool AdHocTransferPatterns = false>
   void search_interval() {
     utl::equal_ranges_linear(
         state_.starts_,
@@ -333,8 +347,15 @@ private:
           auto const worst_time_at_dest =
               start_time +
               (kFwd ? 1 : -1) * std::min(fastest_direct_, kMaxTravelTime);
-          algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
-                        q_.prf_idx_, state_.results_);
+
+          if constexpr (Algo::kUseAdHocTransferPatterns) {
+            algo_.template execute<AdHocTransferPatterns>(
+                start_time, q_.max_transfers_, worst_time_at_dest, q_.prf_idx_,
+                state_.results_);
+          } else {
+            algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
+                          q_.prf_idx_, state_.results_);
+          }
 
           for (auto& j : state_.results_) {
             if (j.legs_.empty() &&

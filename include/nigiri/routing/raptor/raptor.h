@@ -100,6 +100,23 @@ struct raptor {
     state_.station_mark_[to_idx(l)] = true;
   }
 
+  void mark_transfer_patterns(pareto_set<journey> const& results) {
+    for (auto const& j : results) {
+      if (j.legs_.empty()) {
+        continue;
+      }
+      for (auto const& l : j.legs_) {
+        state_.transfer_pattern_mark_[to_idx(l.from_)] = true;
+        state_.transfer_pattern_mark_[to_idx(l.to_)] = true;
+      }
+    }
+  }
+
+  void reset_transfer_patterns() {
+    utl::fill(state_.transfer_pattern_mark_, false);
+  }
+
+  template <bool AdHocTransferPatterns = false>
   void execute(unixtime_t const start_time,
                std::uint8_t const max_transfers,
                unixtime_t const worst_time_at_dest,
@@ -119,6 +136,13 @@ struct raptor {
         state_.best_[i] = get_best(state_.round_times_[k][i], state_.best_[i]);
         if (is_dest_[i]) {
           update_time_at_dest(k, state_.best_[i]);
+        }
+      }
+
+      if constexpr (AdHocTransferPatterns) {
+        for (auto i = 0U; i != n_locations_; ++i) {
+          state_.station_mark_[i] =
+              state_.station_mark_[i] && state_.transfer_pattern_mark_[i];
         }
       }
 
