@@ -93,11 +93,15 @@ struct raptor {
     }
   }
 
+  template <bool AdHocTransferPatterns = false>
   void add_start(location_idx_t const l, unixtime_t const t) {
     trace_upd("adding start {}: {}\n", location{tt_, l}, t);
     state_.best_[to_idx(l)] = unix_to_delta(base(), t);
     state_.round_times_[0U][to_idx(l)] = unix_to_delta(base(), t);
     state_.station_mark_[to_idx(l)] = true;
+    if constexpr (AdHocTransferPatterns) {
+      state_.transfer_pattern_mark_[to_idx(l)] = true;
+    }
   }
 
   void mark_transfer_patterns(pareto_set<journey> const& results) {
@@ -114,6 +118,15 @@ struct raptor {
 
   void reset_transfer_patterns() {
     utl::fill(state_.transfer_pattern_mark_, false);
+  }
+
+  void reset_marks() {
+    utl::fill(state_.prev_station_mark_, false);
+    utl::fill(state_.station_mark_, false);
+    utl::fill(state_.route_mark_, false);
+    if constexpr (Rt) {
+      utl::fill(state_.rt_transport_mark_, false);
+    }
   }
 
   template <bool AdHocTransferPatterns = false>

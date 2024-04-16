@@ -157,15 +157,6 @@ struct search {
     while (true) {
       trace("start_time={}\n", search_interval_);
 
-      if constexpr (Algo::kUseAdHocTransferPatterns) {
-        if (state_.results_.size() > 0) {
-          algo_.mark_transfer_patterns(state_.results_);
-          search_interval<true>();
-          algo_.reset_arrivals();
-          remove_ontrip_results();
-        }
-      }
-
       search_interval();
 
       if (is_ontrip() || max_interval_reached() ||
@@ -332,7 +323,6 @@ private:
     });
   }
 
-  template <bool AdHocTransferPatterns = false>
   void search_interval() {
     utl::equal_ranges_linear(
         state_.starts_,
@@ -345,7 +335,12 @@ private:
           for (auto const& s : it_range{from_it, to_it}) {
             trace("init: time_at_start={}, time_at_stop={} at {}\n",
                   s.time_at_start_, s.time_at_stop_, location_idx_t{s.stop_});
-            algo_.add_start(s.stop_, s.time_at_stop_);
+
+            if constexpr (Algo::kUseAdHocTransferPatterns) {
+              algo_.template add_start<true>(s.stop_, s.time_at_stop_);
+            } else {
+              algo_.add_start(s.stop_, s.time_at_stop_);
+            }
           }
 
           auto const worst_time_at_dest =
@@ -353,9 +348,22 @@ private:
               (kFwd ? 1 : -1) * std::min(fastest_direct_, kMaxTravelTime);
 
           if constexpr (Algo::kUseAdHocTransferPatterns) {
-            algo_.template execute<AdHocTransferPatterns>(
-                start_time, q_.max_transfers_, worst_time_at_dest, q_.prf_idx_,
-                state_.results_);
+            if (state_.results_.size() != 0U) {
+              algo_.template execute<true>(start_time, q_.max_transfers_,
+                                           worst_time_at_dest, q_.prf_idx_,
+                                           state_.results_);
+              algo_.next_start_time();
+              algo_.reset_arrivals();
+              for (auto const& s : it_range{from_it, to_it}) {
+                trace("init: time_at_start={}, time_at_stop={} at {}\n ",
+                      s.time_at_start_, s.time_at_stop_,
+                      location_idx_t{s.stop_});
+                algo_.add_start(s.stop_, s.time_at_stop_);
+              }
+            }
+            algo_.template execute<false>(start_time, q_.max_transfers_,
+                                          worst_time_at_dest, q_.prf_idx_,
+                                          state_.results_);
           } else {
             algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
                           q_.prf_idx_, state_.results_);
