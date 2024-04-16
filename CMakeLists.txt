@@ -38,41 +38,41 @@ if(NIGIRI_LINT)
   include(cmake/clang-tidy.cmake)
 endif()
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   set(nigiri-compile-options
-        -Weverything
-        -Wno-c++98-compat
-        -Wno-c++98-compat-pedantic
-        -Wno-newline-eof
-        -Wno-missing-prototypes
-        -Wno-padded
-        -Wno-double-promotion
-        -Wno-undef
-        -Wno-undefined-reinterpret-cast
-        -Wno-float-conversion
-        -Wno-global-constructors
-        -Wno-exit-time-destructors
-        -Wno-switch-enum
-        -Wno-c99-designator
-        -Wno-zero-as-null-pointer-constant
-        -Wno-missing-noreturn
-        -Wno-undefined-func-template
-        -Wno-unsafe-buffer-usage
-        -Wno-c++20-compat
-        -Wno-reserved-macro-identifier
-        -Wno-documentation-unknown-command
-        -Wno-duplicate-enum
-        -Werror)
+      -Weverything
+      -Wno-c++98-compat
+      -Wno-c++98-compat-pedantic
+      -Wno-newline-eof
+      -Wno-missing-prototypes
+      -Wno-padded
+      -Wno-double-promotion
+      -Wno-undef
+      -Wno-undefined-reinterpret-cast
+      -Wno-float-conversion
+      -Wno-global-constructors
+      -Wno-exit-time-destructors
+      -Wno-switch-enum
+      -Wno-c99-designator
+      -Wno-zero-as-null-pointer-constant
+      -Wno-missing-noreturn
+      -Wno-undefined-func-template
+      -Wno-unsafe-buffer-usage
+      -Wno-c++20-compat
+      -Wno-reserved-macro-identifier
+      -Wno-documentation-unknown-command
+      -Wno-duplicate-enum
+      -Werror)
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
   set(nigiri-compile-options -Wall -Wextra -Werror)
 elseif(MSVC)
   set(nigiri-compile-options /WX)
 else()
   set(nigiri-compile-options
-        -Wall
-        -Wextra
-        -Wno-maybe-uninitialized)
-  if (NOT CMAKE_CROSSCOMPILING)
+      -Wall
+      -Wextra
+      -Wno-maybe-uninitialized)
+  if(NOT CMAKE_CROSSCOMPILING)
     set(nigiri-compile-options ${nigiri-compile-options} -Werror)
   endif()
 endif()
@@ -93,13 +93,18 @@ add_executable(nigiri-server ${nigiri-server-files})
 target_link_libraries(nigiri-server PRIVATE nigiri)
 target_compile_features(nigiri-server PUBLIC cxx_std_23)
 
+# --- BENCHMARK ---
+file(GLOB_RECURSE nigiri-benchmark-files benchmark/main.cc)
+add_executable(nigiri-benchmark ${nigiri-benchmark-files})
+target_link_libraries(nigiri-benchmark PRIVATE nigiri)
+target_compile_features(nigiri-benchmark PUBLIC cxx_std_23)
 
 # --- TEST ---
 add_library(nigiri-generated INTERFACE)
 target_include_directories(nigiri-generated INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/generated)
-configure_file (
-  ${CMAKE_CURRENT_SOURCE_DIR}/test/test_dir.h.in
-  ${CMAKE_CURRENT_BINARY_DIR}/generated/test_dir.h
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_dir.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/test_dir.h
 )
 file(GLOB_RECURSE nigiri-test-files test/*.cc)
 add_executable(nigiri-test ${nigiri-test-files})
