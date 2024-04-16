@@ -233,6 +233,10 @@ struct search {
 
       search_interval_ = new_interval;
 
+      if (Algo::kUseAdHocTransferPatterns) {
+        adhoc_transfer_patterns();
+      }
+
       ++stats_.search_iterations_;
     }
 
@@ -335,39 +339,15 @@ private:
           for (auto const& s : it_range{from_it, to_it}) {
             trace("init: time_at_start={}, time_at_stop={} at {}\n",
                   s.time_at_start_, s.time_at_stop_, location_idx_t{s.stop_});
-
-            if constexpr (Algo::kUseAdHocTransferPatterns) {
-              algo_.template add_start<true>(s.stop_, s.time_at_stop_);
-            } else {
-              algo_.add_start(s.stop_, s.time_at_stop_);
-            }
+            algo_.add_start(s.stop_, s.time_at_stop_);
           }
 
           auto const worst_time_at_dest =
               start_time +
               (kFwd ? 1 : -1) * std::min(fastest_direct_, kMaxTravelTime);
 
-          if constexpr (Algo::kUseAdHocTransferPatterns) {
-            if (state_.results_.size() != 0U) {
-              algo_.template execute<true>(start_time, q_.max_transfers_,
-                                           worst_time_at_dest, q_.prf_idx_,
-                                           state_.results_);
-              algo_.next_start_time();
-              algo_.reset_arrivals();
-              for (auto const& s : it_range{from_it, to_it}) {
-                trace("init: time_at_start={}, time_at_stop={} at {}\n ",
-                      s.time_at_start_, s.time_at_stop_,
-                      location_idx_t{s.stop_});
-                algo_.add_start(s.stop_, s.time_at_stop_);
-              }
-            }
-            algo_.template execute<false>(start_time, q_.max_transfers_,
-                                          worst_time_at_dest, q_.prf_idx_,
-                                          state_.results_);
-          } else {
-            algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
-                          q_.prf_idx_, state_.results_);
-          }
+          algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
+                        q_.prf_idx_, state_.results_);
 
           for (auto& j : state_.results_) {
             if (j.legs_.empty() &&
@@ -377,6 +357,32 @@ private:
             }
           }
         });
+  }
+
+  void adhoc_transfer_patterns() {
+    algo_.next_start_time();
+    auto const start_time = state_.starts_.front().time_at_start_;
+    for (auto const& s : state_.starts_) {
+      if (s.time_at_start_ != start_time) {
+        break;
+      }
+      algo_.template add_start<true>(s.stop_, s.time_at_stop_);
+      auto const worst_time_at_dest =
+          start_time +
+          (kFwd ? 1 : -1) * std::min(fastest_direct_, kMaxTravelTime);
+      algo_.template execute<true>(start_time, q_.max_transfers_,
+                                   worst_time_at_dest, q_.prf_idx_,
+                                   state_.results_);
+
+      for (auto& j : state_.results_) {
+        if (j.legs_.empty() &&
+            (is_ontrip() || search_interval_.contains(j.start_time_)) &&
+            j.travel_time() < fastest_direct_) {
+          algo_.reconstruct(q_, j);
+        }
+      }
+    }
+    algo_.reset_arrivals();
   }
 
   timetable const& tt_;

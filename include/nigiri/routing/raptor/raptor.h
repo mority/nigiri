@@ -120,15 +120,6 @@ struct raptor {
     utl::fill(state_.transfer_pattern_mark_, false);
   }
 
-  void reset_marks() {
-    utl::fill(state_.prev_station_mark_, false);
-    utl::fill(state_.station_mark_, false);
-    utl::fill(state_.route_mark_, false);
-    if constexpr (Rt) {
-      utl::fill(state_.rt_transport_mark_, false);
-    }
-  }
-
   template <bool AdHocTransferPatterns = false>
   void execute(unixtime_t const start_time,
                std::uint8_t const max_transfers,
