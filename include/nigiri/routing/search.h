@@ -156,18 +156,18 @@ struct search {
           n_results_in_interval() < q_.min_connection_count_
               ? estimate_interval_extension(q_.min_connection_count_ -
                                             n_results_in_interval())
-              : std::tuple<duration_t, duration_t>{duration_t{0U},
-                                                   duration_t{0U}};
+              : std::pair<i32_minutes, i32_minutes>{i32_minutes{0U},
+                                                    i32_minutes{0U}};
 
-      auto const new_interval = interval{
-          q_.extend_interval_earlier_
-              ? tt_.external_interval().clamp(search_interval_.from_ -
-                                              std::get<0>(interval_extension))
-              : search_interval_.from_,
-          q_.extend_interval_later_
-              ? tt_.external_interval().clamp(search_interval_.to_ +
-                                              std::get<1>(interval_extension))
-              : search_interval_.to_};
+      auto const new_interval =
+          interval{q_.extend_interval_earlier_
+                       ? tt_.external_interval().clamp(search_interval_.from_ -
+                                                       interval_extension.first)
+                       : search_interval_.from_,
+                   q_.extend_interval_later_
+                       ? tt_.external_interval().clamp(
+                             search_interval_.to_ + interval_extension.second)
+                       : search_interval_.to_};
       trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
 
       if (new_interval.from_ != search_interval_.from_) {
@@ -389,26 +389,14 @@ private:
     // events at src
     float events_src = 0.0f;
     for (auto& o : q_.start_) {
-      std::vector<char> name;
-      for (auto c : tt_.locations_.names_.at(o.target())) {
-        name.emplace_back(c);
-      }
-      std::cerr << "Adding events at source " << std::string_view(name) << "...\n";
       events_src += events_loc(day_idx, o.target());
-      std::cerr << "events_src = " << events_src << "\n";
     }
 
     // events at destination
     float events_dest = 0.0f;
     for (auto u{0U}; u < state_.is_destination_.size(); ++u) {
       if (state_.is_destination_[u]) {
-        std::vector<char> name;
-        for (auto c : tt_.locations_.names_.at(location_idx_t{u})) {
-          name.emplace_back(c);
-        }
-        std::cerr << "Adding events at destination " << std::string_view(name) << "...\n";
         events_dest += events_loc(day_idx, location_idx_t{u});
-        std::cerr << "events_dest = " << events_dest << "\n";
       }
     }
 
@@ -418,21 +406,20 @@ private:
 
   enum time_dir { earlier, later };
 
-  duration_t estimate_time_dir(unsigned const num_con_req, time_dir dir) {
+  i32_minutes estimate_time_dir(unsigned const num_con_req, time_dir dir) {
     float events = 0.0f;
     auto n_days = 0U;
     while (events < static_cast<float>(num_con_req)) {
-      auto const new_interval_endpoint = dir == time_dir::earlier
-                                             ? search_interval_.from_ - i32_minutes{n_days * 1440U}
-                                             : search_interval_.to_ + i32_minutes{n_days * 1440U};
+      auto const new_interval_endpoint =
+          dir == time_dir::earlier
+              ? search_interval_.from_ - i32_minutes{n_days * 1440U}
+              : search_interval_.to_ + i32_minutes{n_days * 1440U};
 
       if (!tt_.external_interval().contains(new_interval_endpoint)) {
-        std::cerr << "end of timetable reached\n";
         return dir == time_dir::earlier
                    ? search_interval_.from_ - tt_.external_interval().from_
                    : tt_.external_interval().to_ - search_interval_.to_;
       }
-
 
       events += events_src_dest(
           day_idx_t{std::chrono::duration_cast<date::days>(
@@ -440,26 +427,27 @@ private:
                         .count()});
 
       ++n_days;
+      if (n_days == 2) {
+        break;
+      }
     }
     return n_days == 1
-               ? duration_t{static_cast<unsigned>(
+               ? i32_minutes{static_cast<unsigned>(
                      (static_cast<float>(num_con_req) / events) * 1440.0f)}
-               : duration_t{n_days * 1440U};
+               : i32_minutes{n_days * 1440U};
   }
 
-  std::tuple<duration_t, duration_t> estimate_interval_extension(
+  std::pair<i32_minutes, i32_minutes> estimate_interval_extension(
       unsigned const num_con_req) {
 
-    std::cerr << "estimate_earlier\n";
     auto estimate_earlier =
         q_.extend_interval_earlier_
             ? estimate_time_dir(num_con_req, time_dir::earlier)
-            : duration_t{0U};
+            : i32_minutes{0U};
 
-    std::cerr << "estimate_later\n";
     auto estimate_later = q_.extend_interval_later_
                               ? estimate_time_dir(num_con_req, time_dir::later)
-                              : duration_t{0U};
+                              : i32_minutes{0U};
 
     return {estimate_earlier, estimate_later};
   }
