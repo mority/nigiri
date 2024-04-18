@@ -137,6 +137,8 @@ struct search {
       return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
+    // initial interval estimate
+
     state_.starts_.clear();
     add_start_labels(q_.start_time_, true);
 
@@ -197,6 +199,8 @@ struct search {
       }
 
       state_.starts_.clear();
+
+      // interval extension
 
       auto const new_interval = interval{
           q_.extend_interval_earlier_ ? tt_.external_interval().clamp(
