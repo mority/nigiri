@@ -19,14 +19,15 @@ interval<unixtime_t> interval_estimator<SearchDir>::initial(
     return new_itv;
   }
 
-  while (num_start_events(itv) < q_.min_connection_count_) {
+  while (num_start_events(new_itv) < q_.min_connection_count_) {
+    
     // check if further extension is possible
-    if (!can_extend(itv)) {
+    if (!can_extend(new_itv)) {
       break;
     }
 
     // extend interval into allowed directions
-    if (can_extend_both_dir(itv)) {
+    if (can_extend_both_dir(new_itv)) {
       new_itv.from_ -= half_step;
       new_itv.to_ += half_step;
     } else {
@@ -39,8 +40,8 @@ interval<unixtime_t> interval_estimator<SearchDir>::initial(
     }
 
     // clamp to timetable
-    new_itv.from_ = tt_.external_interval().clamp(itv.from_);
-    new_itv.to_ = tt_.external_interval().clamp(itv.to_);
+    new_itv.from_ = tt_.external_interval().clamp(new_itv.from_);
+    new_itv.to_ = tt_.external_interval().clamp(new_itv.to_);
   }
 
   return new_itv;
@@ -52,18 +53,18 @@ interval<unixtime_t> interval_estimator<SearchDir>::extension(
     pareto_set<journey> const& results,
     std::uint32_t const num_con_req) const {
   auto new_itv = itv;
-  if (!can_extend(itv)) {
+  if (!can_extend(new_itv)) {
     return new_itv;
   }
 
   // estimate extension amount
-  auto ext = itv.size();
+  auto ext = new_itv.size();
   if (results.size() > 0) {
-    ext = ext_from_journeys(itv, results, num_con_req);
+    ext = ext_from_journeys(results, num_con_req);
   }
 
   // extend
-  if (can_extend_both_dir(itv)) {
+  if (can_extend_both_dir(new_itv)) {
     new_itv.from_ -= ext / 2;
     new_itv.to_ += ext / 2;
   } else {
@@ -76,8 +77,8 @@ interval<unixtime_t> interval_estimator<SearchDir>::extension(
   }
 
   // clamp to timetable
-  new_itv.from_ = tt_.external_interval().clamp(itv.from_);
-  new_itv.to_ = tt_.external_interval().clamp(itv.to_);
+  new_itv.from_ = tt_.external_interval().clamp(new_itv.from_);
+  new_itv.to_ = tt_.external_interval().clamp(new_itv.to_);
 
   return new_itv;
 }
@@ -106,9 +107,13 @@ std::uint32_t interval_estimator<SearchDir>::num_events(
   auto acc = 0U;
   for (auto const& route : routes) {
     auto const stop_seq = tt_.route_location_seq_[route];
-    for (auto i = 0U; i != stop_seq.size(); ++i) {
-      auto const stop_idx = static_cast<stop_idx_t>(
-          SearchDir == direction::kForward ? i : stop_seq.size() - i - 1U);
+    auto const stop_idx_start =
+        SearchDir == direction::kForward ? stop_idx_t{0U} : stop_idx_t{1U};
+    auto const stop_idx_end =
+        SearchDir == direction::kForward
+            ? static_cast<stop_idx_t>(stop_seq.size() - 1U)
+            : static_cast<stop_idx_t>(stop_seq.size());
+    for (auto stop_idx = stop_idx_start; stop_idx != stop_idx_end; ++stop_idx) {
       auto const s = stop{stop_seq[stop_idx]};
       if (s.location_idx() == loc) {
         auto const can_enter_exit =
@@ -132,7 +137,7 @@ std::uint32_t interval_estimator<SearchDir>::num_events(
       }
     }
   }
-  return acc;
+  return acc / routes.size();
 }
 
 template <direction SearchDir>
@@ -145,16 +150,15 @@ std::uint32_t interval_estimator<SearchDir>::num_start_events(
                              end(tt_.location_routes_[o.target()])});
   };
 
-  auto const& offsets =
-      SearchDir == direction::kForward ? q_.start_ : q_.destination_;
+  // auto const& offsets =
+  //     SearchDir == direction::kForward ? q_.start_ : q_.destination_;
+  auto const& offsets = q_.start_;
   return std::accumulate(begin(offsets), end(offsets), 0U, acc_fun);
 }
 
 template <direction SearchDir>
 i32_minutes interval_estimator<SearchDir>::ext_from_journeys(
-    interval<unixtime_t> const& itv,
-    pareto_set<journey> const& results,
-    std::uint32_t const num_con_req) const {
+    pareto_set<journey> const& results, std::uint32_t const num_con_req) const {
   auto ext = i32_minutes{0U};
   for (auto const& j : results) {
     for (auto const& l : j.legs_) {
@@ -178,7 +182,7 @@ i32_minutes interval_estimator<SearchDir>::ext_from_journeys(
         }
 
         // extend
-        if (can_extend_both_dir(itv)) {
+        if (can_extend_both_dir(itv_at_loc)) {
           itv_at_loc.from_ -= half_step;
           itv_at_loc.to_ += half_step;
         } else {

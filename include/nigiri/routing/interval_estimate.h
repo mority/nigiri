@@ -31,8 +31,7 @@ private:
                            location_idx_t const,
                            std::vector<route_idx_t> const&) const;
   std::uint32_t num_start_events(interval<unixtime_t> const&) const;
-  i32_minutes ext_from_journeys(interval<unixtime_t> const&,
-                                pareto_set<journey> const&,
+  i32_minutes ext_from_journeys(pareto_set<journey> const&,
                                 std::uint32_t const) const;
 
   timetable const& tt_;
