@@ -1,5 +1,6 @@
 #include "nigiri/routing/interval_estimate.h"
 
+#include "nigiri/routing/journey.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/timetable.h"
 
@@ -9,88 +10,197 @@ constexpr auto const step = i32_minutes{60};
 constexpr auto const half_step = step / 2;
 
 template <direction SearchDir>
-void interval_estimator<SearchDir>::initial_estimate(
-    interval<unixtime_t>& itv) const {
-  estimate(itv, q_.min_connection_count_);
-}
+interval<unixtime_t> interval_estimator<SearchDir>::initial(
+    interval<unixtime_t> const& itv) const {
+  auto new_itv = itv;
 
-template <direction SearchDir>
-void interval_estimator<SearchDir>::estimate(interval<unixtime_t>& itv,
-                                             std::uint32_t num_con_req) const {
-  if (num_con_req == 0 ||
+  if (q_.min_connection_count_ == 0 ||
       (!q_.extend_interval_earlier_ && !q_.extend_interval_later_)) {
-    return;
+    return new_itv;
   }
 
-  while (events_in_itv(itv) < num_con_req) {
+  while (num_start_events(itv) < q_.min_connection_count_) {
     // check if further extension is possible
-    if ((itv.from_ == tt_.external_interval().from_ ||
-         !q_.extend_interval_earlier_) &&
-        (itv.to_ == tt_.external_interval().to_ ||
-         !q_.extend_interval_later_)) {
+    if (!can_extend(itv)) {
       break;
     }
 
     // extend interval into allowed directions
-    if (q_.extend_interval_earlier_ &&
-        itv.from_ != tt_.external_interval().from_ &&
-        q_.extend_interval_later_ && itv.to_ != tt_.external_interval().to_) {
-      itv.from_ -= half_step;
-      itv.to_ += half_step;
+    if (can_extend_both_dir(itv)) {
+      new_itv.from_ -= half_step;
+      new_itv.to_ += half_step;
     } else {
       if (q_.extend_interval_earlier_) {
-        itv.from_ -= step;
+        new_itv.from_ -= step;
       }
       if (q_.extend_interval_later_) {
-        itv.to_ += step;
+        new_itv.to_ += step;
       }
     }
 
     // clamp to timetable
-    itv.from_ = tt_.external_interval().clamp(itv.from_);
-    itv.to_ = tt_.external_interval().clamp(itv.to_);
+    new_itv.from_ = tt_.external_interval().clamp(itv.from_);
+    new_itv.to_ = tt_.external_interval().clamp(itv.to_);
   }
+
+  return new_itv;
 }
 
 template <direction SearchDir>
-std::uint32_t interval_estimator<SearchDir>::events_in_itv(
-    interval<unixtime_t> const& itv) const {
+interval<unixtime_t> interval_estimator<SearchDir>::extension(
+    interval<unixtime_t> const& itv,
+    pareto_set<journey> const& results,
+    std::uint32_t const num_con_req) const {
+  auto new_itv = itv;
+  if (!can_extend(itv)) {
+    return new_itv;
+  }
 
-  auto const events_at_loc = [&](auto acc, offset const& o) {
-    for (auto const& route : tt_.location_routes_[o.target_]) {
-      auto const stop_seq = tt_.route_location_seq_[route];
-      for (auto i = 0U; i != stop_seq.size(); ++i) {
-        auto const s = stop{stop_seq[i]};
-        if (s.location_idx() == o.target_) {
-          auto const can_enter_exit = SearchDir == direction::kForward
-                                          ? s.in_allowed()
-                                          : s.out_allowed();
-          if (can_enter_exit) {
-            for (auto const transport_idx :
-                 tt_.route_transport_ranges_[route]) {
-              auto const& bf =
-                  tt_.bitfields_[tt_.transport_traffic_days_[transport_idx]];
-              for (auto day = 0U; i != bf.size(); ++day) {
-                auto const et = SearchDir == direction::kForward
-                                    ? event_type::kDep
-                                    : event_type::kArr;
-                if (bf.test(day) &&
-                    itv.contains(tt_.event_time(
-                        transport{transport_idx, day_idx_t{day}}, i, et))) {
-                  ++acc;
-                }
+  // estimate extension amount
+  auto ext = itv.size();
+  if (results.size() > 0) {
+    ext = ext_from_journeys(itv, results, num_con_req);
+  }
+
+  // extend
+  if (can_extend_both_dir(itv)) {
+    new_itv.from_ -= ext / 2;
+    new_itv.to_ += ext / 2;
+  } else {
+    if (q_.extend_interval_earlier_) {
+      new_itv.from_ -= ext;
+    }
+    if (q_.extend_interval_later_) {
+      new_itv.to_ += ext;
+    }
+  }
+
+  // clamp to timetable
+  new_itv.from_ = tt_.external_interval().clamp(itv.from_);
+  new_itv.to_ = tt_.external_interval().clamp(itv.to_);
+
+  return new_itv;
+}
+
+template <direction SearchDir>
+bool interval_estimator<SearchDir>::can_extend(
+    interval<unixtime_t> const& itv) const {
+  return (q_.extend_interval_earlier_ &&
+          tt_.external_interval().from_ < itv.from_) ||
+         (q_.extend_interval_later_ && itv.to_ < tt_.external_interval().to_);
+}
+
+template <direction SearchDir>
+bool interval_estimator<SearchDir>::can_extend_both_dir(
+    interval<unixtime_t> const& itv) const {
+  return q_.extend_interval_earlier_ &&
+         itv.from_ != tt_.external_interval().from_ &&
+         q_.extend_interval_later_ && itv.to_ != tt_.external_interval().to_;
+}
+
+template <direction SearchDir>
+std::uint32_t interval_estimator<SearchDir>::num_events(
+    interval<unixtime_t> const& itv,
+    location_idx_t const loc,
+    std::vector<route_idx_t> const& routes) const {
+  auto acc = 0U;
+  for (auto const& route : routes) {
+    auto const stop_seq = tt_.route_location_seq_[route];
+    for (auto i = 0U; i != stop_seq.size(); ++i) {
+      auto const stop_idx = static_cast<stop_idx_t>(
+          SearchDir == direction::kForward ? i : stop_seq.size() - i - 1U);
+      auto const s = stop{stop_seq[stop_idx]};
+      if (s.location_idx() == loc) {
+        auto const can_enter_exit =
+            SearchDir == direction::kForward ? s.in_allowed() : s.out_allowed();
+        if (can_enter_exit) {
+          for (auto const transport_idx : tt_.route_transport_ranges_[route]) {
+            auto const& bf =
+                tt_.bitfields_[tt_.transport_traffic_days_[transport_idx]];
+            for (auto day = 0U; day != bf.size(); ++day) {
+              auto const et = SearchDir == direction::kForward
+                                  ? event_type::kDep
+                                  : event_type::kArr;
+              if (bf.test(day) && itv.contains(tt_.event_time(
+                                      transport{transport_idx, day_idx_t{day}},
+                                      stop_idx, et))) {
+                ++acc;
               }
             }
           }
         }
       }
     }
-    return acc;
+  }
+  return acc;
+}
+
+template <direction SearchDir>
+std::uint32_t interval_estimator<SearchDir>::num_start_events(
+    interval<unixtime_t> const& itv) const {
+
+  auto const acc_fun = [&](auto const& acc, offset const& o) {
+    return acc + num_events(itv, o.target(),
+                            {begin(tt_.location_routes_[o.target()]),
+                             end(tt_.location_routes_[o.target()])});
   };
 
   auto const& offsets =
       SearchDir == direction::kForward ? q_.start_ : q_.destination_;
-  return std::accumulate(begin(offsets), end(offsets), 0U, events_at_loc);
+  return std::accumulate(begin(offsets), end(offsets), 0U, acc_fun);
 }
 
+template <direction SearchDir>
+i32_minutes interval_estimator<SearchDir>::ext_from_journeys(
+    interval<unixtime_t> const& itv,
+    pareto_set<journey> const& results,
+    std::uint32_t const num_con_req) const {
+  auto ext = i32_minutes{0U};
+  for (auto const& j : results) {
+    for (auto const& l : j.legs_) {
+      if (!holds_alternative<journey::run_enter_exit>(l.uses_)) {
+        continue;
+      }
+
+      auto const loc = SearchDir == direction::kForward ? l.from_ : l.to_;
+      auto itv_at_loc = SearchDir == direction::kForward
+                            ? interval<unixtime_t>{l.dep_time_ - half_step,
+                                                   l.dep_time_ + half_step}
+                            : interval<unixtime_t>{l.arr_time_ - half_step,
+                                                   l.arr_time_ + half_step};
+      auto const route = std::vector<route_idx_t>{
+          tt_.transport_route_[get<journey::run_enter_exit>(l.uses_)
+                                   .r_.t_.t_idx_]};
+      while (num_events(itv_at_loc, loc, route) < num_con_req) {
+        // can extend?
+        if (!can_extend(itv_at_loc)) {
+          break;
+        }
+
+        // extend
+        if (can_extend_both_dir(itv)) {
+          itv_at_loc.from_ -= half_step;
+          itv_at_loc.to_ += half_step;
+        } else {
+          if (q_.extend_interval_earlier_) {
+            itv_at_loc.from_ -= step;
+          }
+          if (q_.extend_interval_later_) {
+            itv_at_loc.to_ += step;
+          }
+        }
+
+        // clamp
+        itv_at_loc.from_ = tt_.external_interval().clamp(itv_at_loc.from_);
+        itv_at_loc.to_ = tt_.external_interval().clamp(itv_at_loc.to_);
+      }
+
+      ext = std::max(ext, itv_at_loc.size());
+    }
+  }
+  return ext;
+}
+
+template struct interval_estimator<direction::kForward>;
+template struct interval_estimator<direction::kBackward>;
 }  // namespace nigiri::routing

@@ -2,6 +2,8 @@
 
 #include "nigiri/types.h"
 
+#include "nigiri/routing/pareto_set.h"
+
 namespace nigiri {
 struct timetable;
 }  // namespace nigiri
@@ -9,18 +11,29 @@ struct timetable;
 namespace nigiri::routing {
 
 struct query;
+struct journey;
 
 template <direction SearchDir>
 struct interval_estimator {
   explicit interval_estimator(timetable const& tt, query const& q)
       : tt_{tt}, q_{q} {}
 
-  void initial_estimate(interval<unixtime_t>& itv) const;
+  interval<unixtime_t> initial(interval<unixtime_t> const&) const;
 
-  void estimate(interval<unixtime_t>& itv, std::uint32_t num_con_req) const;
+  interval<unixtime_t> extension(interval<unixtime_t> const&,
+                                 pareto_set<journey> const&,
+                                 std::uint32_t const num_con_req) const;
 
 private:
-  std::uint32_t events_in_itv(interval<unixtime_t> const& itv) const;
+  bool can_extend(interval<unixtime_t> const&) const;
+  bool can_extend_both_dir(interval<unixtime_t> const&) const;
+  std::uint32_t num_events(interval<unixtime_t> const&,
+                           location_idx_t const,
+                           std::vector<route_idx_t> const&) const;
+  std::uint32_t num_start_events(interval<unixtime_t> const&) const;
+  i32_minutes ext_from_journeys(interval<unixtime_t> const&,
+                                pareto_set<journey> const&,
+                                std::uint32_t const) const;
 
   timetable const& tt_;
   query const& q_;

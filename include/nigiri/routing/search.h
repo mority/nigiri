@@ -9,6 +9,7 @@
 #include "nigiri/routing/dijkstra.h"
 #include "nigiri/routing/for_each_meta.h"
 #include "nigiri/routing/get_fastest_direct.h"
+#include "nigiri/routing/interval_estimate.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
@@ -138,9 +139,15 @@ struct search {
     }
 
     // initial interval estimate
+    auto const itv_est = interval_estimator<SearchDir>{tt_, q_};
+    search_interval_ = itv_est.initial(search_interval_);
+
+    std::cout << "initial interval length [h]: "
+              << static_cast<double>(search_interval_.size().count()) / 60.0
+              << "\n";
 
     state_.starts_.clear();
-    add_start_labels(q_.start_time_, true);
+    add_start_labels(search_interval_, true);
 
     auto const processing_start_time = std::chrono::steady_clock::now();
     auto const is_timeout_reached = [&]() {
@@ -201,14 +208,13 @@ struct search {
       state_.starts_.clear();
 
       // interval extension
+      auto const new_interval =
+          itv_est.extension(search_interval_, state_.results_,
+                            q_.min_connection_count_ - n_results_in_interval());
+      std::cout << "extension interval length [h]: "
+                << static_cast<double>(new_interval.size().count()) / 60.0
+                << "\n";
 
-      auto const new_interval = interval{
-          q_.extend_interval_earlier_ ? tt_.external_interval().clamp(
-                                            search_interval_.from_ - 60_minutes)
-                                      : search_interval_.from_,
-          q_.extend_interval_later_
-              ? tt_.external_interval().clamp(search_interval_.to_ + 60_minutes)
-              : search_interval_.to_};
       trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
 
       if (new_interval.from_ != search_interval_.from_) {
