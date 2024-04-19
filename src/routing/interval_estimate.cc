@@ -20,9 +20,9 @@ interval<unixtime_t> interval_estimator<SearchDir>::initial(
   }
 
   while (num_start_events(new_itv) < q_.min_connection_count_) {
-    
+
     // check if further extension is possible
-    if (!can_extend(new_itv)) {
+    if (max_itv_reached(new_itv)) {
       break;
     }
 
@@ -53,14 +53,14 @@ interval<unixtime_t> interval_estimator<SearchDir>::extension(
     pareto_set<journey> const& results,
     std::uint32_t const num_con_req) const {
   auto new_itv = itv;
-  if (!can_extend(new_itv)) {
+  if (max_itv_reached(new_itv)) {
     return new_itv;
   }
 
   // estimate extension amount
-  auto ext = new_itv.size();
-  if (results.size() > 0) {
-    ext = ext_from_journeys(results, num_con_req);
+  auto ext = ext_from_journeys(results, num_con_req);
+  if (ext == 0_minutes) {
+    ext = new_itv.size();
   }
 
   // extend
@@ -84,11 +84,13 @@ interval<unixtime_t> interval_estimator<SearchDir>::extension(
 }
 
 template <direction SearchDir>
-bool interval_estimator<SearchDir>::can_extend(
+bool interval_estimator<SearchDir>::max_itv_reached(
     interval<unixtime_t> const& itv) const {
-  return (q_.extend_interval_earlier_ &&
-          tt_.external_interval().from_ < itv.from_) ||
-         (q_.extend_interval_later_ && itv.to_ < tt_.external_interval().to_);
+  auto const can_search_earlier =
+      q_.extend_interval_earlier_ && itv.from_ != tt_.external_interval().from_;
+  auto const can_search_later =
+      q_.extend_interval_later_ && itv.to_ != tt_.external_interval().to_;
+  return !can_search_earlier && !can_search_later;
 }
 
 template <direction SearchDir>
@@ -177,7 +179,7 @@ i32_minutes interval_estimator<SearchDir>::ext_from_journeys(
                                    .r_.t_.t_idx_]};
       while (num_events(itv_at_loc, loc, route) < num_con_req) {
         // can extend?
-        if (!can_extend(itv_at_loc)) {
+        if (max_itv_reached(itv_at_loc)) {
           break;
         }
 

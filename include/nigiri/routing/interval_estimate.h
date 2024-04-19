@@ -25,7 +25,7 @@ struct interval_estimator {
                                  std::uint32_t const num_con_req) const;
 
 private:
-  bool can_extend(interval<unixtime_t> const&) const;
+  bool max_itv_reached(interval<unixtime_t> const&) const;
   bool can_extend_both_dir(interval<unixtime_t> const&) const;
   std::uint32_t num_events(interval<unixtime_t> const&,
                            location_idx_t const,
