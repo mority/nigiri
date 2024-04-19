@@ -142,12 +142,12 @@ struct search {
     auto const itv_est = interval_estimator<SearchDir>{tt_, q_};
     search_interval_ = itv_est.initial(search_interval_);
 
-    std::cout << "initial interval length [h]: "
-              << static_cast<double>(search_interval_.size().count()) / 60.0
-              << "\n";
-
     state_.starts_.clear();
-    add_start_labels(search_interval_, true);
+    if (search_interval_.size() != 0_minutes) {
+      add_start_labels(search_interval_, true);
+    } else {
+      add_start_labels(q_.start_time_, true);
+    }
 
     auto const processing_start_time = std::chrono::steady_clock::now();
     auto const is_timeout_reached = [&]() {
@@ -211,9 +211,6 @@ struct search {
       auto const new_interval =
           itv_est.extension(search_interval_, state_.results_,
                             q_.min_connection_count_ - n_results_in_interval());
-      std::cout << "extension interval length [h]: "
-                << static_cast<double>(new_interval.size().count()) / 60.0
-                << "\n";
 
       trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
 
