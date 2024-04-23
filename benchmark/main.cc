@@ -23,10 +23,10 @@ nigiri::pareto_set<nigiri::routing::journey> raptor_search(
   static auto algo_state = algo_state_t{};
 
   using algo_t = routing::raptor<nigiri::direction::kForward, false>;
-  return *(routing::search<nigiri::direction::kForward, algo_t>{
+  return routing::search<nigiri::direction::kForward, algo_t>{
       tt, nullptr, search_state, algo_state, std::move(q)}
-               .execute()
-               .journeys_);
+      .execute()
+      .journeys_;
 }
 
 std::unique_ptr<cista::wrapped<nigiri::timetable>> load_timetable(
@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
     ("intermodal_start", bpo::value<std::string>()->default_value("walk"), "walk | bicycle | car")
     ("intermodal_dest", bpo::value<std::string>()->default_value("walk"), "walk | bicycle | car")
     ("use_start_footpaths", bpo::value<bool>(&gs.use_start_footpaths_)->default_value(true), "")
-    ("max_transfers,t", bpo::value<std::uint8_t>(&gs.max_transfers_)->default_value(7U), "maximum number of transfers during routing")
+    ("max_transfers,t", bpo::value<std::uint8_t>(&gs.max_transfers_)->default_value(kMaxTransfers), "maximum number of transfers during routing")
     ("min_connection_count,m", bpo::value<std::uint32_t>(&gs.min_connection_count_)->default_value(3U), "the minimum number of connections to find with each query")
     ("extend_interval_earlier,e", bpo::value<bool>(&gs.extend_interval_earlier_)->default_value(true), "allows extension of the search interval into the past")
     ("extend_interval_later,l", bpo::value<bool>(&gs.extend_interval_later_)->default_value(true), "allows extension of the search interval into the future")
@@ -360,6 +360,46 @@ int main(int argc, char* argv[]) {
   print_stats(routing_times, "routing times [ms]");
   std::sort(begin(search_iterations), end(search_iterations));
   print_stats(search_iterations, "search iterations");
+
+  auto const coord = [&](auto const loc) {
+    return (**tt).locations_.coordinates_[loc];
+  };
+
+  auto loc_distance = std::vector<double>{};
+  loc_distance.reserve(results.size() * 2);
+  auto const get_dist = [&](journey const& j) {
+    auto const src_coord = coord(j.legs_[0].from_);
+    auto const dest_coord = coord(j.dest_);
+    auto const dist_src_dest = geo::distance(src_coord, dest_coord);
+    for (auto const& l : j.legs_) {
+      auto const from_coord = coord(l.from_);
+      auto const to_coord = coord(l.to_);
+
+      auto const dist_src_from = geo::distance(src_coord, from_coord);
+      auto const dist_dest_from = geo::distance(dest_coord, from_coord);
+      auto const dist_src_to = geo::distance(src_coord, to_coord);
+      auto const dist_dest_to = geo::distance(dest_coord, to_coord);
+
+      auto const dist_from =
+          std::min(dist_src_from, dist_dest_from) / dist_src_dest;
+      auto const dist_to = std::min(dist_src_to, dist_dest_to) / dist_src_dest;
+
+      loc_distance.emplace_back(dist_from);
+      loc_distance.emplace_back(dist_to);
+    }
+  };
+
+  for (auto const& result : results) {
+    for (auto const& j : result.second.journeys_) {
+      if (!j.legs_.empty()) {
+        get_dist(j);
+      }
+    }
+  }
+
+  std::sort(begin(loc_distance), end(loc_distance));
+  print_stats(loc_distance,
+              "loc distance (normalized by distance from src to dest)");
 
   return 0;
 }

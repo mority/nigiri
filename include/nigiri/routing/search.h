@@ -43,7 +43,7 @@ struct search_stats {
 
 template <typename AlgoStats>
 struct routing_result {
-  pareto_set<journey> const* journeys_{nullptr};
+  pareto_set<journey> journeys_;
   interval<unixtime_t> interval_;
   search_stats search_stats_;
   AlgoStats algo_stats_;
@@ -134,7 +134,7 @@ struct search {
     state_.results_.clear();
 
     if (start_dest_overlap()) {
-      return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
+      return {state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
     state_.starts_.clear();
@@ -246,7 +246,7 @@ struct search {
     stats_.execute_time_ =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             (std::chrono::steady_clock::now() - processing_start_time));
-    return {.journeys_ = &state_.results_,
+    return {.journeys_ = state_.results_,
             .interval_ = search_interval_,
             .search_stats_ = stats_,
             .algo_stats_ = algo_.get_stats()};
