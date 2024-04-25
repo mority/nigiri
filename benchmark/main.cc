@@ -24,10 +24,10 @@ nigiri::pareto_set<nigiri::routing::journey> raptor_search(
   static auto algo_state = algo_state_t{};
 
   using algo_t = routing::raptor<nigiri::direction::kForward, false>;
-  return *(routing::search<nigiri::direction::kForward, algo_t>{
+  return routing::search<nigiri::direction::kForward, algo_t>{
       tt, nullptr, search_state, algo_state, std::move(q)}
-               .execute()
-               .journeys_);
+      .execute()
+      .journeys_;
 }
 
 std::unique_ptr<cista::wrapped<nigiri::timetable>> load_timetable(
@@ -313,8 +313,6 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  std::mutex mutex;
-
   // generate queries
   auto queries = std::vector<query>{};
   {
@@ -326,13 +324,12 @@ int main(int argc, char* argv[]) {
     auto query_generation_timer = scoped_timer(fmt::format(
         "generation of {} queries using seed {}", num_queries, qg.seed_));
     std::cout << "Query generator settings:\n" << gs << "\n";
-    utl::parallel_for_run(num_queries, [&](auto const i) {
+    for (auto i = 0U; i != num_queries; ++i) {
       auto const q = qg.random_pretrip_query();
       if (q.has_value()) {
-        std::lock_guard<std::mutex> guard(mutex);
         queries.emplace_back(q.value());
       }
-    });
+    }
   }
 
   std::cout << queries.size() << " queries generated successfully\n";
@@ -344,6 +341,7 @@ int main(int argc, char* argv[]) {
     auto query_processing_timer =
         scoped_timer(fmt::format("processing of {} queries", queries.size()));
     progress_tracker->status("processing queries").in_high(queries.size());
+    std::mutex mutex;
     utl::parallel_for_run(
         queries.size(),
         [&](auto const q_idx) {
@@ -370,16 +368,44 @@ int main(int argc, char* argv[]) {
   routing_times.reserve(results.size());
   auto search_iterations = std::vector<std::uint64_t>{};
   search_iterations.reserve(results.size());
+  auto estimate_times = std::vector<std::chrono::milliseconds::rep>{};
+  estimate_times.reserve(results.size());
+  auto num_con = std::vector<std::uint32_t>{};
+  num_con.reserve(results.size());
+  auto initial_interval_size = std::vector<i32_minutes::rep>{};
+  initial_interval_size.reserve(results.size());
+  auto final_interval_size = std::vector<i32_minutes::rep>{};
+  final_interval_size.reserve(results.size());
   for (auto const& result : results) {
     routing_times.emplace_back(
         result.second.search_stats_.execute_time_.count());
     search_iterations.emplace_back(
         result.second.search_stats_.search_iterations_);
+    estimate_times.emplace_back(
+        result.second.search_stats_.estimate_time_.count());
+    num_con.emplace_back(0);
+    for (auto const& j : result.second.journeys_) {
+      if (!j.legs_.empty()) {
+        ++num_con.back();
+      }
+    }
+    initial_interval_size.emplace_back(
+        result.second.search_stats_.initial_interval_size.count());
+    final_interval_size.emplace_back(
+        result.second.search_stats_.final_interval_size.count());
   }
   std::sort(begin(routing_times), end(routing_times));
   print_stats(routing_times, "routing times [ms]");
   std::sort(begin(search_iterations), end(search_iterations));
   print_stats(search_iterations, "search iterations");
+  std::sort(begin(estimate_times), end(estimate_times));
+  print_stats(estimate_times, "estimate interval times [ms]");
+  std::sort(begin(num_con), end(num_con));
+  print_stats(num_con, "number of journeys found");
+  std::sort(begin(initial_interval_size), end(initial_interval_size));
+  print_stats(initial_interval_size, "initial interval size [min]");
+  std::sort(begin(final_interval_size), end(final_interval_size));
+  print_stats(final_interval_size, "final interval size [min]");
 
   return 0;
 }

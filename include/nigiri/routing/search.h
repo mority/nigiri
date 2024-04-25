@@ -38,13 +38,15 @@ struct search_stats {
   std::uint64_t lb_time_{0ULL};
   std::uint64_t fastest_direct_{0ULL};
   std::uint64_t search_iterations_{0ULL};
-  std::uint64_t interval_extensions_{0ULL};
-  std::chrono::milliseconds execute_time_{0LL};  // [ms]
+  i32_minutes initial_interval_size{0ULL};
+  i32_minutes final_interval_size{0ULL};
+  std::chrono::milliseconds execute_time_{0LL};
+  std::chrono::milliseconds estimate_time_{0LL};
 };
 
 template <typename AlgoStats>
 struct routing_result {
-  pareto_set<journey> const* journeys_{nullptr};
+  pareto_set<journey> const journeys_;
   interval<unixtime_t> interval_;
   search_stats search_stats_;
   AlgoStats algo_stats_;
@@ -135,12 +137,18 @@ struct search {
     state_.results_.clear();
 
     if (start_dest_overlap()) {
-      return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
+      return {state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
     // initial interval estimate
     auto const itv_est = interval_estimator<SearchDir>{tt_, q_};
+    auto const initial_start_time = std::chrono::steady_clock::now();
     search_interval_ = itv_est.initial(search_interval_);
+    stats_.initial_interval_size = stats_.final_interval_size =
+        search_interval_.size();
+    stats_.estimate_time_ +=
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - initial_start_time);
 
     state_.starts_.clear();
     if (search_interval_.size() != 0_minutes) {
@@ -208,9 +216,14 @@ struct search {
       state_.starts_.clear();
 
       // interval extension
+      auto const extension_start_time = std::chrono::steady_clock::now();
       auto const new_interval =
           itv_est.extension(search_interval_, state_.results_,
                             q_.min_connection_count_ - n_results_in_interval());
+      stats_.final_interval_size = new_interval.size();
+      stats_.estimate_time_ +=
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::steady_clock::now() - extension_start_time);
 
       trace("interval adapted: {} -> {}\n", search_interval_, new_interval);
 
@@ -253,7 +266,7 @@ struct search {
     stats_.execute_time_ =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             (std::chrono::steady_clock::now() - processing_start_time));
-    return {.journeys_ = &state_.results_,
+    return {.journeys_ = state_.results_,
             .interval_ = search_interval_,
             .search_stats_ = stats_,
             .algo_stats_ = algo_.get_stats()};
