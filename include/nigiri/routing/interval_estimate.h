@@ -46,27 +46,9 @@ struct interval_estimator {
   }
 
   interval<unixtime_t> extension(interval<unixtime_t> const& itv,
-                                 pareto_set<journey> const& results,
                                  std::uint32_t const num_con_req) const {
     auto new_itv = itv;
-    if (max_itv_reached(new_itv)) {
-      return new_itv;
-    }
-
-    auto n_j_with_legs = 0U;
-    for (auto const& j : results) {
-      if (!j.legs_.empty()) {
-        ++n_j_with_legs;
-      }
-    }
-
-    auto ext = i32_minutes{0U};
-    if (n_j_with_legs != 0) {
-      auto const time_per_con = itv.size() / n_j_with_legs;
-      ext = time_per_con * num_con_req;
-    } else {
-      ext = itv.size() * num_con_req * 2;
-    }
+    auto const ext = itv.size() * num_con_req;
 
     // extend
     if (can_extend_both_dir(new_itv)) {
@@ -89,14 +71,6 @@ struct interval_estimator {
   }
 
 private:
-  bool max_itv_reached(interval<unixtime_t> const& itv) const {
-    auto const can_search_earlier = q_.extend_interval_earlier_ &&
-                                    itv.from_ != tt_.external_interval().from_;
-    auto const can_search_later =
-        q_.extend_interval_later_ && itv.to_ != tt_.external_interval().to_;
-    return !can_search_earlier && !can_search_later;
-  }
-
   bool can_extend_both_dir(interval<unixtime_t> const& itv) const {
     return q_.extend_interval_earlier_ &&
            itv.from_ != tt_.external_interval().from_ &&

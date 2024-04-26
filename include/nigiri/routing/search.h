@@ -46,7 +46,7 @@ struct search_stats {
 
 template <typename AlgoStats>
 struct routing_result {
-  pareto_set<journey> const journeys_;
+  pareto_set<journey> const* journeys_;
   interval<unixtime_t> interval_;
   search_stats search_stats_;
   AlgoStats algo_stats_;
@@ -137,7 +137,7 @@ struct search {
     state_.results_.clear();
 
     if (start_dest_overlap()) {
-      return {state_.results_, search_interval_, stats_, algo_.get_stats()};
+      return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
     // initial interval estimate
@@ -217,9 +217,8 @@ struct search {
 
       // interval extension
       auto const extension_start_time = std::chrono::steady_clock::now();
-      auto const new_interval =
-          itv_est.extension(search_interval_, state_.results_,
-                            q_.min_connection_count_ - n_results_in_interval());
+      auto const new_interval = itv_est.extension(
+          search_interval_, q_.min_connection_count_ - n_results_in_interval());
       stats_.final_interval_size = new_interval.size();
       stats_.estimate_time_ +=
           std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -266,7 +265,7 @@ struct search {
     stats_.execute_time_ =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             (std::chrono::steady_clock::now() - processing_start_time));
-    return {.journeys_ = state_.results_,
+    return {.journeys_ = &state_.results_,
             .interval_ = search_interval_,
             .search_stats_ = stats_,
             .algo_stats_ = algo_.get_stats()};
