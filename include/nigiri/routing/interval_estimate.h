@@ -23,7 +23,6 @@ struct interval_estimator {
     auto new_itv = itv;
     auto const ext = 1_hours * q_.min_connection_count_;
 
-    // extend interval more into "bad" direction
     if (can_extend_bad_dir(itv)) {
       if constexpr (SearchDir == direction::kForward) {
         if (can_extend_earlier(itv)) {
@@ -52,7 +51,6 @@ struct interval_estimator {
       }
     }
 
-    // clamp to timetable
     new_itv.from_ = tt_.external_interval().clamp(new_itv.from_);
     new_itv.to_ = tt_.external_interval().clamp(new_itv.to_);
 
@@ -69,7 +67,6 @@ struct interval_estimator {
     auto new_itv = itv;
     auto const ext = itv.size() * num_con_req;
 
-    // extend
     if (can_extend_both_dir(itv)) {
       new_itv.from_ -= ext / 2;
       new_itv.to_ += ext / 2;
@@ -82,7 +79,6 @@ struct interval_estimator {
       }
     }
 
-    // clamp to timetable
     new_itv.from_ = tt_.external_interval().clamp(new_itv.from_);
     new_itv.to_ = tt_.external_interval().clamp(new_itv.to_);
 
