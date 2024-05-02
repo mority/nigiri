@@ -84,11 +84,11 @@ struct raptor {
   void next_start_time() {
     utl::fill(state_.best_, kInvalid);
     utl::fill(state_.tmp_, kInvalid);
-    utl::fill(state_.prev_station_mark_, false);
-    utl::fill(state_.station_mark_, false);
-    utl::fill(state_.route_mark_, false);
+    utl::fill(state_.prev_station_mark_.blocks_, 0U);
+    utl::fill(state_.station_mark_.blocks_, 0U);
+    utl::fill(state_.route_mark_.blocks_, 0U);
     if constexpr (Rt) {
-      utl::fill(state_.rt_transport_mark_, false);
+      utl::fill(state_.rt_transport_mark_.blocks_, 0U);
     }
   }
 
@@ -96,7 +96,8 @@ struct raptor {
     trace_upd("adding start {}: {}\n", location{tt_, l}, t);
     state_.best_[to_idx(l)] = unix_to_delta(base(), t);
     state_.round_times_[0U][to_idx(l)] = unix_to_delta(base(), t);
-    state_.station_mark_[to_idx(l)] = true;
+    // state_.station_mark_[to_idx(l)] = true;
+    state_.station_mark_.set(to_idx(l), true);
   }
 
   void execute(unixtime_t const start_time,
@@ -126,13 +127,15 @@ struct raptor {
         if (state_.station_mark_[i]) {
           for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
             any_marked = true;
-            state_.route_mark_[to_idx(r)] = true;
+            // state_.route_mark_[to_idx(r)] = true;
+            state_.route_mark_.set(to_idx(r), true);
           }
           if constexpr (Rt) {
             for (auto const& rt_t :
                  rtt_->location_rt_transports_[location_idx_t{i}]) {
               any_marked = true;
-              state_.rt_transport_mark_[to_idx(rt_t)] = true;
+              // state_.rt_transport_mark_[to_idx(rt_t)] = true;
+              state_.rt_transport_mark_.set(to_idx(rt_t), true);
             }
           }
         }
@@ -144,7 +147,7 @@ struct raptor {
       }
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
-      utl::fill(state_.station_mark_, false);
+      utl::fill(state_.station_mark_.blocks_, 0U);
 
       any_marked = (allowed_claszes_ == all_clasz_allowed())
                        ? loop_routes<false>(k)
@@ -160,10 +163,10 @@ struct raptor {
         break;
       }
 
-      utl::fill(state_.route_mark_, false);
+      utl::fill(state_.route_mark_.blocks_, 0U);
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
-      utl::fill(state_.station_mark_, false);
+      utl::fill(state_.station_mark_.blocks_, 0U);
 
       update_transfers(k);
       update_footpaths(k, prf_idx);
@@ -275,7 +278,8 @@ private:
         ++stats_.n_earliest_arrival_updated_by_footpath_;
         state_.round_times_[k][i] = fp_target_time;
         state_.best_[i] = fp_target_time;
-        state_.station_mark_[i] = true;
+        // state_.station_mark_[i] = true;
+        state_.station_mark_.set(i, true);
         if (is_dest) {
           update_time_at_dest(k, fp_target_time);
         }
@@ -326,7 +330,8 @@ private:
           ++stats_.n_earliest_arrival_updated_by_footpath_;
           state_.round_times_[k][to_idx(fp.target())] = fp_target_time;
           state_.best_[to_idx(fp.target())] = fp_target_time;
-          state_.station_mark_[to_idx(fp.target())] = true;
+          // state_.station_mark_[to_idx(fp.target())] = true;
+          state_.station_mark_.set(to_idx(fp.target()), true);
           if (is_dest_[to_idx(fp.target())]) {
             update_time_at_dest(k, fp_target_time);
           }
@@ -398,7 +403,8 @@ private:
 
             ++stats_.n_earliest_arrival_updated_by_route_;
             state_.tmp_[l_idx] = get_best(by_transport, state_.tmp_[l_idx]);
-            state_.station_mark_[l_idx] = true;
+            // state_.station_mark_[l_idx] = true;
+            state_.station_mark_.set(l_idx, true);
             current_best = by_transport;
             any_marked = true;
           }
@@ -471,7 +477,8 @@ private:
 
           ++stats_.n_earliest_arrival_updated_by_route_;
           state_.tmp_[l_idx] = get_best(by_transport, state_.tmp_[l_idx]);
-          state_.station_mark_[l_idx] = true;
+          // state_.station_mark_[l_idx] = true;
+          state_.station_mark_.set(l_idx, true);
           current_best = by_transport;
           any_marked = true;
         } else {
