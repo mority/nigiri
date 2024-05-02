@@ -24,10 +24,10 @@ nigiri::pareto_set<nigiri::routing::journey> raptor_search(
   static auto algo_state = algo_state_t{};
 
   using algo_t = routing::raptor<nigiri::direction::kForward, false>;
-  return routing::search<nigiri::direction::kForward, algo_t>{
+  return *routing::search<nigiri::direction::kForward, algo_t>{
       tt, nullptr, search_state, algo_state, std::move(q)}
-      .execute()
-      .journeys_;
+              .execute()
+              .journeys_;
 }
 
 std::vector<std::string> tokenize(std::string const& str,
@@ -285,11 +285,11 @@ int main(int argc, char* argv[]) {
     estimate_times.emplace_back(
         result.second.search_stats_.estimate_time_.count());
     num_con.emplace_back(0);
-    for (auto const& j : result.second.journeys_) {
-      if (!j.legs_.empty()) {
-        ++num_con.back();
-      }
-    }
+    //    for (auto const& j : result.second.journeys_) {
+    //      if (!j.legs_.empty()) {
+    //        ++num_con.back();
+    //      }
+    //    }
     initial_interval_size.emplace_back(
         result.second.search_stats_.initial_interval_size.count());
     final_interval_size.emplace_back(
