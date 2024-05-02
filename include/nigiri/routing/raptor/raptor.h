@@ -52,7 +52,7 @@ struct raptor {
   raptor(timetable const& tt,
          rt_timetable const* rtt,
          raptor_state& state,
-         std::vector<bool>& is_dest,
+         bitvec& is_dest,
          std::vector<std::uint16_t>& dist_to_dest,
          std::vector<std::uint16_t>& lb,
          day_idx_t const base,
@@ -715,7 +715,7 @@ private:
   timetable const& tt_;
   rt_timetable const* rtt_{nullptr};
   raptor_state& state_;
-  std::vector<bool>& is_dest_;
+  bitvec& is_dest_;
   std::vector<std::uint16_t>& dist_to_end_;
   std::vector<std::uint16_t>& lb_;
   std::array<delta_t, kMaxTransfers + 1> time_at_dest_;
