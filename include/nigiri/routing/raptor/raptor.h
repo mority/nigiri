@@ -672,10 +672,12 @@ private:
   bool is_intermodal_dest() const { return !dist_to_end_.empty(); }
 
   void update_time_at_dest(unsigned const k, delta_t const t) {
-    for (auto i = k, j = 0U; i != time_at_dest_.size(); ++i, ++j) {
-      auto const impr_per_transfer =
-          delta_t{(to_unix(t) - start_time_) * kImprovePerTransfer};
-      time_at_dest_[i] = get_best(time_at_dest_[i], t - j * impr_per_transfer);
+    auto const impr_per_transfer = static_cast<delta_t>(
+        (to_unix(t) - start_time_).count() * kImprovePerTransfer);
+    auto j = delta_t{0};
+    for (auto i = k; i != time_at_dest_.size(); ++i, ++j) {
+      time_at_dest_[i] = get_best(
+          time_at_dest_[i], static_cast<delta_t>(t - j * impr_per_transfer));
     }
   }
 
