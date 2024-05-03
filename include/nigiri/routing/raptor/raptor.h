@@ -73,7 +73,6 @@ struct raptor {
     state_.resize(n_locations_, n_routes_, n_rt_transports_);
     utl::fill(time_at_dest_, kInvalid);
     state_.round_times_.reset(kInvalid);
-    utl::fill(state_.min_travel_time_, std::numeric_limits<duration_t>::max());
   }
 
   algo_stats_t get_stats() const { return stats_; }
