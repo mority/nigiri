@@ -36,6 +36,8 @@ struct raptor_state {
   bitvec prev_station_mark_;
   bitvec route_mark_;
   bitvec rt_transport_mark_;
+  bitvec transfer_pattern_mark_;
+  bitvec transfer_pattern_taint_;
 };
 
 }  // namespace nigiri::routing

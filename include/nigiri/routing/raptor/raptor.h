@@ -79,6 +79,7 @@ struct raptor {
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
     state_.round_times_.reset(kInvalid);
+    arrivals_were_reset_ = true;
   }
 
   void next_start_time() {
@@ -99,11 +100,20 @@ struct raptor {
     state_.station_mark_.set(to_idx(l), true);
   }
 
+  template <bool TransferPatterns = false>
   void execute(unixtime_t const start_time,
                std::uint8_t const max_transfers,
                unixtime_t const worst_time_at_dest,
                profile_idx_t const prf_idx,
                pareto_set<journey>& results) {
+    if constexpr (!TransferPatterns) {
+      if (arrivals_were_reset_) {
+        execute<true>(start_time, max_transfers, worst_time_at_dest, prf_idx,
+                      results);
+        arrivals_were_reset_ = false;
+      }
+    }
+
     auto const end_k = std::min(max_transfers, kMaxTransfers) + 1U;
 
     auto const d_worst_at_dest = unix_to_delta(base(), worst_time_at_dest);
@@ -120,6 +130,10 @@ struct raptor {
       is_dest_.for_each_set_bit([&](std::uint64_t const i) {
         update_time_at_dest(k, state_.best_[i]);
       });
+
+      if constexpr (TransferPatterns) {
+        state_.station_mark_ &= state_.transfer_pattern_mark_;
+      }
 
       auto any_marked = false;
       state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
@@ -163,9 +177,9 @@ struct raptor {
       std::swap(state_.prev_station_mark_, state_.station_mark_);
       utl::fill(state_.station_mark_.blocks_, 0U);
 
-      update_transfers(k);
-      update_footpaths(k, prf_idx);
-      update_intermodal_footpaths(k);
+      update_transfers<TransferPatterns>(k);
+      update_footpaths<TransferPatterns>(k, prf_idx);
+      update_intermodal_footpaths<TransferPatterns>(k);
 
       trace_print_state_after_round();
     }
@@ -202,7 +216,7 @@ private:
     return tt_.internal_interval_days().from_ + as_int(base_) * date::days{1};
   }
 
-  template <bool WithClaszFilter>
+  template <bool WithClaszFilter, bool TransferPatterns>
   bool loop_routes(unsigned const k) {
     auto any_marked = false;
     state_.route_mark_.for_each_set_bit([&](auto const r_idx) {
@@ -216,12 +230,12 @@ private:
 
       ++stats_.n_routes_visited_;
       trace("┊ ├k={} updating route {}\n", k, r);
-      any_marked |= update_route(k, r);
+      any_marked |= update_route<TransferPatterns>(k, r);
     });
     return any_marked;
   }
 
-  template <bool WithClaszFilter>
+  template <bool WithClaszFilter, bool TransferPatterns>
   bool loop_rt_routes(unsigned const k) {
     auto any_marked = false;
     state_.rt_transport_mark_.for_each_set_bit([&](auto const rt_t_idx) {
@@ -236,11 +250,12 @@ private:
 
       ++stats_.n_routes_visited_;
       trace("┊ ├k={} updating rt transport {}\n", k, rt_t);
-      any_marked |= update_rt_transport(k, rt_t);
+      any_marked |= update_rt_transport<TransferPatterns>(k, rt_t);
     });
     return any_marked;
   }
 
+  template <bool TransferPatterns>
   void update_transfers(unsigned const k) {
     state_.prev_station_mark_.for_each_set_bit([&](auto&& i) {
       auto const is_dest = is_dest_[i];
@@ -250,8 +265,11 @@ private:
               : dir(tt_.locations_.transfer_time_[location_idx_t{i}]).count();
       auto const fp_target_time =
           static_cast<delta_t>(state_.tmp_[i] + transfer_time);
-      if (is_better(fp_target_time, state_.best_[i]) &&
-          is_better(fp_target_time, time_at_dest_[k])) {
+      if ((is_better(fp_target_time, state_.best_[i]) &&
+           is_better(fp_target_time, time_at_dest_[k])) ||
+          (fp_target_time == state_.best_[i] &&
+           fp_target_time <= time_at_dest_[k] &&
+           state_.transfer_pattern_taint_[i])) {
         if (lb_[i] == kUnreachable ||
             !is_better(fp_target_time + dir(lb_[i]), time_at_dest_[k])) {
           ++stats_.fp_update_prevented_by_lower_bound_;
@@ -262,6 +280,11 @@ private:
         state_.round_times_[k][i] = fp_target_time;
         state_.best_[i] = fp_target_time;
         state_.station_mark_.set(i, true);
+        if constexpr (TransferPatterns) {
+          state_.transfer_pattern_taint_.set(i, true);
+        } else {
+          state_.transfer_pattern_taint_.set(i, false);
+        }
         if (is_dest) {
           update_time_at_dest(k, fp_target_time);
         }
@@ -269,6 +292,7 @@ private:
     });
   }
 
+  template <bool TransferPatterns>
   void update_footpaths(unsigned const k, profile_idx_t const prf_idx) {
     state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       auto const l_idx = location_idx_t{i};
@@ -281,8 +305,11 @@ private:
         auto const fp_target_time =
             clamp(state_.tmp_[i] + dir(fp.duration()).count());
 
-        if (is_better(fp_target_time, state_.best_[target]) &&
-            is_better(fp_target_time, time_at_dest_[k])) {
+        if ((is_better(fp_target_time, state_.best_[target]) &&
+             is_better(fp_target_time, time_at_dest_[k])) ||
+            (fp_target_time == state_.best_[target] &&
+             fp_target_time <= time_at_dest_[k] &&
+             state_.transfer_pattern_taint_[target])) {
           auto const lower_bound = lb_[to_idx(fp.target())];
           if (lower_bound == kUnreachable ||
               !is_better(fp_target_time + dir(lower_bound), time_at_dest_[k])) {
@@ -309,6 +336,11 @@ private:
           state_.round_times_[k][to_idx(fp.target())] = fp_target_time;
           state_.best_[to_idx(fp.target())] = fp_target_time;
           state_.station_mark_.set(to_idx(fp.target()), true);
+          if constexpr (TransferPatterns) {
+            state_.transfer_pattern_taint_.set(i, true);
+          } else {
+            state_.transfer_pattern_taint_.set(i, false);
+          }
           if (is_dest_[to_idx(fp.target())]) {
             update_time_at_dest(k, fp_target_time);
           }
@@ -324,6 +356,7 @@ private:
     });
   }
 
+  template <bool TransferPatterns>
   void update_intermodal_footpaths(unsigned const k) {
     if (dist_to_end_.empty()) {
       return;
@@ -339,6 +372,9 @@ private:
           state_.round_times_[k][kIntermodalTarget] = end_time;
           state_.best_[kIntermodalTarget] = end_time;
           update_time_at_dest(k, end_time);
+          if constexpr (TransferPatterns) {
+            state_.transfer_pattern_taint_.set(i, true);
+          }
         }
 
         trace("┊ │k={}  INTERMODAL FOOTPATH: location={}, dist_to_end={}\n", k,
@@ -347,6 +383,7 @@ private:
     }
   }
 
+  template <bool TransferPatterns>
   bool update_rt_transport(unsigned const k, rt_transport_idx_t const rt_t) {
     auto const stop_seq = rtt_->rt_transport_location_seq_[rt_t];
     auto et = false;
@@ -381,6 +418,9 @@ private:
             ++stats_.n_earliest_arrival_updated_by_route_;
             state_.tmp_[l_idx] = get_best(by_transport, state_.tmp_[l_idx]);
             state_.station_mark_.set(l_idx, true);
+            if constexpr (TransferPatterns) {
+              state_.transfer_pattern_taint_.set(i, true);
+            }
             current_best = by_transport;
             any_marked = true;
           }
@@ -406,6 +446,7 @@ private:
     return any_marked;
   }
 
+  template <bool TransferPatterns>
   bool update_route(unsigned const k, route_idx_t const r) {
     auto const stop_seq = tt_.route_location_seq_[r];
     bool any_marked = false;
@@ -454,6 +495,9 @@ private:
           ++stats_.n_earliest_arrival_updated_by_route_;
           state_.tmp_[l_idx] = get_best(by_transport, state_.tmp_[l_idx]);
           state_.station_mark_.set(l_idx, true);
+          if constexpr (TransferPatterns) {
+            state_.transfer_pattern_taint_.set(i, true);
+          }
           current_best = by_transport;
           any_marked = true;
         } else {
@@ -706,6 +750,7 @@ private:
   raptor_stats stats_;
   std::uint32_t n_locations_, n_routes_, n_rt_transports_;
   clasz_mask_t allowed_claszes_;
+  bool arrivals_were_reset_{false};
 };
 
 }  // namespace nigiri::routing
