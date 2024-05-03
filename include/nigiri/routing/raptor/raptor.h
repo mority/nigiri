@@ -39,6 +39,7 @@ struct raptor {
       std::numeric_limits<std::uint16_t>::max();
   static constexpr auto const kIntermodalTarget =
       to_idx(get_special_station(special_station::kEnd));
+  static constexpr auto const kImprovePerTransfer = 0.1;
 
   static bool is_better(auto a, auto b) { return kFwd ? a < b : a > b; }
   static bool is_better_or_eq(auto a, auto b) { return kFwd ? a <= b : a >= b; }
@@ -72,6 +73,7 @@ struct raptor {
     state_.resize(n_locations_, n_routes_, n_rt_transports_);
     utl::fill(time_at_dest_, kInvalid);
     state_.round_times_.reset(kInvalid);
+    utl::fill(state_.min_travel_time_, std::numeric_limits<duration_t>::max());
   }
 
   algo_stats_t get_stats() const { return stats_; }
@@ -104,6 +106,8 @@ struct raptor {
                unixtime_t const worst_time_at_dest,
                profile_idx_t const prf_idx,
                pareto_set<journey>& results) {
+    start_time_ = start_time;
+
     auto const end_k = std::min(max_transfers, kMaxTransfers) + 1U;
 
     auto const d_worst_at_dest = unix_to_delta(base(), worst_time_at_dest);
@@ -669,8 +673,10 @@ private:
   bool is_intermodal_dest() const { return !dist_to_end_.empty(); }
 
   void update_time_at_dest(unsigned const k, delta_t const t) {
-    for (auto i = k; i != time_at_dest_.size(); ++i) {
-      time_at_dest_[i] = get_best(time_at_dest_[i], t);
+    for (auto i = k, j = 0U; i != time_at_dest_.size(); ++i, ++j) {
+      auto const impr_per_transfer =
+          delta_t{(to_unix(t) - start_time_) * kImprovePerTransfer};
+      time_at_dest_[i] = get_best(time_at_dest_[i], t - j * impr_per_transfer);
     }
   }
 
@@ -706,6 +712,7 @@ private:
   raptor_stats stats_;
   std::uint32_t n_locations_, n_routes_, n_rt_transports_;
   clasz_mask_t allowed_claszes_;
+  unixtime_t start_time_;
 };
 
 }  // namespace nigiri::routing
