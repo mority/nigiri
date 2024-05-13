@@ -175,6 +175,11 @@ int main(int argc, char* argv[]) {
             "start coordinate for random queries")
     ("dest_coord", bpo::value<std::string>(),
             "destination coordinate for random queries")
+    ("query_file,q", bpo::value<std::string>(),
+            "load queries from file")
+    ("dump_slowest", bpo::value<bool>()->default_value(true),
+            "dump query with slowest performance to a file"
+            "slowest_query.bin inside the input folder")
   ;
   // clang-format on
   bpo::variables_map vm;
