@@ -118,17 +118,23 @@ struct search {
         state_{s},
         q_{std::move(q)},
         search_interval_{std::visit(
-            utl::overloaded{
-                [](interval<unixtime_t> const start_interval) {
-                  return start_interval;
-                },
-                [](unixtime_t const start_time) {
-                  return interval<unixtime_t>{start_time, start_time};
-                }},
+            utl::overloaded{[](interval<unixtime_t> const start_interval) {
+                              return start_interval;
+                            },
+                            [](unixtime_t const start_time) {
+                              return interval<unixtime_t>{start_time,
+                                                          start_time};
+                            }},
             q_.start_time_)},
         fastest_direct_{get_fastest_direct(tt_, q_, SearchDir)},
         algo_{init(q_.allowed_claszes_, algo_state)},
-        timeout_(timeout) {}
+        timeout_(timeout) {
+    auto const dist_start_dest =
+        geo::distance(tt_.locations_.coordinates_[q_.start_[0].target()],
+                      tt_.locations_.coordinates_[q_.destination_[0].target()]);
+    if (dist_start_dest > 1'000'000.0) {
+    }
+  }
 
   routing_result<algo_stats_t> execute() {
     state_.results_.clear();
@@ -171,13 +177,13 @@ struct search {
             "timeout_reached={}\n",
             is_ontrip(), q_.extend_interval_earlier_, q_.extend_interval_later_,
             std::visit(
-                utl::overloaded{
-                    [](interval<unixtime_t> const& start_interval) {
-                      return start_interval;
-                    },
-                    [](unixtime_t const start_time) {
-                      return interval<unixtime_t>{start_time, start_time};
-                    }},
+                utl::overloaded{[](interval<unixtime_t> const& start_interval) {
+                                  return start_interval;
+                                },
+                                [](unixtime_t const start_time) {
+                                  return interval<unixtime_t>{start_time,
+                                                              start_time};
+                                }},
                 q_.start_time_),
             search_interval_, tt_.external_interval(), n_results_in_interval(),
             is_timeout_reached());
@@ -189,13 +195,13 @@ struct search {
             "number_of_results_in_interval={}\n",
             q_.extend_interval_earlier_, q_.extend_interval_later_,
             std::visit(
-                utl::overloaded{
-                    [](interval<unixtime_t> const& start_interval) {
-                      return start_interval;
-                    },
-                    [](unixtime_t const start_time) {
-                      return interval<unixtime_t>{start_time, start_time};
-                    }},
+                utl::overloaded{[](interval<unixtime_t> const& start_interval) {
+                                  return start_interval;
+                                },
+                                [](unixtime_t const start_time) {
+                                  return interval<unixtime_t>{start_time,
+                                                              start_time};
+                                }},
                 q_.start_time_),
             search_interval_, tt_.external_interval(), n_results_in_interval());
       }
@@ -341,7 +347,7 @@ private:
 
           auto const worst_time_at_dest =
               start_time +
-              (kFwd ? 1 : -1) * std::min(fastest_direct_, kMaxTravelTime);
+              (kFwd ? 1 : -1) * std::min(fastest_direct_, max_travel_time_);
           algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
                         q_.prf_idx_, state_.results_);
 
@@ -364,6 +370,7 @@ private:
   duration_t fastest_direct_;
   Algo algo_;
   std::optional<std::chrono::seconds> timeout_;
+  duration_t max_travel_time_{1440U};
 };
 
 }  // namespace nigiri::routing
