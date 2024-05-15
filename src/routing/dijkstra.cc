@@ -23,7 +23,8 @@ namespace nigiri::routing {
 void dijkstra(timetable const& tt,
               query const& q,
               vecvec<location_idx_t, footpath> const& lb_graph,
-              std::vector<label::dist_t>& dists) {
+              std::vector<label::dist_t>& dists,
+              duration_t max_travel_time) {
   dists.resize(tt.n_locations());
   utl::fill(dists, std::numeric_limits<label::dist_t>::max());
 
@@ -39,7 +40,8 @@ void dijkstra(timetable const& tt,
         });
   }
 
-  auto pq = dial<label, get_bucket>{kMaxTravelTime.count()};
+  auto pq =
+      dial<label, get_bucket>{static_cast<size_t>(max_travel_time.count())};
   for (auto const& [l, duration] : min) {
     auto const d = duration;
     for_each_meta(tt, q.start_match_mode_, l, [&](location_idx_t const meta) {

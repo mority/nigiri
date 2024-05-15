@@ -56,7 +56,8 @@ struct raptor {
          std::vector<std::uint16_t>& dist_to_dest,
          std::vector<std::uint16_t>& lb,
          day_idx_t const base,
-         clasz_mask_t const allowed_claszes)
+         clasz_mask_t const allowed_claszes,
+         duration_t max_travel_time)
       : tt_{tt},
         rtt_{rtt},
         state_{state},
@@ -68,7 +69,8 @@ struct raptor {
         n_locations_{tt_.n_locations()},
         n_routes_{tt.n_routes()},
         n_rt_transports_{Rt ? rtt->n_rt_transports() : 0U},
-        allowed_claszes_{allowed_claszes} {
+        allowed_claszes_{allowed_claszes},
+        max_travel_time_{max_travel_time} {
     state_.resize(n_locations_, n_routes_, n_rt_transports_);
     utl::fill(time_at_dest_, kInvalid);
     state_.round_times_.reset(kInvalid);
@@ -540,7 +542,7 @@ private:
     ++stats_.n_earliest_trip_calls_;
 
     auto const n_days_to_iterate = std::min(
-        kMaxTravelTime.count() / 1440 + 1,
+        max_travel_time_.count() / 1440 + 1,
         kFwd ? n_days_ - as_int(day_at_stop) : as_int(day_at_stop) + 1);
 
     auto const event_times = tt_.event_times_at_stop(
@@ -708,6 +710,7 @@ private:
   raptor_stats stats_;
   std::uint32_t n_locations_, n_routes_, n_rt_transports_;
   clasz_mask_t allowed_claszes_;
+  duration_t max_travel_time_;
 };
 
 }  // namespace nigiri::routing

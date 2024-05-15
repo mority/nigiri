@@ -11,18 +11,20 @@ namespace nigiri::routing {
 
 template <direction SearchDir>
 struct interval_estimator {
-  explicit interval_estimator(timetable const& tt, query const& q)
+  explicit interval_estimator(timetable const& tt,
+                              query const& q,
+                              duration_t max_travel_time)
       : tt_{tt}, q_{q} {
 
     auto const start_itv = std::visit(
-        utl::overloaded{[](unixtime_t const& ut) {
-                          return interval<unixtime_t>{ut, ut};
-                        },
-                        [](interval<unixtime_t> iut) { return iut; }},
+        utl::overloaded{
+            [](unixtime_t const& ut) { return interval<unixtime_t>{ut, ut}; },
+            [](interval<unixtime_t> iut) { return iut; }},
         q.start_time_);
 
-    data_type_max_interval_ = {start_itv.from_ - kMaxSearchIntervalSize,
-                               start_itv.from_ + kMaxSearchIntervalSize};
+    data_type_max_interval_ = {
+        start_itv.from_ - (kMaxSearchIntervalSize - max_travel_time),
+        start_itv.from_ + (kMaxSearchIntervalSize - max_travel_time)};
   }
 
   interval<unixtime_t> initial(interval<unixtime_t> const& itv) const {

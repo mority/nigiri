@@ -57,6 +57,8 @@ struct search {
   static constexpr auto const kBwd = (SearchDir == direction::kBackward);
 
   Algo init(clasz_mask_t const allowed_claszes, algo_state_t& algo_state) {
+    init_max_travel_time();
+
     stats_.fastest_direct_ =
         static_cast<std::uint64_t>(fastest_direct_.count());
 
@@ -67,7 +69,7 @@ struct search {
       UTL_START_TIMING(lb);
       dijkstra(tt_, q_,
                kFwd ? tt_.fwd_search_lb_graph_ : tt_.bwd_search_lb_graph_,
-               state_.travel_time_lower_bound_);
+               state_.travel_time_lower_bound_, max_travel_time_);
       for (auto i = 0U; i != tt_.n_locations(); ++i) {
         auto const lb = state_.travel_time_lower_bound_[i];
         for (auto const c : tt_.locations_.children_[location_idx_t{i}]) {
@@ -104,7 +106,8 @@ struct search {
         day_idx_t{std::chrono::duration_cast<date::days>(
                       search_interval_.from_ - tt_.internal_interval().from_)
                       .count()},
-        allowed_claszes};
+        allowed_claszes,
+        max_travel_time_};
   }
 
   search(timetable const& tt,
@@ -128,13 +131,7 @@ struct search {
             q_.start_time_)},
         fastest_direct_{get_fastest_direct(tt_, q_, SearchDir)},
         algo_{init(q_.allowed_claszes_, algo_state)},
-        timeout_(timeout) {
-    auto const dist_start_dest =
-        geo::distance(tt_.locations_.coordinates_[q_.start_[0].target()],
-                      tt_.locations_.coordinates_[q_.destination_[0].target()]);
-    if (dist_start_dest > 1'000'000.0) {
-    }
-  }
+        timeout_(timeout) {}
 
   routing_result<algo_stats_t> execute() {
     state_.results_.clear();
@@ -143,7 +140,8 @@ struct search {
       return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
-    auto const itv_est = interval_estimator<SearchDir>{tt_, q_};
+    auto const itv_est =
+        interval_estimator<SearchDir>{tt_, q_, max_travel_time_};
     search_interval_ = itv_est.initial(search_interval_);
 
     state_.starts_.clear();
@@ -246,7 +244,7 @@ struct search {
       utl::erase_if(state_.results_, [&](journey const& j) {
         return !search_interval_.contains(j.start_time_) ||
                j.travel_time() >= fastest_direct_ ||
-               j.travel_time() > kMaxTravelTime;
+               j.travel_time() > max_travel_time_;
       });
       utl::sort(state_.results_, [](journey const& a, journey const& b) {
         return a.start_time_ < b.start_time_;
@@ -361,6 +359,20 @@ private:
         });
   }
 
+  void init_max_travel_time() {
+    auto const dist_start_dest =
+        geo::distance(tt_.locations_.coordinates_[q_.start_[0].target()],
+                      tt_.locations_.coordinates_[q_.destination_[0].target()]);
+    if (dist_start_dest > 3'000'000.0) {
+      max_travel_time_ = 3_days;
+    } else if (dist_start_dest > 1'000'000.0) {
+      max_travel_time_ = duration_t{static_cast<duration_t::rep>(
+          (dist_start_dest / 1'000'000.0) * 1440U)};
+    } else {
+      max_travel_time_ = 1_days;
+    }
+  }
+
   timetable const& tt_;
   rt_timetable const* rtt_;
   search_state& state_;
@@ -370,7 +382,7 @@ private:
   duration_t fastest_direct_;
   Algo algo_;
   std::optional<std::chrono::seconds> timeout_;
-  duration_t max_travel_time_{1440U};
+  duration_t max_travel_time_;
 };
 
 }  // namespace nigiri::routing

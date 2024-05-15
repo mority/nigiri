@@ -59,6 +59,7 @@ void dijkstra(vecvec<NodeIdx, Edge> const& graph,
 void dijkstra(timetable const&,
               query const&,
               vecvec<location_idx_t, footpath> const& lb_graph,
-              std::vector<std::uint16_t>& dists);
+              std::vector<std::uint16_t>& dists,
+              duration_t max_travel_time);
 
 }  // namespace nigiri::routing
