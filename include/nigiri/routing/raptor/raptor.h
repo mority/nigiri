@@ -35,8 +35,6 @@ struct raptor {
   static constexpr auto const kFwd = (SearchDir == direction::kForward);
   static constexpr auto const kBwd = (SearchDir == direction::kBackward);
   static constexpr auto const kInvalid = kInvalidDelta<SearchDir>;
-  static constexpr auto const kUnreachable =
-      std::numeric_limits<std::uint16_t>::max();
   static constexpr auto const kIntermodalTarget =
       to_idx(get_special_station(special_station::kEnd));
 

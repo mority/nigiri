@@ -118,13 +118,13 @@ struct search {
         state_{s},
         q_{std::move(q)},
         search_interval_{std::visit(
-            utl::overloaded{
-                [](interval<unixtime_t> const start_interval) {
-                  return start_interval;
-                },
-                [](unixtime_t const start_time) {
-                  return interval<unixtime_t>{start_time, start_time};
-                }},
+            utl::overloaded{[](interval<unixtime_t> const start_interval) {
+                              return start_interval;
+                            },
+                            [](unixtime_t const start_time) {
+                              return interval<unixtime_t>{start_time,
+                                                          start_time};
+                            }},
             q_.start_time_)},
         fastest_direct_{get_fastest_direct(tt_, q_, SearchDir)},
         algo_{init(q_.allowed_claszes_, algo_state)},
@@ -133,7 +133,7 @@ struct search {
   routing_result<algo_stats_t> execute() {
     state_.results_.clear();
 
-    if (start_dest_overlap()) {
+    if (start_dest_overlap() || all_unreachable()) {
       return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
@@ -171,13 +171,13 @@ struct search {
             "timeout_reached={}\n",
             is_ontrip(), q_.extend_interval_earlier_, q_.extend_interval_later_,
             std::visit(
-                utl::overloaded{
-                    [](interval<unixtime_t> const& start_interval) {
-                      return start_interval;
-                    },
-                    [](unixtime_t const start_time) {
-                      return interval<unixtime_t>{start_time, start_time};
-                    }},
+                utl::overloaded{[](interval<unixtime_t> const& start_interval) {
+                                  return start_interval;
+                                },
+                                [](unixtime_t const start_time) {
+                                  return interval<unixtime_t>{start_time,
+                                                              start_time};
+                                }},
                 q_.start_time_),
             search_interval_, tt_.external_interval(), n_results_in_interval(),
             is_timeout_reached());
@@ -189,13 +189,13 @@ struct search {
             "number_of_results_in_interval={}\n",
             q_.extend_interval_earlier_, q_.extend_interval_later_,
             std::visit(
-                utl::overloaded{
-                    [](interval<unixtime_t> const& start_interval) {
-                      return start_interval;
-                    },
-                    [](unixtime_t const start_time) {
-                      return interval<unixtime_t>{start_time, start_time};
-                    }},
+                utl::overloaded{[](interval<unixtime_t> const& start_interval) {
+                                  return start_interval;
+                                },
+                                [](unixtime_t const start_time) {
+                                  return interval<unixtime_t>{start_time,
+                                                              start_time};
+                                }},
                 q_.start_time_),
             search_interval_, tt_.external_interval(), n_results_in_interval());
       }
@@ -284,6 +284,15 @@ private:
                     });
       return overlaps;
     });
+  }
+
+  bool all_unreachable() const {
+    for (auto const& o : q_.start_) {
+      if (state_.travel_time_lower_bound_[to_idx(o.target())] != kUnreachable) {
+        return false;
+      }
+    }
+    return true;
   }
 
   unsigned n_results_in_interval() const {
