@@ -39,6 +39,7 @@ struct raptor {
       std::numeric_limits<std::uint16_t>::max();
   static constexpr auto const kIntermodalTarget =
       to_idx(get_special_station(special_station::kEnd));
+  static constexpr auto const kAdditionalTransfers = 3U;
 
   static bool is_better(auto a, auto b) { return kFwd ? a < b : a > b; }
   static bool is_better_or_eq(auto a, auto b) { return kFwd ? a <= b : a >= b; }
@@ -107,7 +108,7 @@ struct raptor {
                unixtime_t const worst_time_at_dest,
                profile_idx_t const prf_idx,
                pareto_set<journey>& results) {
-    auto const end_k = std::min(max_transfers, kMaxTransfers) + 1U;
+    end_k_ = std::min(max_transfers, kMaxTransfers) + 1U;
 
     auto const d_worst_at_dest = unix_to_delta(base(), worst_time_at_dest);
     for (auto& time_at_dest : time_at_dest_) {
@@ -116,7 +117,7 @@ struct raptor {
 
     trace_print_init_state();
 
-    for (auto k = 1U; k != end_k; ++k) {
+    for (auto k = 1U; k != end_k_; ++k) {
       for (auto i = 0U; i != n_locations_; ++i) {
         state_.best_[i] = get_best(state_.round_times_[k][i], state_.best_[i]);
       }
@@ -174,7 +175,7 @@ struct raptor {
     }
 
     is_dest_.for_each_set_bit([&](auto const i) {
-      for (auto k = 1U; k != end_k; ++k) {
+      for (auto k = 1U; k != end_k_; ++k) {
         auto const dest_time = state_.round_times_[k][i];
         if (dest_time != kInvalid) {
           trace("ADDING JOURNEY: start={}, dest={} @ {}, transfers={}\n",
@@ -672,7 +673,16 @@ private:
 
   void update_time_at_dest(unsigned const k, delta_t const t) {
     for (auto i = k; i != time_at_dest_.size(); ++i) {
-      time_at_dest_[i] = get_best(time_at_dest_[i], t);
+      if (limit_end_k_) {
+        time_at_dest_[i] = get_best(time_at_dest_[i], t);
+      } else {
+        auto old_time_at_dest = time_at_dest_[i];
+        time_at_dest_[i] = get_best(time_at_dest_[i], t);
+        if (time_at_dest_[i] < old_time_at_dest) {
+          end_k_ = k + kAdditionalTransfers;
+          limit_end_k_ = true;
+        }
+      }
     }
   }
 
@@ -708,6 +718,8 @@ private:
   raptor_stats stats_;
   std::uint32_t n_locations_, n_routes_, n_rt_transports_;
   clasz_mask_t allowed_claszes_;
+  std::uint32_t end_k_;
+  bool limit_end_k_{false};
 };
 
 }  // namespace nigiri::routing
