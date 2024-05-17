@@ -442,6 +442,12 @@ private:
                                 state_.tmp_[l_idx], state_.best_[l_idx]);
         assert(by_transport != std::numeric_limits<delta_t>::min() &&
                by_transport != std::numeric_limits<delta_t>::max());
+        if (by_transport == std::numeric_limits<delta_t>::min() ||
+            by_transport == std::numeric_limits<delta_t>::max()) {
+          std::cout << "by_transport = " << by_transport
+                    << ", left numeric limits\n";
+          std::terminate();
+        }
         if (is_better(by_transport, current_best) &&
             is_better(by_transport, time_at_dest_[k]) &&
             lb_[l_idx] != kUnreachable &&

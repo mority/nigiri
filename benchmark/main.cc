@@ -347,6 +347,8 @@ int main(int argc, char* argv[]) {
     utl::parallel_for_run_threadlocal<query_state>(
         queries.size(),
         [&](auto& query_state, auto const q_idx) {
+          std::lock_guard<std::mutex> guard(mutex);
+          std::cout << "starting query " << q_idx << "\n";
           try {
             auto const total_time_start = std::chrono::steady_clock::now();
             auto const result =
@@ -356,11 +358,11 @@ int main(int argc, char* argv[]) {
                     queries[q_idx].q_}
                     .execute();
             auto const total_time_stop = std::chrono::steady_clock::now();
-            std::lock_guard<std::mutex> guard(mutex);
             results.emplace_back(
                 q_idx, result, *result.journeys_,
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                     total_time_stop - total_time_start));
+            std::cout << "finished query " << q_idx << "\n";
           } catch (const std::exception& e) {
             std::cout << e.what();
           }
