@@ -3,57 +3,46 @@
 #include "nigiri/routing/clasz_mask.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/raptor/raptor_state.h"
-#include "nigiri/routing/search.h"
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
+#include "search.h"
 
 namespace nigiri::routing {
 
-struct reachability_stats {
-  std::uint64_t n_footpaths_visited_{0ULL};
-  std::uint64_t n_routes_visited_{0ULL};
-};
-
 template <direction SearchDir>
 struct reachability {
-  using algo_stats_t = reachability_stats;
-
   static constexpr auto const kFwd = (SearchDir == direction::kForward);
   static constexpr auto const kBwd = (SearchDir == direction::kBackward);
   static constexpr auto const kUnreachable =
       std::numeric_limits<std::uint8_t>::max();
 
   reachability(timetable const& tt,
-               search_state& ss,
                raptor_state& rs,
-               clasz_mask_t const allowed_claszes)
-      : tt_{tt}, ss_{ss}, rs_{rs}, allowed_claszes_{allowed_claszes} {
-    ss_.transports_to_dest_.resize(tt_.n_locations());
+               clasz_mask_t allowed_claszes)
+      : tt_{tt}, rs_{rs}, allowed_claszes_{allowed_claszes} {}
+
+  void execute(bitvec const& is_dest,
+               std::vector<std::uint8_t>& transports_to_dest,
+               std::uint8_t const max_transfers,
+               profile_idx_t const prf_idx) {
     rs_.station_mark_.resize(tt_.n_locations());
-    rs_.prev_station_mark_.resize((tt_.n_locations()));
-    rs_.route_mark_.resize(tt_.n_routes());
-  }
-
-  void reset() {
-    utl::fill(ss_.transports_to_dest_, kUnreachable);
-    utl::fill(rs_.prev_station_mark_.blocks_, 0U);
     utl::fill(rs_.station_mark_.blocks_, 0U);
+    rs_.prev_station_mark_.resize((tt_.n_locations()));
+    utl::fill(rs_.prev_station_mark_.blocks_, 0U);
+    rs_.route_mark_.resize(tt_.n_routes());
     utl::fill(rs_.route_mark_.blocks_, 0U);
-  }
+    transports_to_dest.resize(tt_.n_locations());
+    utl::fill(transports_to_dest, kUnreachable);
 
-  void add_dest(location_idx_t const l) {
-    rs_.station_mark_.set(to_idx(l), true);
-  }
-
-  void execute(std::uint8_t const max_transfers, profile_idx_t const prf_idx) {
+    rs_.station_mark_ |= is_dest;
     auto const end_k = std::min(max_transfers, kMaxTransfers);
 
     for (auto k = std::uint8_t{0U}; k != end_k; ++k) {
 
       auto any_marked = false;
       rs_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-        if (ss_.transports_to_dest_[i] == kUnreachable) {
-          ss_.transports_to_dest_[i] = k;
+        if (transports_to_dest[i] == kUnreachable) {
+          transports_to_dest[i] = k;
         }
         for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
           any_marked = true;
@@ -99,7 +88,6 @@ private:
         }
       }
 
-      ++stats_.n_routes_visited_;
       any_marked |= update_route(r);
     });
     return any_marked;
@@ -144,16 +132,13 @@ private:
       auto const& fps = kFwd ? tt_.locations_.footpaths_out_[prf_idx][l_idx]
                              : tt_.locations_.footpaths_in_[prf_idx][l_idx];
       for (auto const& fp : fps) {
-        ++stats_.n_footpaths_visited_;
         rs_.station_mark_.set(to_idx(fp.target()), true);
       }
     });
   }
 
   timetable const& tt_;
-  search_state& ss_;
   raptor_state& rs_;
-  reachability_stats stats_;
   clasz_mask_t allowed_claszes_;
 };
 
