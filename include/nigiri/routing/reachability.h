@@ -9,13 +9,13 @@ namespace nigiri::routing {
 
 struct reachability_state {
   void resize(unsigned n_locations, unsigned n_routes) {
-    location_transfers_.resize(n_locations);
+    transports_to_dest_.resize(n_locations);
     station_mark_.resize(n_locations);
     prev_station_mark_.resize(n_locations);
     route_mark_.resize(n_routes);
   }
 
-  std::vector<std::uint8_t> location_transfers_;
+  std::vector<std::uint8_t> transports_to_dest_;
   bitvec station_mark_;
   bitvec prev_station_mark_;
   bitvec route_mark_;
@@ -48,7 +48,7 @@ struct reachability {
   }
 
   void reset() {
-    utl::fill(state_.location_transfers_, kUnreachable);
+    utl::fill(state_.transports_to_dest_, kUnreachable);
     utl::fill(state_.prev_station_mark_.blocks_, 0U);
     utl::fill(state_.station_mark_.blocks_, 0U);
     utl::fill(state_.route_mark_.blocks_, 0U);
@@ -59,12 +59,15 @@ struct reachability {
   }
 
   void execute(std::uint8_t const max_transfers, profile_idx_t const prf_idx) {
-    auto const end_k = std::min(max_transfers, kMaxTransfers) + 1U;
+    auto const end_k = std::min(max_transfers, kMaxTransfers);
 
-    for (auto k = 1U; k != end_k; ++k) {
+    for (auto k = std::uint8_t{0U}; k != end_k; ++k) {
 
       auto any_marked = false;
       state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+        if (state_.transports_to_dest_[i] == kUnreachable) {
+          state_.transports_to_dest_[i] = k;
+        }
         for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
           any_marked = true;
           state_.route_mark_.set(to_idx(r), true);
@@ -79,8 +82,8 @@ struct reachability {
       utl::fill(state_.station_mark_.blocks_, 0U);
 
       any_marked = (allowed_claszes_ == all_clasz_allowed())
-                       ? loop_routes<false>(k)
-                       : loop_routes<true>(k);
+                       ? loop_routes<false>()
+                       : loop_routes<true>();
 
       if (!any_marked) {
         break;
@@ -98,7 +101,7 @@ struct reachability {
 
 private:
   template <bool WithClaszFilter>
-  bool loop_routes(unsigned const k) {
+  bool loop_routes() {
     auto any_marked = false;
     state_.route_mark_.for_each_set_bit([&](auto const r_idx) {
       auto const r = route_idx_t{r_idx};
@@ -110,12 +113,12 @@ private:
       }
 
       ++stats_.n_routes_visited_;
-      any_marked |= update_route(k, r);
+      any_marked |= update_route(r);
     });
     return any_marked;
   }
 
-  bool update_route(unsigned const k, route_idx_t const r) {
+  bool update_route(route_idx_t const r) {
     auto const stop_seq = tt_.route_location_seq_[r];
     bool any_marked = false;
 
@@ -141,9 +144,7 @@ private:
         continue;
       }
 
-      if (state_.location_transfers_[l_idx] == kUnreachable) {
-        state_.location_transfers_[l_idx] = k;
-      }
+      found_reached = true;
     }
     return any_marked;
   }
