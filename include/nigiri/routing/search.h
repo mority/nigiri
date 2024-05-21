@@ -13,6 +13,7 @@
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
+#include "nigiri/routing/reachability.h"
 #include "nigiri/routing/start_times.h"
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
@@ -32,6 +33,7 @@ struct search_state {
   std::vector<std::uint16_t> dist_to_dest_;
   std::vector<start> starts_;
   pareto_set<journey> results_;
+  std::vector<std::uint8_t> transports_to_dest_;
 };
 
 struct search_stats {
@@ -39,6 +41,7 @@ struct search_stats {
   std::uint64_t fastest_direct_{0ULL};
   std::uint64_t interval_extensions_{0ULL};
   std::chrono::milliseconds execute_time_{0LL};  // [ms]
+  std::chrono::milliseconds reachability_time_{0ULL};
 };
 
 template <typename AlgoStats>
@@ -62,6 +65,20 @@ struct search {
 
     collect_destinations(tt_, q_.destination_, q_.dest_match_mode_,
                          state_.is_destination_, state_.dist_to_dest_);
+
+    auto reachability_time_start = std::chrono::steady_clock::now();
+    if constexpr (kFwd) {
+      reachability<direction::kBackward>(tt_, algo_state, allowed_claszes)
+          .execute(state_.is_destination_, state_.transports_to_dest_,
+                   q_.max_transfers_, q_.prf_idx_);
+    } else {
+      reachability<direction::kForward>(tt_, algo_state, allowed_claszes)
+          .execute(state_.is_destination_, state_.transports_to_dest_,
+                   q_.max_transfers_, q_.prf_idx_);
+    }
+    stats_.reachability_time_ =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - reachability_time_start);
 
     if constexpr (Algo::kUseLowerBounds) {
       UTL_START_TIMING(lb);
@@ -134,6 +151,11 @@ struct search {
     state_.results_.clear();
 
     if (start_dest_overlap()) {
+      return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
+    }
+
+    if (!can_reach()) {
+      std::cout << "No start can reach a destination\n";
       return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
@@ -287,6 +309,21 @@ private:
                     });
       return overlaps;
     });
+  }
+
+  bool can_reach() const {
+    for (auto const& o : q_.start_) {
+      if (state_.transports_to_dest_[to_idx(o.target_)] <= kMaxTransfers + 1U) {
+        std::cout << "start: "
+                  << std::string_view{begin(tt_.locations_.ids_[o.target()]),
+                                      end(tt_.locations_.ids_[o.target()])}
+                  << ", reaches a destination with "
+                  << state_.transports_to_dest_[to_idx(o.target_)]
+                  << " transports\n";
+        return true;
+      }
+    }
+    return false;
   }
 
   unsigned n_results_in_interval() const {
