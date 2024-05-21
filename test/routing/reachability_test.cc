@@ -21,19 +21,20 @@ TEST(routing, reachability_forward) {
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
-  auto state = reachability_state{};
-  auto r = reachability<direction::kForward>{tt, state, all_clasz_allowed()};
+  auto ss = search_state{};
+  auto rs = raptor_state{};
+  auto r = reachability<direction::kForward>{tt, ss, rs, all_clasz_allowed()};
   r.reset();
   r.add_dest(tt.locations_.location_id_to_idx_.at({"0000001", src}));
   r.execute(kMaxTransfers, 0);
 
-  EXPECT_EQ(state.transports_to_dest_
+  EXPECT_EQ(ss.transports_to_dest_
                 [tt.locations_.location_id_to_idx_.at({"0000001", src}).v_],
             0);
-  EXPECT_EQ(state.transports_to_dest_
+  EXPECT_EQ(ss.transports_to_dest_
                 [tt.locations_.location_id_to_idx_.at({"0000002", src}).v_],
             1);
-  EXPECT_EQ(state.transports_to_dest_
+  EXPECT_EQ(ss.transports_to_dest_
                 [tt.locations_.location_id_to_idx_.at({"0000003", src}).v_],
             2);
 }
@@ -46,19 +47,20 @@ TEST(routing, reachability_backward) {
   load_timetable(src, loader::hrd::hrd_5_20_26, files_abc(), tt);
   finalize(tt);
 
-  auto state = reachability_state{};
-  auto r = reachability<direction::kBackward>{tt, state, all_clasz_allowed()};
+  auto ss = search_state{};
+  auto rs = raptor_state{};
+  auto r = reachability<direction::kBackward>{tt, ss, rs, all_clasz_allowed()};
   r.reset();
   r.add_dest(tt.locations_.location_id_to_idx_.at({"0000003", src}));
   r.execute(kMaxTransfers, 0);
 
-  EXPECT_EQ(state.transports_to_dest_
+  EXPECT_EQ(ss.transports_to_dest_
                 [tt.locations_.location_id_to_idx_.at({"0000003", src}).v_],
             0);
-  EXPECT_EQ(state.transports_to_dest_
+  EXPECT_EQ(ss.transports_to_dest_
                 [tt.locations_.location_id_to_idx_.at({"0000002", src}).v_],
             1);
-  EXPECT_EQ(state.transports_to_dest_
+  EXPECT_EQ(ss.transports_to_dest_
                 [tt.locations_.location_id_to_idx_.at({"0000001", src}).v_],
             2);
 }
