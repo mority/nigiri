@@ -154,11 +154,6 @@ struct search {
       return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
-    if (!can_reach()) {
-      std::cout << "No start can reach a destination\n";
-      return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
-    }
-
     auto const itv_est = interval_estimator<SearchDir>{tt_, q_};
     search_interval_ = itv_est.initial(search_interval_);
 
@@ -306,21 +301,6 @@ private:
                     });
       return overlaps;
     });
-  }
-
-  bool can_reach() const {
-    for (auto const& o : q_.start_) {
-      if (state_.transports_to_dest_[to_idx(o.target_)] <= kMaxTransfers + 1U) {
-        std::cout << "start: "
-                  << std::string_view{begin(tt_.locations_.ids_[o.target()]),
-                                      end(tt_.locations_.ids_[o.target()])}
-                  << ", reaches a destination with "
-                  << state_.transports_to_dest_[to_idx(o.target_)]
-                  << " transports\n";
-        return true;
-      }
-    }
-    return false;
   }
 
   unsigned n_results_in_interval() const {
