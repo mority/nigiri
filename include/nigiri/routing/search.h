@@ -92,15 +92,6 @@ struct search {
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - reachability_time_start);
 
-    for (auto i = 0U; i < state_.dist_to_dest_.size(); ++i) {
-      std::cout << "location: "
-                << std::string_view{begin(
-                                        tt_.locations_.ids_[location_idx_t{i}]),
-                                    end(tt_.locations_.ids_[location_idx_t{i}])}
-                << ", transports_to_dest: "
-                << unsigned(state_.transports_to_dest_[i]) << "\n";
-    }
-
     if constexpr (Algo::kUseLowerBounds) {
       UTL_START_TIMING(lb);
       dijkstra(tt_, q_,

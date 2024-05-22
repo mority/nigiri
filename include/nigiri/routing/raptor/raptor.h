@@ -435,19 +435,24 @@ private:
           to_unix(state_.round_times_[k - 1][l_idx]),
           to_unix(state_.best_[l_idx]), to_unix(state_.tmp_[l_idx]));
 
+      // won't reach a destination from this location
+      if (end_k_ <= k + transports_to_dest_[l_idx]) {
+        continue;
+      }
+
       auto current_best = kInvalid;
       if (et.is_valid() && (kFwd ? stp.out_allowed() : stp.in_allowed())) {
         auto const by_transport = time_at_stop(
             r, et, stop_idx, kFwd ? event_type::kArr : event_type::kDep);
-        current_best = get_best(state_.round_times_[k - 1][l_idx],
+        current_best = get_best(state_.round_times_[k - 1][l_idx] +,
                                 state_.tmp_[l_idx], state_.best_[l_idx]);
         assert(by_transport != std::numeric_limits<delta_t>::min() &&
                by_transport != std::numeric_limits<delta_t>::max());
         if (is_better(by_transport, current_best) &&
             is_better(by_transport, time_at_dest_[k]) &&
             lb_[l_idx] != kUnreachable &&
-            k + transports_to_dest_[l_idx] < end_k_ &&
-            is_better(by_transport + dir(lb_[l_idx]), time_at_dest_[k])) {
+            is_better(by_transport + dir(lb_[l_idx]),
+                      time_at_dest_[k + transports_to_dest_[l_idx]])) {
           trace_upd(
               "┊ │k={}    name={}, dbg={}, time_by_transport={}, BETTER THAN "
               "current_best={} => update, {} marking station {}!\n",
