@@ -12,7 +12,8 @@ namespace nigiri::routing {
 template <direction SearchDir>
 struct reachability {
   static constexpr auto const kFwd = (SearchDir == direction::kForward);
-  static constexpr auto const kBwd = (SearchDir == direction::kBackward);
+  static constexpr auto const kUnreachable =
+      std::numeric_limits<std::uint16_t>::max();
   static constexpr auto const kUnreached =
       std::numeric_limits<std::uint8_t>::max();
 
@@ -25,12 +26,20 @@ struct reachability {
         transports_to_dest_{transports_to_dest},
         allowed_claszes_{allowed_claszes} {}
 
-  void execute(bitvec const& is_dest,
+  void execute(std::variant<bitvec, std::vector<std::uint16_t>> const& dest,
                std::uint8_t const max_transfers,
                profile_idx_t const prf_idx) {
     // prepare state
     rs_.station_mark_.resize(tt_.n_locations());
-    rs_.station_mark_ = is_dest;
+    std::visit(utl::overloaded{
+                   [&](bitvec const& is_dest) { rs_.station_mark_ = is_dest; },
+                   [&](std::vector<std::uint16_t> const& dist_to_dest) {
+                     for (auto i = 0U; i != dist_to_dest.size(); ++i) {
+                       rs_.station_mark_.set(i,
+                                             dist_to_dest[i] != kUnreachable);
+                     }
+                   }},
+               dest);
     rs_.prev_station_mark_.resize((tt_.n_locations()));
     utl::fill(rs_.prev_station_mark_.blocks_, 0U);
     rs_.route_mark_.resize(tt_.n_routes());
