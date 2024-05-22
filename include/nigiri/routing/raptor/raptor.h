@@ -55,6 +55,7 @@ struct raptor {
          bitvec& is_dest,
          std::vector<std::uint16_t>& dist_to_dest,
          std::vector<std::uint16_t>& lb,
+         std::vector<std::uint8_t> const& transports_to_dest,
          day_idx_t const base,
          clasz_mask_t const allowed_claszes)
       : tt_{tt},
@@ -63,6 +64,7 @@ struct raptor {
         is_dest_{is_dest},
         dist_to_end_{dist_to_dest},
         lb_{lb},
+        transports_to_dest_{transports_to_dest},
         base_{base},
         n_days_{tt_.internal_interval_days().size().count()},
         n_locations_{tt_.n_locations()},
@@ -107,7 +109,7 @@ struct raptor {
                unixtime_t const worst_time_at_dest,
                profile_idx_t const prf_idx,
                pareto_set<journey>& results) {
-    auto const end_k = std::min(max_transfers, kMaxTransfers) + 1U;
+    end_k_ = std::min(max_transfers, kMaxTransfers) + 1U;
 
     auto const d_worst_at_dest = unix_to_delta(base(), worst_time_at_dest);
     for (auto& time_at_dest : time_at_dest_) {
@@ -116,7 +118,7 @@ struct raptor {
 
     trace_print_init_state();
 
-    for (auto k = 1U; k != end_k; ++k) {
+    for (auto k = 1U; k != end_k_; ++k) {
       for (auto i = 0U; i != n_locations_; ++i) {
         state_.best_[i] = get_best(state_.round_times_[k][i], state_.best_[i]);
       }
@@ -174,7 +176,7 @@ struct raptor {
     }
 
     is_dest_.for_each_set_bit([&](auto const i) {
-      for (auto k = 1U; k != end_k; ++k) {
+      for (auto k = 1U; k != end_k_; ++k) {
         auto const dest_time = state_.round_times_[k][i];
         if (dest_time != kInvalid) {
           trace("ADDING JOURNEY: start={}, dest={} @ {}, transfers={}\n",
@@ -444,6 +446,7 @@ private:
         if (is_better(by_transport, current_best) &&
             is_better(by_transport, time_at_dest_[k]) &&
             lb_[l_idx] != kUnreachable &&
+            k + transports_to_dest_[l_idx] < end_k_ &&
             is_better(by_transport + dir(lb_[l_idx]), time_at_dest_[k])) {
           trace_upd(
               "┊ │k={}    name={}, dbg={}, time_by_transport={}, BETTER THAN "
@@ -702,7 +705,9 @@ private:
   bitvec& is_dest_;
   std::vector<std::uint16_t>& dist_to_end_;
   std::vector<std::uint16_t>& lb_;
+  std::vector<std::uint8_t> const& transports_to_dest_;
   std::array<delta_t, kMaxTransfers + 1> time_at_dest_;
+  std::uint32_t end_k_;
   day_idx_t base_;
   int n_days_;
   raptor_stats stats_;

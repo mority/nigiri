@@ -68,17 +68,38 @@ struct search {
 
     auto reachability_time_start = std::chrono::steady_clock::now();
     if constexpr (kFwd) {
-      reachability<direction::kBackward>(tt_, algo_state, allowed_claszes)
-          .execute(state_.is_destination_, state_.transports_to_dest_,
-                   q_.max_transfers_, q_.prf_idx_);
+      if (q_.dest_match_mode_ == location_match_mode::kIntermodal) {
+        reachability<direction::kBackward>(
+            tt_, algo_state, state_.transports_to_dest_, allowed_claszes)
+            .execute(state_.dist_to_dest_, q_.max_transfers_, q_.prf_idx_);
+      } else {
+        reachability<direction::kBackward>(
+            tt_, algo_state, state_.transports_to_dest_, allowed_claszes)
+            .execute(state_.is_destination_, q_.max_transfers_, q_.prf_idx_);
+      }
     } else {
-      reachability<direction::kForward>(tt_, algo_state, allowed_claszes)
-          .execute(state_.is_destination_, state_.transports_to_dest_,
-                   q_.max_transfers_, q_.prf_idx_);
+      if (q_.dest_match_mode_ == location_match_mode::kIntermodal) {
+        reachability<direction::kForward>(
+            tt_, algo_state, state_.transports_to_dest_, allowed_claszes)
+            .execute(state_.dist_to_dest_, q_.max_transfers_, q_.prf_idx_);
+      } else {
+        reachability<direction::kForward>(
+            tt_, algo_state, state_.transports_to_dest_, allowed_claszes)
+            .execute(state_.is_destination_, q_.max_transfers_, q_.prf_idx_);
+      }
     }
     stats_.reachability_time_ =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - reachability_time_start);
+
+    for (auto i = 0U; i < state_.dist_to_dest_.size(); ++i) {
+      std::cout << "location: "
+                << std::string_view{begin(
+                                        tt_.locations_.ids_[location_idx_t{i}]),
+                                    end(tt_.locations_.ids_[location_idx_t{i}])}
+                << ", transports_to_dest: "
+                << unsigned(state_.transports_to_dest_[i]) << "\n";
+    }
 
     if constexpr (Algo::kUseLowerBounds) {
       UTL_START_TIMING(lb);
@@ -118,6 +139,7 @@ struct search {
         state_.is_destination_,
         state_.dist_to_dest_,
         state_.travel_time_lower_bound_,
+        state_.transports_to_dest_,
         day_idx_t{std::chrono::duration_cast<date::days>(
                       search_interval_.from_ - tt_.internal_interval().from_)
                       .count()},
@@ -151,11 +173,6 @@ struct search {
     state_.results_.clear();
 
     if (start_dest_overlap()) {
-      return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
-    }
-
-    if (!can_reach()) {
-      std::cout << "No start can reach a destination\n";
       return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
     }
 
@@ -309,21 +326,6 @@ private:
                     });
       return overlaps;
     });
-  }
-
-  bool can_reach() const {
-    for (auto const& o : q_.start_) {
-      if (state_.transports_to_dest_[to_idx(o.target_)] <= kMaxTransfers + 1U) {
-        std::cout << "start: "
-                  << std::string_view{begin(tt_.locations_.ids_[o.target()]),
-                                      end(tt_.locations_.ids_[o.target()])}
-                  << ", reaches a destination with "
-                  << state_.transports_to_dest_[to_idx(o.target_)]
-                  << " transports\n";
-        return true;
-      }
-    }
-    return false;
   }
 
   unsigned n_results_in_interval() const {

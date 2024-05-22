@@ -12,38 +12,50 @@ namespace nigiri::routing {
 template <direction SearchDir>
 struct reachability {
   static constexpr auto const kFwd = (SearchDir == direction::kForward);
-  static constexpr auto const kBwd = (SearchDir == direction::kBackward);
   static constexpr auto const kUnreachable =
+      std::numeric_limits<std::uint16_t>::max();
+  static constexpr auto const kUnreached =
       std::numeric_limits<std::uint8_t>::max();
 
   reachability(timetable const& tt,
                raptor_state& rs,
-               clasz_mask_t allowed_claszes)
-      : tt_{tt}, rs_{rs}, allowed_claszes_{allowed_claszes} {}
-
-  void execute(bitvec const& is_dest,
                std::vector<std::uint8_t>& transports_to_dest,
+               clasz_mask_t allowed_claszes)
+      : tt_{tt},
+        rs_{rs},
+        transports_to_dest_{transports_to_dest},
+        allowed_claszes_{allowed_claszes} {}
+
+  void execute(std::variant<bitvec, std::vector<std::uint16_t>> const& dest,
                std::uint8_t const max_transfers,
                profile_idx_t const prf_idx) {
+    // prepare state
     rs_.station_mark_.resize(tt_.n_locations());
-    utl::fill(rs_.station_mark_.blocks_, 0U);
+    std::visit(utl::overloaded{
+                   [&](bitvec const& is_dest) { rs_.station_mark_ = is_dest; },
+                   [&](std::vector<std::uint16_t> const& dist_to_dest) {
+                     for (auto i = 0U; i != dist_to_dest.size(); ++i) {
+                       rs_.station_mark_.set(i,
+                                             dist_to_dest[i] != kUnreachable);
+                     }
+                   }},
+               dest);
     rs_.prev_station_mark_.resize((tt_.n_locations()));
     utl::fill(rs_.prev_station_mark_.blocks_, 0U);
     rs_.route_mark_.resize(tt_.n_routes());
     utl::fill(rs_.route_mark_.blocks_, 0U);
-    transports_to_dest.resize(tt_.n_locations());
-    utl::fill(transports_to_dest, kUnreachable);
+    transports_to_dest_.resize(tt_.n_locations());
+    utl::fill(transports_to_dest_, kUnreached);
 
-    rs_.station_mark_ |= is_dest;
-    auto const end_k = std::min(max_transfers, kMaxTransfers);
+    // init
+    rs_.station_mark_.for_each_set_bit(
+        [&](std::uint64_t const i) { transports_to_dest_[i] = 0; });
+    end_k_ = std::min(max_transfers, kMaxTransfers) + 1U;
 
-    for (auto k = std::uint8_t{0U}; k != end_k; ++k) {
-
+    // rounds
+    for (auto k = std::uint8_t{1U}; k != end_k_; ++k) {
       auto any_marked = false;
       rs_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-        if (transports_to_dest[i] == kUnreachable) {
-          transports_to_dest[i] = k;
-        }
         for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
           any_marked = true;
           rs_.route_mark_.set(to_idx(r), true);
@@ -58,8 +70,8 @@ struct reachability {
       utl::fill(rs_.station_mark_.blocks_, 0U);
 
       any_marked = (allowed_claszes_ == all_clasz_allowed())
-                       ? loop_routes<false>()
-                       : loop_routes<true>();
+                       ? loop_routes<false>(k)
+                       : loop_routes<true>(k);
 
       if (!any_marked) {
         break;
@@ -68,16 +80,15 @@ struct reachability {
       utl::fill(rs_.route_mark_.blocks_, 0U);
 
       std::swap(rs_.prev_station_mark_, rs_.station_mark_);
-      utl::fill(rs_.station_mark_.blocks_, 0U);
 
-      update_transfers();
-      update_footpaths(prf_idx);
+      rs_.station_mark_ = rs_.prev_station_mark_;  // update_transfers();
+      update_footpaths(k, prf_idx);
     }
   }
 
 private:
   template <bool WithClaszFilter>
-  bool loop_routes() {
+  bool loop_routes(std::uint8_t const k) {
     auto any_marked = false;
     rs_.route_mark_.for_each_set_bit([&](auto const r_idx) {
       auto const r = route_idx_t{r_idx};
@@ -88,16 +99,16 @@ private:
         }
       }
 
-      any_marked |= update_route(r);
+      any_marked |= update_route(r, k);
     });
     return any_marked;
   }
 
-  bool update_route(route_idx_t const r) {
+  bool update_route(route_idx_t const r, std::uint8_t const k) {
     auto const stop_seq = tt_.route_location_seq_[r];
     bool any_marked = false;
 
-    auto found_reached = false;
+    auto found_prev_mark = false;
     for (auto i = 0U; i != stop_seq.size(); ++i) {
       auto const stop_idx =
           static_cast<stop_idx_t>(kFwd ? i : stop_seq.size() - i - 1U);
@@ -105,11 +116,13 @@ private:
       auto const l_idx = cista::to_idx(stp.location_idx());
       auto const is_last = i == stop_seq.size() - 1U;
 
-      if (!found_reached && !rs_.prev_station_mark_[l_idx]) {
+      if (!found_prev_mark && !rs_.prev_station_mark_[l_idx]) {
         continue;
       }
 
-      if (found_reached && (kFwd ? stp.out_allowed() : stp.in_allowed())) {
+      if (found_prev_mark && (kFwd ? stp.out_allowed() : stp.in_allowed()) &&
+          transports_to_dest_[l_idx] == kUnreached) {
+        transports_to_dest_[l_idx] = k;
         rs_.station_mark_.set(l_idx, true);
         any_marked = true;
       }
@@ -119,27 +132,31 @@ private:
         continue;
       }
 
-      found_reached = true;
+      found_prev_mark = true;
     }
     return any_marked;
   }
 
-  void update_transfers() { rs_.station_mark_ |= rs_.prev_station_mark_; }
-
-  void update_footpaths(profile_idx_t const prf_idx) {
+  void update_footpaths(std::uint8_t const k, profile_idx_t const prf_idx) {
     rs_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       auto const l_idx = location_idx_t{i};
       auto const& fps = kFwd ? tt_.locations_.footpaths_out_[prf_idx][l_idx]
                              : tt_.locations_.footpaths_in_[prf_idx][l_idx];
       for (auto const& fp : fps) {
-        rs_.station_mark_.set(to_idx(fp.target()), true);
+        auto const l_idx_fp = to_idx(fp.target());
+        if (transports_to_dest_[l_idx_fp] == kUnreached) {
+          transports_to_dest_[l_idx_fp] = k;
+          rs_.station_mark_.set(l_idx_fp, true);
+        }
       }
     });
   }
 
   timetable const& tt_;
   raptor_state& rs_;
+  std::vector<std::uint8_t>& transports_to_dest_;
   clasz_mask_t allowed_claszes_;
+  std::uint8_t end_k_;
 };
 
 }  // namespace nigiri::routing
