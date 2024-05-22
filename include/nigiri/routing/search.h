@@ -68,13 +68,13 @@ struct search {
 
     auto reachability_time_start = std::chrono::steady_clock::now();
     if constexpr (kFwd) {
-      reachability<direction::kBackward>(tt_, algo_state, allowed_claszes)
-          .execute(state_.is_destination_, state_.transports_to_dest_,
-                   q_.max_transfers_, q_.prf_idx_);
+      reachability<direction::kBackward>(
+          tt_, algo_state, state_.transports_to_dest_, allowed_claszes)
+          .execute(state_.is_destination_, q_.max_transfers_, q_.prf_idx_);
     } else {
-      reachability<direction::kForward>(tt_, algo_state, allowed_claszes)
-          .execute(state_.is_destination_, state_.transports_to_dest_,
-                   q_.max_transfers_, q_.prf_idx_);
+      reachability<direction::kForward>(
+          tt_, algo_state, state_.transports_to_dest_, allowed_claszes)
+          .execute(state_.is_destination_, q_.max_transfers_, q_.prf_idx_);
     }
     stats_.reachability_time_ =
         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -118,6 +118,7 @@ struct search {
         state_.is_destination_,
         state_.dist_to_dest_,
         state_.travel_time_lower_bound_,
+        state_.transports_to_dest_,
         day_idx_t{std::chrono::duration_cast<date::days>(
                       search_interval_.from_ - tt_.internal_interval().from_)
                       .count()},
