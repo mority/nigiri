@@ -23,26 +23,34 @@ std::vector<std::unique_ptr<loader_interface>> get_loaders() {
 }
 
 timetable load(std::vector<std::filesystem::path> const& paths,
-               loader_config const& config,
-               interval<date::sys_days> const& date_range) {
+               loader_config const& c,
+               interval<date::sys_days> const& date_range,
+               bool ignore) {
   auto const loaders = get_loaders();
 
   auto tt = timetable{};
   tt.date_range_ = date_range;
   register_special_stations(tt);
 
+  auto global_bitfield_indices = hash_map<bitfield, bitfield_idx_t>{};
+
   for (auto const [idx, p] : utl::enumerate(paths)) {
     auto const src = source_idx_t{idx};
     auto const dir = make_dir(p);
     auto const loader_it =
         utl::find_if(loaders, [&](auto&& l) { return l->applicable(*dir); });
-    utl::verify(loader_it != end(loaders), "no loader for {} found",
-                p.string());
-    log(log_lvl::info, "loader.load", "loading {}", p.string());
-    (*loader_it)->load(config, src, *dir, tt);
+    if (loader_it != end(loaders)) {
+      log(log_lvl::info, "loader.load", "loading {}", p.string());
+      (*loader_it)->load(c, src, *dir, tt, global_bitfield_indices);
+    } else if (!ignore) {
+      throw utl::fail("no loader for {} found", p.string());
+    } else {
+      log(log_lvl::error, "loader.load", "no loader for {} found", p.string());
+    }
   }
 
-  finalize(tt);
+  finalize(tt, c.adjust_footpaths_, c.merge_duplicates_,
+           c.max_footpath_length_);
 
   return tt;
 }
