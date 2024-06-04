@@ -8,13 +8,15 @@
 #include "utl/parallel_for.h"
 #include "utl/progress_tracker.h"
 
-#include "nigiri/loader/load.h"
-#include "nigiri/loader/loader_interface.h"
 #include "nigiri/logging.h"
 #include "nigiri/query_generator/generator.h"
 #include "nigiri/routing/raptor/raptor.h"
 #include "nigiri/routing/search.h"
 #include "nigiri/timetable.h"
+#include "nigiri/types.h"
+
+using namespace nigiri;
+using namespace nigiri::routing;
 
 nigiri::pareto_set<nigiri::routing::journey> raptor_search(
     nigiri::timetable const& tt, nigiri::routing::query q) {
@@ -65,12 +67,21 @@ std::optional<geo::box> parse_bbox(std::string const& str) {
              latlng{std::stod(tokens[2]), std::stod(tokens[3])}};
 }
 
+std::optional<geo::latlng> parse_coord(std::string const& str) {
+  using namespace geo;
+
+  auto const coord_regex =
+      std::regex{"^[-+]?[0-9]*\\.?[0-9]+,[-+]?[0-9]*\\.?[0-9]+"};
+  if (!std::regex_match(begin(str), end(str), coord_regex)) {
+    return std::nullopt;
+  }
+  auto const tokens = tokenize(str, ',', 2U);
+  return latlng{std::stod(tokens[0]), std::stod(tokens[1])};
+}
+
 // needs sorted vector
 template <typename T>
 T quantile(std::vector<T> const& v, double q) {
-  if (v.empty()) {
-    return 0;
-  }
   q = q < 0.0 ? 0.0 : q;
   q = 1.0 < q ? 1.0 : q;
   if (q == 1.0) {
@@ -79,54 +90,106 @@ T quantile(std::vector<T> const& v, double q) {
   return v[static_cast<std::size_t>(v.size() * q)];
 }
 
-template <typename T>
-void print_stats(std::vector<T> const& var, std::string const& var_name) {
-  if (var.empty()) {
-    std::cout << "Info: prints_stats for " << var_name
-              << ": Input empty, no statistics to display\n";
-    return;
+struct benchmark_result {
+  friend std::ostream& operator<<(std::ostream& out,
+                                  benchmark_result const& br) {
+    out << "(t_total: " << std::fixed << std::setprecision(3) << std::setw(9)
+        << std::chrono::duration_cast<
+               std::chrono::duration<double, std::ratio<1>>>(br.total_time_)
+        << ", t_exec: " << std::setw(9)
+        << std::chrono::duration_cast<
+               std::chrono::duration<double, std::ratio<1>>>(
+               br.routing_result_.search_stats_.execute_time_)
+        << ", intvl_ext: " << std::setw(2)
+        << br.routing_result_.search_stats_.interval_extensions_
+        << ", intvl_size: " << std::setw(5)
+        << std::chrono::duration_cast<
+               std::chrono::duration<std::uint32_t, std::ratio<3600>>>(
+               br.routing_result_.interval_.size())
+        << ", #jrny: " << std::setfill(' ') << std::setw(2)
+        << br.journeys_.size() << ")";
+    return out;
   }
+
+  std::uint64_t q_idx_;
+  routing_result<raptor_stats> routing_result_;
+  pareto_set<journey> journeys_;
+  std::chrono::milliseconds total_time_;
+};
+
+void print_results(std::vector<benchmark_result> const& var,
+                   std::string const& var_name) {
   std::cout << "\n--- " << var_name << " --- (n = " << var.size() << ")"
-            << "\n  25%: " << std::setw(12) << quantile(var, 0.25)
-            << "\n  50%: " << std::setw(12) << quantile(var, 0.5)
-            << "\n  75%: " << std::setw(12) << quantile(var, 0.75)
-            << "\n  90%: " << std::setw(12) << quantile(var, 0.9)
-            << "\n  99%: " << std::setw(12) << quantile(var, 0.99)
-            << "\n99.9%: " << std::setw(12) << quantile(var, 0.999)
-            << "\n  max: " << std::setw(12) << var.back()
+            << "\n  25%: " << quantile(var, 0.25)
+            << "\n  50%: " << quantile(var, 0.5)
+            << "\n  75%: " << quantile(var, 0.75)
+            << "\n  90%: " << quantile(var, 0.9)
+            << "\n  99%: " << quantile(var, 0.99)
+            << "\n99.9%: " << quantile(var, 0.999) << "\n  max: " << var.back()
             << "\n----------------------------------\n";
 }
 
 int main(int argc, char* argv[]) {
-  using namespace nigiri;
-  using namespace nigiri::routing;
   namespace bpo = boost::program_options;
   auto const progress_tracker = utl::activate_progress_tracker("benchmark");
   utl::get_global_progress_trackers().silent_ = false;
 
-  std::uint32_t num_queries;
+  auto tt_path = std::filesystem::path{};
+  auto num_queries = std::uint32_t{10000U};
   auto gs = query_generation::generator_settings{};
 
   bpo::options_description desc("Allowed options");
   // clang-format off
   desc.add_options()
     ("help,h", "produce this help message")
-    ("tt_path,p", bpo::value<std::string>(),"path to a binary file containing a serialized nigiri timetable, can be created using nigiri-importer")
-    ("seed,s", bpo::value<std::uint32_t>(),"value to seed the RNG of the query generator with, omit for random seed")
-    ("num_queries,n", bpo::value<std::uint32_t>(&num_queries)->default_value(10000U), "number of queries to generate/process")
-    ("interval_size,i", bpo::value<std::uint32_t>()->default_value(60U), "the initial size of the search interval in minutes")
-    ("bounding_box,b", bpo::value<std::string>(), "limit randomized locations to a bounding box, format: lat_min,lon_min,lat_max,lon_max\ne.g., 36.0,-11.0,72.0,32.0\n(available via \"-b europe\")")
-    ("start_mode", bpo::value<std::string>()->default_value("intermodal"), "intermodal | station")
-    ("dest_mode", bpo::value<std::string>()->default_value("intermodal"), "intermodal | station")
-    ("intermodal_start", bpo::value<std::string>()->default_value("walk"), "walk | bicycle | car")
-    ("intermodal_dest", bpo::value<std::string>()->default_value("walk"), "walk | bicycle | car")
-    ("use_start_footpaths", bpo::value<bool>(&gs.use_start_footpaths_)->default_value(true), "")
-    ("max_transfers,t", bpo::value<std::uint8_t>(&gs.max_transfers_)->default_value(7U), "maximum number of transfers during routing")
-    ("min_connection_count,m", bpo::value<std::uint32_t>(&gs.min_connection_count_)->default_value(3U), "the minimum number of connections to find with each query")
-    ("extend_interval_earlier,e", bpo::value<bool>(&gs.extend_interval_earlier_)->default_value(true), "allows extension of the search interval into the past")
-    ("extend_interval_later,l", bpo::value<bool>(&gs.extend_interval_later_)->default_value(true), "allows extension of the search interval into the future")
+    ("tt_path,p", bpo::value(&tt_path),
+            "path to a binary file containing a serialized nigiri timetable")
+    ("seed,s", bpo::value<std::uint32_t>(),
+            "value to seed the RNG of the query generator with, "
+            "omit for random seed")
+    ("num_queries,n",
+            bpo::value(&num_queries)->default_value(num_queries),
+            "number of queries to generate/process")
+    ("interval_size,i", bpo::value<std::uint32_t>()->default_value(60U),
+            "the initial size of the search interval in minutes, set to 0 for ontrip queries")
+    ("bounding_box,b", bpo::value<std::string>(),
+            "limit randomized locations to a bounding box, "
+            "format: lat_min,lon_min,lat_max,lon_max\ne.g., 36.0,-11.0,72.0,32.0\n"
+            "(available via \"-b europe\")")
+    ("start_mode", bpo::value<std::string>()->default_value("intermodal"),
+            "intermodal | station")
+    ("dest_mode", bpo::value<std::string>()->default_value("intermodal"),
+            "intermodal | station")
+    ("intermodal_start", bpo::value<std::string>()->default_value("walk"),
+            "walk | bicycle | car")
+    ("intermodal_dest", bpo::value<std::string>()->default_value("walk"),
+            "walk | bicycle | car")
+    ("use_start_footpaths",
+            bpo::value<bool>(&gs.use_start_footpaths_)->default_value(true), "")
+    ("max_transfers,t",
+            bpo::value<std::uint32_t>()->default_value(kMaxTransfers),
+            "maximum number of transfers during routing")
+    ("min_connection_count,m",
+            bpo::value<std::uint32_t>(&gs.min_connection_count_)->default_value(3U),
+            "the minimum number of connections to find with each query")
+    ("extend_interval_earlier,e",
+            bpo::value<bool>(&gs.extend_interval_earlier_)->default_value(true),
+            "allows extension of the search interval into the past")
+    ("extend_interval_later,l",
+            bpo::value<bool>(&gs.extend_interval_later_)->default_value(true),
+            "allows extension of the search interval into the future")
     ("prf_idx", bpo::value<profile_idx_t>(&gs.prf_idx_)->default_value(0U), "")
-    ("allowed_claszes", bpo::value<clasz_mask_t>(&gs.allowed_claszes_)->default_value(routing::all_clasz_allowed()), "")
+    ("allowed_claszes",
+            bpo::value<clasz_mask_t>(&gs.allowed_claszes_)->default_value(routing::all_clasz_allowed()),
+            "")
+    ("start_coord", bpo::value<std::string>(),
+            "start coordinate for random queries")
+    ("dest_coord", bpo::value<std::string>(),
+            "destination coordinate for random queries")
+    ("start_loc", bpo::value<location_idx_t::value_t>(),
+            "start location for random queries")
+    ("dest_loc", bpo::value<location_idx_t::value_t>(),
+        "destination location for random queries")
   ;
   // clang-format on
   bpo::variables_map vm;
@@ -141,8 +204,6 @@ int main(int argc, char* argv[]) {
   std::unique_ptr<cista::wrapped<nigiri::timetable>> tt;
   if (vm.count("tt_path")) {
     try {
-      auto const tt_path =
-          std::filesystem::path{vm["tt_path"].as<std::string>()};
       auto load_timetable_timer = scoped_timer(
           fmt::format("loading timetable from {}", tt_path.string()));
       tt = std::make_unique<cista::wrapped<nigiri::timetable>>(
@@ -184,7 +245,7 @@ int main(int argc, char* argv[]) {
       }
     }
   } else if (vm["start_mode"].as<std::string>() == "station") {
-    gs.start_match_mode_ = location_match_mode::kExact;
+    gs.start_match_mode_ = location_match_mode::kEquivalent;
   } else {
     std::cout << "Error: Invalid start mode\n";
     return 1;
@@ -205,16 +266,51 @@ int main(int argc, char* argv[]) {
       }
     }
   } else if (vm["dest_mode"].as<std::string>() == "station") {
-    gs.dest_match_mode_ = location_match_mode::kExact;
+    gs.dest_match_mode_ = location_match_mode::kEquivalent;
   } else {
     std::cout << "Error: Invalid destination mode\n";
     return 1;
   }
 
-  std::mutex mutex;
+  gs.max_transfers_ = vm["max_transfers"].as<unsigned>() >
+                              std::numeric_limits<std::uint8_t>::max()
+                          ? std::numeric_limits<std::uint8_t>::max()
+                          : vm["max_transfers"].as<unsigned>();
+
+  if (vm.count("start_coord")) {
+    gs.start_match_mode_ = location_match_mode::kIntermodal;
+    auto const start_coord = parse_coord(vm["start_coord"].as<std::string>());
+    if (start_coord.has_value()) {
+      gs.start_ = start_coord.value();
+    } else {
+      std::cout << "Error: Invalid start coordinate\n";
+      return 1;
+    }
+  }
+
+  if (vm.count("dest_coord")) {
+    gs.dest_match_mode_ = location_match_mode::kIntermodal;
+    auto const dest_coord = parse_coord(vm["dest_coord"].as<std::string>());
+    if (dest_coord.has_value()) {
+      gs.dest_ = dest_coord.value();
+    } else {
+      std::cout << "Error: Invalid destination coordinate\n";
+      return 1;
+    }
+  }
+
+  if (vm.count("start_loc")) {
+    gs.start_match_mode_ = location_match_mode::kEquivalent;
+    gs.start_ = vm["start_loc"].as<location_idx_t>();
+  }
+
+  if (vm.count("dest_loc")) {
+    gs.dest_match_mode_ = location_match_mode::kEquivalent;
+    gs.dest_ = vm["dest_loc"].as<location_idx_t>();
+  }
 
   // generate queries
-  auto queries = std::vector<query>{};
+  auto queries = std::vector<nigiri::query_generation::start_dest_query>{};
   {
     auto qg = vm.count("seed")
                   ? query_generation::generator{**tt, gs,
@@ -223,20 +319,21 @@ int main(int argc, char* argv[]) {
 
     auto query_generation_timer = scoped_timer(fmt::format(
         "generation of {} queries using seed {}", num_queries, qg.seed_));
-    std::cout << "Query generator settings:\n" << gs << "\n";
+    std::cout << "--- Query generator settings ---\n"
+              << gs << "\n--- --- ---\n";
     for (auto i = 0U; i != num_queries; ++i) {
-      auto const q = qg.random_pretrip_query();
-      if (q.has_value()) {
-        queries.emplace_back(q.value());
+      auto const sdq = qg.random_query();
+      if (sdq.has_value()) {
+        queries.emplace_back(sdq.value());
       }
     }
   }
-
   std::cout << queries.size() << " queries generated successfully\n";
 
   // process queries
-  auto results =
-      std::vector<pair<std::uint64_t, routing_result<raptor_stats>>>{};
+  auto results = std::vector<benchmark_result>{};
+  results.reserve(queries.size());
+  std::mutex mutex;
   {
     auto query_processing_timer =
         scoped_timer(fmt::format("processing of {} queries", queries.size()));
@@ -246,39 +343,87 @@ int main(int argc, char* argv[]) {
       raptor_state rs_;
     };
     utl::parallel_for_run_threadlocal<query_state>(
-        queries.size(),
-        [&](auto& query_state, auto const q_idx) {
+        queries.size(), [&](auto& query_state, auto const q_idx) {
           try {
+            auto const total_time_start = std::chrono::steady_clock::now();
             auto const result =
                 routing::search<direction::kForward,
                                 routing::raptor<direction::kForward, false>>{
                     **tt, nullptr, query_state.ss_, query_state.rs_,
-                    queries[q_idx]}
+                    queries[q_idx].q_}
                     .execute();
+            auto const total_time_stop = std::chrono::steady_clock::now();
             std::lock_guard<std::mutex> guard(mutex);
-            results.emplace_back(q_idx, result);
+            results.emplace_back(
+                q_idx, result, *result.journeys_,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    total_time_stop - total_time_start));
+            progress_tracker->increment();
           } catch (const std::exception& e) {
             std::cout << e.what();
           }
-        },
-        progress_tracker->update_fn());
+        });
   }
 
   // print results
-  auto routing_times = std::vector<std::chrono::milliseconds::rep>{};
-  routing_times.reserve(results.size());
-  auto search_iterations = std::vector<std::uint64_t>{};
-  search_iterations.reserve(results.size());
-  for (auto const& result : results) {
-    routing_times.emplace_back(
-        result.second.search_stats_.execute_time_.count());
-    search_iterations.emplace_back(
-        result.second.search_stats_.search_iterations_);
+  std::sort(begin(results), end(results), [](auto const& a, auto const& b) {
+    return a.total_time_ < b.total_time_;
+  });
+  print_results(results, "total_time");
+
+  auto const print_slow_result = [&](auto const& br) {
+    auto const visit_loc_idx = [&](location_idx_t const loc_idx) {
+      std::stringstream ss;
+      ss << "(loc_idx: " << loc_idx.v_ << ", name: "
+         << std::string_view{begin((**tt).locations_.names_[loc_idx]),
+                             end((**tt).locations_.names_[loc_idx])}
+         << ", coord: (" << (**tt).locations_.coordinates_[loc_idx].lat() << ","
+         << (**tt).locations_.coordinates_[loc_idx].lng() << "))";
+      return ss.str();
+    };
+    auto const visit_coord = [](geo::latlng const& coord) {
+      std::stringstream ss;
+      ss << "(" << coord.lat() << "," << coord.lng() << ")";
+      return ss.str();
+    };
+
+    std::cout << br << "\nstart: "
+              << std::visit(utl::overloaded{visit_loc_idx, visit_coord},
+                            queries[br.q_idx_].start_)
+              << "\ndest: "
+              << std::visit(utl::overloaded{visit_loc_idx, visit_coord},
+                            queries[br.q_idx_].dest_)
+              << "\n";
+  };
+  std::cout << "\nSlowest Queries:\n";
+  for (auto i = 0; i != results.size() && i != 10; ++i) {
+    std::cout << "\n--- " << i + 1 << " ---\n";
+    print_slow_result(rbegin(results)[i]);
   }
-  std::sort(begin(routing_times), end(routing_times));
-  print_stats(routing_times, "routing times [ms]");
-  std::sort(begin(search_iterations), end(search_iterations));
-  print_stats(search_iterations, "search iterations");
+  std::cout << "\n";
+
+  std::sort(begin(results), end(results), [](auto const& a, auto const& b) {
+    return a.routing_result_.search_stats_.execute_time_ <
+           b.routing_result_.search_stats_.execute_time_;
+  });
+  print_results(results, "execute_time");
+
+  std::sort(begin(results), end(results), [](auto const& a, auto const& b) {
+    return a.routing_result_.search_stats_.interval_extensions_ <
+           b.routing_result_.search_stats_.interval_extensions_;
+  });
+  print_results(results, "interval_extensions");
+
+  std::sort(begin(results), end(results), [](auto const& a, auto const& b) {
+    return a.routing_result_.interval_.size() <
+           b.routing_result_.interval_.size();
+  });
+  print_results(results, "interval_size");
+
+  std::sort(begin(results), end(results), [](auto const& a, auto const& b) {
+    return a.journeys_.size() < b.journeys_.size();
+  });
+  print_results(results, "#journeys");
 
   return 0;
 }

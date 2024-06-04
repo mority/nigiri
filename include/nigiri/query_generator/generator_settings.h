@@ -20,7 +20,10 @@ struct generator_settings {
       return mm == location_match_mode::kIntermodal ? "intermodal" : "station";
     };
 
-    out << "interval_size: " << gs.interval_size_.count();
+    out << "interval_size: "
+        << std::chrono::duration_cast<
+               std::chrono::duration<double, std::ratio<3600>>>(
+               gs.interval_size_);
     if (gs.bbox_.has_value()) {
       out << "\nbbox: min(" << gs.bbox_.value().min_ << "), max("
           << gs.bbox_.value().max_ << ")";
@@ -39,6 +42,27 @@ struct generator_settings {
         << (gs.extend_interval_later_ ? "true" : "false")
         << "\nprf_idx: " << std::uint32_t{gs.prf_idx_}
         << "\nallowed_claszes: " << gs.allowed_claszes_;
+
+    auto const visit_loc = [](location_idx_t const loc_idx) {
+      std::stringstream ss;
+      ss << "station: " << loc_idx.v_;
+      return ss.str();
+    };
+    auto const visit_coord = [](geo::latlng const& coord) {
+      std::stringstream ss;
+      ss << "coordinate: (" << coord.lat() << "," << coord.lng() << ")";
+      return ss.str();
+    };
+    if (gs.start_.has_value()) {
+      out << "\nstart "
+          << std::visit(utl::overloaded{visit_loc, visit_coord},
+                        gs.start_.value());
+    }
+    if (gs.dest_.has_value()) {
+      out << "\ndestination "
+          << std::visit(utl::overloaded{visit_loc, visit_coord},
+                        gs.dest_.value());
+    }
     return out;
   }
 
@@ -50,6 +74,8 @@ struct generator_settings {
       routing::location_match_mode::kIntermodal};
   transport_mode start_mode_{kWalk};
   transport_mode dest_mode_{kWalk};
+  std::optional<std::variant<location_idx_t, geo::latlng>> start_;
+  std::optional<std::variant<location_idx_t, geo::latlng>> dest_;
   bool use_start_footpaths_{true};
   std::uint8_t max_transfers_{routing::kMaxTransfers};
   unsigned min_connection_count_{0U};
