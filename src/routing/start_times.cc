@@ -20,12 +20,13 @@ void trace_start(char const* fmt_str, Args... args) {
 
 unixtime_t round_to_multiple(unixtime_t const time_at_start,
                              direction const search_dir) {
-  auto result = (time_at_start.time_since_epoch().count() / kStartTimeDivisor) *
-                kStartTimeDivisor;
-  if (search_dir == direction::kBackward) {
-    result += kStartTimeDivisor;
-  }
-  return unixtime_t{i32_minutes{result}};
+  return unixtime_t{i32_minutes{
+      (time_at_start.time_since_epoch().count() / kStartTimeDivisor) *
+          kStartTimeDivisor +
+      (search_dir == direction::kBackward &&
+               time_at_start.time_since_epoch().count() % kStartTimeDivisor != 0
+           ? kStartTimeDivisor
+           : 0)}};
 }
 
 void add_start_times_at_stop(direction const search_dir,
