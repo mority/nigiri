@@ -18,6 +18,16 @@ void trace_start(char const* fmt_str, Args... args) {
   }
 }
 
+unixtime_t round_to_multiple(unixtime_t const time_at_start,
+                             direction const search_dir) {
+  auto result = (time_at_start.time_since_epoch().count() / kStartTimeDivisor) *
+                kStartTimeDivisor;
+  if (search_dir == direction::kBackward) {
+    result += kStartTimeDivisor;
+  }
+  return unixtime_t{i32_minutes{result}};
+}
+
 void add_start_times_at_stop(direction const search_dir,
                              timetable const& tt,
                              rt_timetable const* rtt,
@@ -57,9 +67,10 @@ void add_start_times_at_stop(direction const search_dir,
           interval_with_offset.contains(tt.to_unixtime(day, stop_time_mam))) {
         auto const ev_time = tt.to_unixtime(day, stop_time_mam);
         auto const& s = starts.emplace_back(
-            start{.time_at_start_ = search_dir == direction::kForward
-                                        ? ev_time - offset
-                                        : ev_time + offset,
+            start{.time_at_start_ =
+                      search_dir == direction::kForward
+                          ? round_to_multiple(ev_time - offset, search_dir)
+                          : round_to_multiple(ev_time + offset, search_dir),
                   .time_at_stop_ = ev_time,
                   .stop_ = location_idx});
         trace_start(
