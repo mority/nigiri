@@ -166,8 +166,9 @@ void add_starts_in_interval(direction const search_dir,
             (search_dir == direction::kForward ? event_type::kDep
                                                : event_type::kArr));
         auto const& inserted = starts.emplace_back(start{
-            .time_at_start_ =
-                search_dir == direction::kForward ? ev_time - d : ev_time + d,
+            .time_at_start_ = search_dir == direction::kForward
+                                  ? round_to_multiple(ev_time - d, search_dir)
+                                  : round_to_multiple(ev_time + d, search_dir),
             .time_at_stop_ = ev_time,
             .stop_ = l});
         trace_start(
