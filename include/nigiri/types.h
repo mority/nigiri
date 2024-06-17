@@ -290,14 +290,20 @@ enum class location_type : std::uint8_t {
 enum class event_type { kArr, kDep };
 
 /*
-Search Direction  |  Forward                      |  Backward
-------------------|-------------------------------|----------------------------------
-User Perspective  |  Start: Initial Departure     |  Start: Final Arrival
-                  |  Destination: Final Arrival   |  Destination: Initial
-Departure |  Intermodal Start: Offset to  |  Intermodal Start: Offset from |
-initial Departure         |      final arrival |  Intermodal Destination:      |
-Intermodal Destination: Offset |     Offset from final arrival |      to initial
-departure
+                  |                       Search direction                     |
+                  |  Forward                      |  Backward                  |
+------------------|-------------------------------|----------------------------|
+User perspective: |                               |                            |
+                  |                               |                            |
+    Start         |  Initial departure            |  Final arrival             |
+                  |                               |                            |
+    Destination   |  Final arrival                |  Initial departure         |
+                  |                               |                            |
+    Start match   |  Offset mode to               |  Offset mode from          |
+       mode       |  initial departure            |  final arrival             |
+                  |                               |                            |
+    Dest match    |  Offset mode from             |  Offset mode to            |
+       mode       |  final arrival                |  initial departure         |
  */
 enum class direction { kForward, kBackward };
 
