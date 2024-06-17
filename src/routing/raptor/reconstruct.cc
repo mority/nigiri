@@ -460,11 +460,6 @@ void reconstruct_journey(timetable const& tt,
     }
   }
 
-  auto ss = std::stringstream{};
-  ss << "before undo rounding:\n";
-  j.print(ss, tt);
-  std::cout << ss.str() << "\n";
-
   // undo rounded time at start
   if constexpr (SearchDir == direction::kForward) {
     if (q.start_match_mode_ == location_match_mode::kIntermodal) {
@@ -508,11 +503,6 @@ void reconstruct_journey(timetable const& tt,
       }
     }
   }
-
-  ss = std::stringstream{};
-  ss << "after undo rounding:\n";
-  j.print(ss, tt);
-  std::cout << ss.str() << "\n";
 
   optimize_footpaths<SearchDir>(tt, rtt, q, j);
 
