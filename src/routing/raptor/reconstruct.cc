@@ -460,6 +460,60 @@ void reconstruct_journey(timetable const& tt,
     }
   }
 
+  auto ss = std::stringstream{};
+  ss << "before undo rounding:\n";
+  j.print(ss, tt);
+  std::cout << ss.str() << "\n";
+
+  // undo rounded time at start
+  if constexpr (SearchDir == direction::kForward) {
+    if (q.start_match_mode_ == location_match_mode::kIntermodal) {
+      if (j.legs_.size() >= 2 && holds_alternative<offset>(j.legs_[0].uses_) &&
+          holds_alternative<journey::run_enter_exit>(j.legs_[1].uses_)) {
+        auto const rounding_error = j.legs_[1].dep_time_ - j.legs_[0].arr_time_;
+        j.legs_[0].dep_time_ += rounding_error;
+        j.legs_[0].arr_time_ += rounding_error;
+        j.start_time_ += rounding_error;
+      }
+    } else {
+      if (!j.legs_.empty() &&
+          holds_alternative<journey::run_enter_exit>(j.legs_[0].uses_)) {
+        auto const fr = rt::frun{
+            tt, rtt, get<journey::run_enter_exit>(j.legs_[0].uses_).r_};
+        auto const t_actual = fr[fr.first_valid()].time(event_type::kDep);
+        j.legs_[0].dep_time_ = t_actual;
+        j.start_time_ = t_actual;
+      }
+    }
+  } else {  // SearchDir == direction::kBackward
+    if (q.start_match_mode_ == location_match_mode::kIntermodal) {
+      if (j.legs_.size() >= 2 &&
+          holds_alternative<offset>(rbegin(j.legs_)[0].uses_) &&
+          holds_alternative<journey::run_enter_exit>(
+              rbegin(j.legs_)[1].uses_)) {
+        auto const rounding_error =
+            rbegin(j.legs_)[0].dep_time_ - rbegin(j.legs_)[1].arr_time_;
+        rbegin(j.legs_)[0].dep_time_ -= rounding_error;
+        rbegin(j.legs_)[0].arr_time_ -= rounding_error;
+        j.start_time_ -= rounding_error;
+      }
+    } else {
+      if (!j.legs_.empty() && holds_alternative<journey::run_enter_exit>(
+                                  rbegin(j.legs_)[0].uses_)) {
+        auto const fr = rt::frun{
+            tt, rtt, get<journey::run_enter_exit>(rbegin(j.legs_)[0].uses_).r_};
+        auto const t_actual = fr[fr.last_valid()].time(event_type::kArr);
+        j.legs_.back().arr_time_ = t_actual;
+        j.start_time_ = t_actual;
+      }
+    }
+  }
+
+  ss = std::stringstream{};
+  ss << "after undo rounding:\n";
+  j.print(ss, tt);
+  std::cout << ss.str() << "\n";
+
   optimize_footpaths<SearchDir>(tt, rtt, q, j);
 
 #if defined(NIGIRI_TRACE_RECUSTRUCT)
