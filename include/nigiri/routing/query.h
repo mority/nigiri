@@ -29,6 +29,9 @@ struct offset {
   transport_mode_id_t type() const noexcept { return transport_mode_id_; }
 
   friend bool operator==(offset const&, offset const&) = default;
+  friend bool operator<(offset const& a, offset const& b) {
+    return a.duration_ < b.duration_;
+  }
 
   location_idx_t target_;
   duration_t duration_;
@@ -38,6 +41,44 @@ struct offset {
 using start_time_t = std::variant<unixtime_t, interval<unixtime_t>>;
 
 struct query {
+  query(start_time_t const& start_time,
+        std::vector<offset> const& start,
+        std::vector<offset>)
+
+      query(start_time_t const& start_time,
+            location_match_mode const start_match_mode,
+            location_match_mode const dest_match_mode,
+            bool const use_start_footpaths,
+            std::vector<offset> const& start,
+            std::vector<offset> const& destination,
+            std::uint8_t const max_transfers,
+            unsigned const min_connection_count,
+            bool const extend_interval_earlier,
+            bool const extend_interval_later,
+            profile_idx_t const prf_idx,
+            clasz_mask_t const allowed_claszes,
+            bool require_bike_transport)
+      : start_time_{start_time},
+        start_match_mode_(start_match_mode),
+        dest_match_mode_(dest_match_mode),
+        use_start_footpaths_(use_start_footpaths),
+        start_(start),
+        destination_(destination),
+        max_transfers_(max_transfers),
+        min_connection_count_(min_connection_count),
+        extend_interval_earlier_(extend_interval_earlier),
+        extend_interval_later_(extend_interval_later),
+        prf_idx_(prf_idx),
+        allowed_claszes_(allowed_claszes),
+        require_bike_transport_(require_bike_transport) {
+    sort_offsets();
+  }
+
+  void sort_offsets() {
+    utl::sort(start_);
+    utl::sort(destination_);
+  }
+
   friend bool operator==(query const&, query const&) = default;
 
   start_time_t start_time_;
