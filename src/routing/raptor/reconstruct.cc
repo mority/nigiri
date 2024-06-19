@@ -473,9 +473,9 @@ void reconstruct_journey(timetable const& tt,
     } else {
       if (!j.legs_.empty() &&
           holds_alternative<journey::run_enter_exit>(j.legs_[0].uses_)) {
-        auto const fr = rt::frun{
-            tt, rtt, get<journey::run_enter_exit>(j.legs_[0].uses_).r_};
-        auto const t_actual = fr[fr.first_valid()].time(event_type::kDep);
+        auto const ree = get<journey::run_enter_exit>(j.legs_[0].uses_);
+        auto const fr = rt::frun{tt, rtt, ree.r_};
+        auto const t_actual = fr[ree.stop_range_.from_].time(event_type::kDep);
         j.legs_[0].dep_time_ = t_actual;
         j.start_time_ = t_actual;
       }
@@ -495,9 +495,10 @@ void reconstruct_journey(timetable const& tt,
     } else {
       if (!j.legs_.empty() && holds_alternative<journey::run_enter_exit>(
                                   rbegin(j.legs_)[0].uses_)) {
-        auto const fr = rt::frun{
-            tt, rtt, get<journey::run_enter_exit>(rbegin(j.legs_)[0].uses_).r_};
-        auto const t_actual = fr[fr.last_valid()].time(event_type::kArr);
+        auto const ree = get<journey::run_enter_exit>(rbegin(j.legs_)[0].uses_);
+        auto const fr = rt::frun{tt, rtt, ree.r_};
+        auto const t_actual =
+            fr[ree.stop_range_.to_ - 1].time(event_type::kArr);
         j.legs_.back().arr_time_ = t_actual;
         j.start_time_ = t_actual;
       }
