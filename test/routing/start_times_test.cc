@@ -395,7 +395,7 @@ TEST(routing, no_round_out_of_interval) {
       {{tt.locations_.location_id_to_idx_.at({.id_ = "A5", .src_ = src}),
         0_minutes, 0U}},
       interval{unixtime_t{sys_days{2024_y / June / 7} + 23_hours + 57_minutes},
-               unixtime_t{sys_days{2024_y / June / 8} + 1_hours}},
+               unixtime_t{sys_days{2024_y / June / 8}}},
       direction::kForward);
 
   std::stringstream ss;
