@@ -42,7 +42,3 @@
   url=git@github.com:motis-project/boost.git
   branch=master
   commit=be5235eb2258d2ec19e32546ab767a62311d9b46
-[ultra]
-  url=git@github.com:kit-algo/ULTRA.git
-  branch=master
-  commit=98192e4c1c4c03e6c604d83a275dd91b35a02bcd
