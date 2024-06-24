@@ -89,9 +89,12 @@ struct raptor {
   void next_start_time() {
     utl::fill(state_.best_, kInvalid);
     utl::fill(state_.tmp_, kInvalid);
-    utl::fill(state_.prev_station_mark_.blocks_, 0U);
-    utl::fill(state_.station_mark_.blocks_, 0U);
-    utl::fill(state_.route_mark_.blocks_, 0U);
+    //    utl::fill(state_.prev_station_mark_.blocks_, 0U);
+    //    utl::fill(state_.station_mark_.blocks_, 0U);
+    //    utl::fill(state_.route_mark_.blocks_, 0U);
+    state_.prev_station_mark_.clear();
+    state_.station_mark_.clear();
+    state_.route_mark_.clear();
     if constexpr (Rt) {
       utl::fill(state_.rt_transport_mark_.blocks_, 0U);
     }
@@ -101,7 +104,7 @@ struct raptor {
     trace_upd("adding start {}: {}\n", location{tt_, l}, t);
     state_.best_[to_idx(l)] = unix_to_delta(base(), t);
     state_.round_times_[0U][to_idx(l)] = unix_to_delta(base(), t);
-    state_.station_mark_.set(to_idx(l), true);
+    state_.station_mark_.insert(l);
   }
 
   void execute(unixtime_t const start_time,
@@ -127,19 +130,36 @@ struct raptor {
       });
 
       auto any_marked = false;
-      state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-        for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
+      // state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+      for (auto l : state_.station_mark_.values_) {
+        for (auto const& r : tt_.location_routes_[l]) {
           any_marked = true;
-          state_.route_mark_.set(to_idx(r), true);
+          //          state_.route_mark_.set(to_idx(r), true);
+          auto stop_seq = tt_.route_location_seq_[r];
+          for (auto i = 0U; i != stop_seq.size(); ++i) {
+            auto const stop_idx =
+                static_cast<stop_idx_t>(kFwd ? i : stop_seq.size() - i - 1U);
+            auto const stp = stop{stop_seq[stop_idx]};
+            if (stp.location_idx() == l && kFwd ? stp.in_allowed()
+                                                : stp.out_allowed()) {
+              if (state_.route_mark_.contains(r)) {
+                state_.route_mark_.insert(
+                    r, kFwd ? std::min(stop_idx, state_.route_mark_[r])
+                            : std::max(stop_idx, state_.route_mark_[r]));
+              } else {
+                state_.route_mark_.insert(r, stop_idx);
+              }
+              break;
+            }
+          }
         }
         if constexpr (Rt) {
-          for (auto const& rt_t :
-               rtt_->location_rt_transports_[location_idx_t{i}]) {
+          for (auto const& rt_t : rtt_->location_rt_transports_[l]) {
             any_marked = true;
             state_.rt_transport_mark_.set(to_idx(rt_t), true);
           }
         }
-      });
+      }
 
       if (!any_marked) {
         trace_print_state_after_round();
@@ -147,7 +167,8 @@ struct raptor {
       }
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
-      utl::fill(state_.station_mark_.blocks_, 0U);
+      //      utl::fill(state_.station_mark_.blocks_, 0U);
+      state_.station_mark_.clear();
 
       any_marked =
           (allowed_claszes_ == all_clasz_allowed())
@@ -169,10 +190,12 @@ struct raptor {
         break;
       }
 
-      utl::fill(state_.route_mark_.blocks_, 0U);
+      //      utl::fill(state_.route_mark_.blocks_, 0U);
+      state_.route_mark_.clear();
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
-      utl::fill(state_.station_mark_.blocks_, 0U);
+      //      utl::fill(state_.station_mark_.blocks_, 0U);
+      state_.station_mark_.clear();
 
       update_transfers(k);
       update_footpaths(k, prf_idx);
@@ -216,24 +239,25 @@ private:
   template <bool WithClaszFilter, bool WithBikeFilter>
   bool loop_routes(unsigned const k) {
     auto any_marked = false;
-    state_.route_mark_.for_each_set_bit([&](auto const r_idx) {
-      auto const r = route_idx_t{r_idx};
+    //    state_.route_mark_.for_each_set_bit([&](auto const r_idx) {
+    for (auto const r : state_.route_mark_.keys_) {
+      // auto const r = route_idx_t{r_idx};
 
       if constexpr (WithClaszFilter) {
         if (!is_allowed(allowed_claszes_, tt_.route_clasz_[r])) {
-          return;
+          continue;
         }
       }
 
       auto section_bike_filter = false;
       if constexpr (WithBikeFilter) {
         auto const bikes_allowed_on_all_sections =
-            tt_.route_bikes_allowed_.test(r_idx * 2);
+            tt_.route_bikes_allowed_.test(r.v_ * 2);
         if (!bikes_allowed_on_all_sections) {
           auto const bikes_allowed_on_some_sections =
-              tt_.route_bikes_allowed_.test(r_idx * 2 + 1);
+              tt_.route_bikes_allowed_.test(r.v_ * 2 + 1);
           if (!bikes_allowed_on_some_sections) {
-            return;
+            continue;
           }
           section_bike_filter = true;
         }
@@ -243,7 +267,7 @@ private:
       trace("┊ ├k={} updating route {}\n", k, r);
       any_marked |= section_bike_filter ? update_route<true>(k, r)
                                         : update_route<false>(k, r);
-    });
+    }
     return any_marked;
   }
 
@@ -283,44 +307,47 @@ private:
   }
 
   void update_transfers(unsigned const k) {
-    state_.prev_station_mark_.for_each_set_bit([&](auto&& i) {
-      auto const is_dest = is_dest_[i];
+    //    state_.prev_station_mark_.for_each_set_bit([&](auto&& i) {
+    for (auto l : state_.prev_station_mark_.values_) {
+      auto const is_dest = is_dest_[l.v_];
       auto const transfer_time =
           (!is_intermodal_dest() && is_dest)
               ? 0
-              : dir(tt_.locations_.transfer_time_[location_idx_t{i}]).count();
+              : dir(tt_.locations_.transfer_time_[l]).count();
       auto const fp_target_time =
-          static_cast<delta_t>(state_.tmp_[i] + transfer_time);
-      if (is_better(fp_target_time, state_.best_[i]) &&
+          static_cast<delta_t>(state_.tmp_[l.v_] + transfer_time);
+      if (is_better(fp_target_time, state_.best_[l.v_]) &&
           is_better(fp_target_time, time_at_dest_[k])) {
-        if (lb_[i] == kUnreachable ||
-            !is_better(fp_target_time + dir(lb_[i]), time_at_dest_[k])) {
+        if (lb_[l.v_] == kUnreachable ||
+            !is_better(fp_target_time + dir(lb_[l.v_]), time_at_dest_[k])) {
           ++stats_.fp_update_prevented_by_lower_bound_;
           return;
         }
 
         ++stats_.n_earliest_arrival_updated_by_footpath_;
-        state_.round_times_[k][i] = fp_target_time;
-        state_.best_[i] = fp_target_time;
-        state_.station_mark_.set(i, true);
+        state_.round_times_[k][l.v_] = fp_target_time;
+        state_.best_[l.v_] = fp_target_time;
+        //        state_.station_mark_.set(i, true);
+        state_.station_mark_.insert(l);
         if (is_dest) {
           update_time_at_dest(k, fp_target_time);
         }
       }
-    });
+    }
   }
 
   void update_footpaths(unsigned const k, profile_idx_t const prf_idx) {
-    state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-      auto const l_idx = location_idx_t{i};
-      auto const& fps = kFwd ? tt_.locations_.footpaths_out_[prf_idx][l_idx]
-                             : tt_.locations_.footpaths_in_[prf_idx][l_idx];
+
+    // state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+    for (auto l : state_.prev_station_mark_.values_) {
+      auto const& fps = kFwd ? tt_.locations_.footpaths_out_[prf_idx][l]
+                             : tt_.locations_.footpaths_in_[prf_idx][l];
       for (auto const& fp : fps) {
         ++stats_.n_footpaths_visited_;
 
         auto const target = to_idx(fp.target());
         auto const fp_target_time =
-            clamp(state_.tmp_[i] + dir(fp.duration()).count());
+            clamp(state_.tmp_[l.v_] + dir(fp.duration()).count());
 
         if (is_better(fp_target_time, state_.best_[target]) &&
             is_better(fp_target_time, time_at_dest_[k])) {
@@ -349,7 +376,8 @@ private:
           ++stats_.n_earliest_arrival_updated_by_footpath_;
           state_.round_times_[k][to_idx(fp.target())] = fp_target_time;
           state_.best_[to_idx(fp.target())] = fp_target_time;
-          state_.station_mark_.set(to_idx(fp.target()), true);
+          //          state_.station_mark_.set(to_idx(fp.target()), true);
+          state_.station_mark_.insert(fp.target());
           if (is_dest_[to_idx(fp.target())]) {
             update_time_at_dest(k, fp_target_time);
           }
@@ -362,7 +390,7 @@ private:
               state_.best_[to_idx(fp.target())], to_unix(time_at_dest_[k]));
         }
       }
-    });
+    }
   }
 
   void update_intermodal_footpaths(unsigned const k) {
@@ -371,7 +399,9 @@ private:
     }
 
     state_.end_reachable_.for_each_set_bit([&](auto const i) {
-      if (state_.prev_station_mark_[i] || state_.station_mark_[i]) {
+      //      if (state_.prev_station_mark_[i] || state_.station_mark_[i]) {
+      if (state_.prev_station_mark_.contains(location_idx_t{i}) ||
+          state_.station_mark_.contains(location_idx_t{i})) {
         auto const end_time = clamp(get_best(state_.best_[i], state_.tmp_[i]) +
                                     dir(dist_to_end_[i]));
 
@@ -430,7 +460,8 @@ private:
 
             ++stats_.n_earliest_arrival_updated_by_route_;
             state_.tmp_[l_idx] = get_best(by_transport, state_.tmp_[l_idx]);
-            state_.station_mark_.set(l_idx, true);
+            //            state_.station_mark_.set(l_idx, true);
+            state_.station_mark_.insert(location_idx_t{l_idx});
             current_best = by_transport;
             any_marked = true;
           }
@@ -442,7 +473,8 @@ private:
       }
 
       if (is_last || !(kFwd ? stp.in_allowed() : stp.out_allowed()) ||
-          !state_.prev_station_mark_[l_idx]) {
+          //          !state_.prev_station_mark_[l_idx]) {
+          !state_.prev_station_mark_.contains(location_idx_t{l_idx})) {
         continue;
       }
 
@@ -462,7 +494,8 @@ private:
     bool any_marked = false;
 
     auto et = transport{};
-    for (auto i = 0U; i != stop_seq.size(); ++i) {
+    for (auto i = state_.route_mark_[r]; i != (kFwd ? stop_seq.size() : 0U);
+         kFwd ? ++i : --i) {
       auto const stop_idx =
           static_cast<stop_idx_t>(kFwd ? i : stop_seq.size() - i - 1U);
       auto const stp = stop{stop_seq[stop_idx]};
@@ -470,7 +503,9 @@ private:
       auto const is_first = i == 0U;
       auto const is_last = i == stop_seq.size() - 1U;
 
-      if (!et.is_valid() && !state_.prev_station_mark_[l_idx]) {
+      //      if (!et.is_valid() && !state_.prev_station_mark_[l_idx]) {
+      if (!et.is_valid() &&
+          !state_.prev_station_mark_.contains(location_idx_t{l_idx})) {
         trace("┊ │k={}  stop_idx={} {}: not marked, no et - skip\n", k,
               stop_idx, location{tt_, location_idx_t{l_idx}});
         continue;
@@ -513,7 +548,8 @@ private:
 
           ++stats_.n_earliest_arrival_updated_by_route_;
           state_.tmp_[l_idx] = get_best(by_transport, state_.tmp_[l_idx]);
-          state_.station_mark_.set(l_idx, true);
+          //          state_.station_mark_.set(l_idx, true);
+          state_.station_mark_.insert(location_idx_t{l_idx});
           current_best = by_transport;
           any_marked = true;
         } else {
@@ -552,7 +588,8 @@ private:
       }
 
       if (is_last || !(kFwd ? stp.in_allowed() : stp.out_allowed()) ||
-          !state_.prev_station_mark_[l_idx]) {
+          //          !state_.prev_station_mark_[l_idx]) {
+          !state_.prev_station_mark_.contains(location_idx_t{l_idx})) {
         continue;
       }
 
