@@ -10,6 +10,12 @@ namespace nigiri::qa {
 
 constexpr auto const kDefaultWeights = criteria_t{1.0, 1.0, 30.0};
 
+criteria_t to_criteria_t(nigiri::routing::journey const& j) {
+  return {static_cast<double>(-j.start_time_.time_since_epoch().count()),
+          static_cast<double>(j.dest_time_.time_since_epoch().count()),
+          static_cast<double>(j.transfers_)};
+}
+
 double improvement(criteria_t const& a,
                    criteria_t const& b,
                    criteria_t const& weights) {
