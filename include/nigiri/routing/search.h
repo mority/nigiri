@@ -173,7 +173,7 @@ struct search {
 
       search_interval();
 
-      if (stats_.search_iterations_ == 0 && state_.results_.size() == 0) {
+      if (stats_.interval_extensions_ == 0 && state_.results_.size() == 0) {
         std::cout << "first execution did not find any connections, stopping "
                      "search\n";
         break;
