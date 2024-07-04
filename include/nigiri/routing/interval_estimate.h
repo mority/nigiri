@@ -15,10 +15,9 @@ struct interval_estimator {
       : tt_{tt}, q_{q} {
 
     auto const start_itv = std::visit(
-        utl::overloaded{[](unixtime_t const& ut) {
-                          return interval<unixtime_t>{ut, ut};
-                        },
-                        [](interval<unixtime_t> iut) { return iut; }},
+        utl::overloaded{
+            [](unixtime_t const& ut) { return interval<unixtime_t>{ut, ut}; },
+            [](interval<unixtime_t> iut) { return iut; }},
         q.start_time_);
 
     data_type_max_interval_ = {
@@ -73,24 +72,34 @@ struct interval_estimator {
   }
 
   interval<unixtime_t> extension(interval<unixtime_t> const& itv,
-                                 std::uint32_t const num_con_req) const {
+                                 std::uint32_t num_con_req,
+                                 pareto_set<journey> const& journeys) const {
     if (num_con_req == 0 ||
         (!q_.extend_interval_earlier_ && !q_.extend_interval_later_)) {
       return itv;
     }
 
     auto new_itv = itv;
-    auto const ext = itv.size() * num_con_req;
 
-    if (can_extend_both_dir(itv)) {
-      new_itv.from_ -= ext / 2;
-      new_itv.to_ += ext / 2;
-    } else {
-      if (q_.extend_interval_earlier_) {
-        new_itv.from_ -= ext;
+    auto const ontrip_ext = ontrip_estimate(itv, journeys);
+    if (ontrip_ext != 0_minutes) {
+      if constexpr (SearchDir == direction::kForward) {
+        new_itv.to_ += ontrip_ext;
+      } else {
+        new_itv.from_ -= ontrip_ext;
       }
-      if (q_.extend_interval_later_) {
-        new_itv.to_ += ext;
+    } else {
+      auto const ext = itv.size() * num_con_req;
+      if (can_extend_both_dir(itv)) {
+        new_itv.from_ -= ext / 2;
+        new_itv.to_ += ext / 2;
+      } else {
+        if (q_.extend_interval_earlier_) {
+          new_itv.from_ -= ext;
+        }
+        if (q_.extend_interval_later_) {
+          new_itv.to_ += ext;
+        }
       }
     }
 
@@ -126,6 +135,36 @@ private:
     itv.to_ = tt_.external_interval().clamp(itv.to_);
     itv.from_ = data_type_max_interval_.clamp(itv.from_);
     itv.to_ = data_type_max_interval_.clamp(itv.to_);
+  }
+
+  i32_minutes ontrip_estimate(interval<unixtime_t> const& itv,
+                              pareto_set<journey> const& journeys) const {
+    if constexpr (SearchDir == direction::kForward) {
+      if (!q_.extend_interval_later_) {
+        return i32_minutes{0};
+      }
+    } else {
+      if (!q_.extend_interval_earlier_) {
+        return i32_minutes{0};
+      }
+    }
+
+    auto ext = i32_minutes{std::numeric_limits<i32_minutes::rep>::max()};
+    for (auto const& j : journeys) {
+      if (itv.contains(j.start_time_)) {
+        continue;
+      }
+
+      if constexpr (SearchDir == direction::kForward) {
+        ext = std::min(j.dest_time_ - itv.to_, ext);
+      } else {
+        ext = std::min(itv.from_ - j.dest_time_, ext);
+      }
+    }
+
+    return ext != i32_minutes{std::numeric_limits<i32_minutes::rep>::max()}
+               ? ext
+               : i32_minutes{0};
   }
 
   timetable const& tt_;
