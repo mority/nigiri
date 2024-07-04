@@ -118,6 +118,13 @@ struct raptor {
 
     trace_print_init_state();
 
+    auto out_file = std::ofstream{"loc_coords.txt", std::ios::app};
+    out_file << "lat, lon, round\n";
+
+    auto visited = bitvec{};
+    visited.resize(tt_.n_locations());
+    utl::fill(visited.blocks_, 0U);
+
     for (auto k = 1U; k != end_k; ++k) {
       for (auto i = 0U; i != n_locations_; ++i) {
         state_.best_[i] = get_best(state_.round_times_[k][i], state_.best_[i]);
@@ -128,6 +135,14 @@ struct raptor {
 
       auto any_marked = false;
       state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+        if (!visited.test(i)) {
+          out_file << tt_.locations_.coordinates_[location_idx_t{i}].lat()
+                   << ", "
+                   << tt_.locations_.coordinates_[location_idx_t{i}].lng()
+                   << ", " << k << "\n";
+          visited.set(i);
+        }
+
         for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
           any_marked = true;
           state_.route_mark_.set(to_idx(r), true);

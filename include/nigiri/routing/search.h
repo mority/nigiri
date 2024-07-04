@@ -168,6 +168,22 @@ struct search {
       return false;
     };
 
+    {
+      auto starts_file = std::ofstream{"starts.txt"};
+      starts_file << "lat, lon\n";
+      for (auto const& s : q_.start_) {
+        starts_file << tt_.locations_.coordinates_[s.target()].lat() << ", "
+                    << tt_.locations_.coordinates_[s.target()].lng() << "\n";
+      }
+
+      auto dests_file = std::ofstream{"dests.txt"};
+      dests_file << "lat, lon\n";
+      for (auto const& d : q_.destination_) {
+        dests_file << tt_.locations_.coordinates_[d.target()].lat() << ", "
+                   << tt_.locations_.coordinates_[d.target()].lng() << "\n";
+      }
+    }
+
     while (true) {
       trace("start_time={}\n", search_interval_);
 
