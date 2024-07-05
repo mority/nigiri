@@ -37,6 +37,7 @@ struct raptor_state {
   bitvec route_mark_;
   bitvec rt_transport_mark_;
   bitvec end_reachable_;
+  bitvec qgis_marked_;
 };
 
 }  // namespace nigiri::routing

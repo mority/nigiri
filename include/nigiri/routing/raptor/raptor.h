@@ -84,6 +84,9 @@ struct raptor {
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
     state_.round_times_.reset(kInvalid);
+    utl::fill(state_.qgis_marked_.blocks_, 0U);
+    auto out_file = std::ofstream{"loc_coords.txt"};
+    out_file << "lat, lon, round\n";
   }
 
   void next_start_time() {
