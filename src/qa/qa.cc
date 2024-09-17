@@ -117,28 +117,28 @@ double rate(pareto_set<nigiri::routing::journey> const& a,
 constexpr auto const kMode =
     cista::mode::WITH_INTEGRITY | cista::mode::WITH_STATIC_VERSION;
 
-void benchmark_criteria::write(std::filesystem::path const& p) const {
+void benchmark_results::write(std::filesystem::path const& p) const {
   auto mmap = cista::mmap{p.string().c_str(), cista::mmap::protection::WRITE};
   auto writer = cista::buf<cista::mmap>(std::move(mmap));
   cista::serialize<kMode>(writer, *this);
 }
 
-cista::wrapped<benchmark_criteria> benchmark_criteria::read(
+cista::wrapped<benchmark_results> benchmark_results::read(
     cista::memory_holder&& mem) {
   return std::visit(
       utl::overloaded{[&](cista::buf<cista::mmap>& b) {
-                        auto const ptr = reinterpret_cast<benchmark_criteria*>(
+                        auto const ptr = reinterpret_cast<benchmark_results*>(
                             &b[cista::data_start(kMode)]);
                         return cista::wrapped{std::move(mem), ptr};
                       },
                       [&](cista::buffer& b) {
                         auto const ptr =
-                            cista::deserialize<benchmark_criteria, kMode>(b);
+                            cista::deserialize<benchmark_results, kMode>(b);
                         return cista::wrapped{std::move(mem), ptr};
                       },
                       [&](cista::byte_buf& b) {
                         auto const ptr =
-                            cista::deserialize<benchmark_criteria, kMode>(b);
+                            cista::deserialize<benchmark_results, kMode>(b);
                         return cista::wrapped{std::move(mem), ptr};
                       }},
       mem);

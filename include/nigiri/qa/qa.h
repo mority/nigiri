@@ -13,17 +13,17 @@ constexpr auto const kMaxRating = std::numeric_limits<double>::max();
 constexpr auto const kMinRating = std::numeric_limits<double>::min();
 using criteria_t = std::array<double, 3>;
 
-struct query_criteria {
+struct query_results {
   std::uint64_t query_idx_;
-  std::chrono::milliseconds query_time_;
-  vector<criteria_t> jc_;
+  std::chrono::milliseconds response_time_;
+  pareto_set<routing::journey> journeys_;
 };
 
-struct benchmark_criteria {
+struct benchmark_results {
   void write(std::filesystem::path const&) const;
-  static cista::wrapped<benchmark_criteria> read(cista::memory_holder&&);
+  static cista::wrapped<benchmark_results> read(cista::memory_holder&&);
 
-  vector<query_criteria> qc_;
+  vector<query_results> results_;
 };
 
 double rate(vector<criteria_t> const&, vector<criteria_t> const&);

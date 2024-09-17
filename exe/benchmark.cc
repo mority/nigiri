@@ -533,16 +533,9 @@ int main(int argc, char* argv[]) {
   print_memory_usage();
 
   if (vm.count("qa_path")) {
-    auto bm_crit = nigiri::qa::benchmark_criteria{};
+    auto bm_crit = nigiri::qa::benchmark_results{};
     for (auto const& res : results) {
-      auto jc = vector<nigiri::qa::criteria_t>{};
-      for (auto const& j : res.journeys_) {
-        jc.emplace_back(
-            static_cast<double>(j.start_time_.time_since_epoch().count()),
-            static_cast<double>(j.dest_time_.time_since_epoch().count()),
-            static_cast<double>(j.transfers_));
-      }
-      bm_crit.qc_.emplace_back(res.q_idx_, res.total_time_, jc);
+      bm_crit.results_.emplace_back(res.q_idx_, res.total_time_, res.journeys_);
     }
     bm_crit.write(qa_path);
   }

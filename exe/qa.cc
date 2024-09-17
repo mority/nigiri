@@ -6,6 +6,7 @@
 
 namespace fs = std::filesystem;
 namespace bpo = boost::program_options;
+using namespace nigiri::qa;
 
 // needs sorted vector
 template <typename T>
@@ -43,17 +44,66 @@ void print_result(
             << "\n----------------------------------\n";
 }
 
+void compare_heuristic(benchmark_results const& ref_file,
+                       benchmark_results const& cmp_file) {
+  auto rating_timing =
+      std::vector<std::pair<double, std::chrono::milliseconds>>{};
+  rating_timing.reserve(ref_file.results_.size());
+  for (auto const& ref : ref_file.results_) {
+    for (auto const& cmp : cmp_file.results_) {
+      if (ref.query_idx_ == cmp.query_idx_) {
+        auto const rating = nigiri::qa::rate(cmp.journeys_, ref.journeys_);
+        auto const timing = cmp.response_time_ - ref.response_time_;
+        rating_timing.emplace_back(rating, timing);
+        break;
+      }
+    }
+  }
+
+  std::sort(begin(rating_timing), end(rating_timing),
+            [](auto const& a, auto const& b) { return a.first < b.first; });
+  print_result(rating_timing, "rating");
+
+  std::sort(begin(rating_timing), end(rating_timing),
+            [](auto const& a, auto const& b) { return a.second < b.second; });
+  print_result(rating_timing, "timing");
+}
+
+void compare_algorithmic(benchmark_results const& ref_file,
+                         benchmark_results const& cmp_file) {
+  auto empty = 0U;
+  auto mismatches = 0U;
+  auto additional_journeys = 0U;
+  auto missing_journeys = 0U;
+
+  for (auto const& ref : ref_file.results_) {
+    if (ref.journeys_.size() == 0) {
+      ++empty;
+    }
+    if (ref.)
+      for (auto const& cmp : cmp_file.results_) {
+      }
+  }
+}
+
 int main(int ac, char** av) {
-  auto in_r = fs::path{};
-  auto in_c = fs::path{};
+  auto ref_path = fs::path{};
+  auto cmp_path = fs::path{};
+
+  enum mode { kAlgorithmic, kHeuristic };
+  auto const mode_map = std::map<std::string, mode>{
+      {"algorithmic", mode::kAlgorithmic}, {"heuristic", mode::kHeuristic}};
+  auto mode_str = std::string{};
 
   auto desc = bpo::options_description{"Options"};
   desc.add_options()  //
       ("help,h", "produce this help message")  //
-      ("reference,r", bpo::value(&in_r),
+      ("reference,r", bpo::value(&ref_path)->required(),
        "path to binary dump of vector<pareto_set<journey>>")  //
-      ("compare,c", bpo::value(&in_c),
-       "path to binary dump of vector<pareto_set<journey>>");
+      ("compare,c", bpo::value(&cmp_path)->required(),
+       "path to binary dump of vector<pareto_set<journey>>")  //
+      ("mode,m", bpo::value(&mode_str)->default_value("algorithmic"),  //
+       "comparison mode: algorithmic | heuristic");
   auto const pos = bpo::positional_options_description{}.add("in", -1);
 
   auto vm = bpo::variables_map{};
@@ -76,32 +126,23 @@ int main(int ac, char** av) {
     return 1;
   }
 
-  auto const ref = nigiri::qa::benchmark_criteria::read(
-      cista::memory_holder{cista::file{in_r.c_str(), "r"}.content()});
-  auto const cmp = nigiri::qa::benchmark_criteria::read(
-      cista::memory_holder{cista::file{in_c.c_str(), "r"}.content()});
-
-  auto rating_timing =
-      std::vector<std::pair<double, std::chrono::milliseconds>>{};
-  rating_timing.reserve(ref->qc_.size());
-  for (auto const& qc_ref : ref->qc_) {
-    for (auto const& qc_cmp : cmp->qc_) {
-      if (qc_ref.query_idx_ == qc_cmp.query_idx_) {
-        auto const rating = nigiri::qa::rate(qc_cmp.jc_, qc_ref.jc_);
-        auto const timing = qc_cmp.query_time_ - qc_ref.query_time_;
-        rating_timing.emplace_back(rating, timing);
-        break;
-      }
-    }
+  auto m = mode::kAlgorithmic;
+  if (mode_map.contains(mode_str)) {
+    m = mode_map.at(mode_str);
+  } else {
+    std::cout << "Error: unknown mode string\n";
+    return 1;
   }
 
-  std::sort(begin(rating_timing), end(rating_timing),
-            [](auto const& a, auto const& b) { return a.first < b.first; });
-  print_result(rating_timing, "rating");
+  auto const ref_file = nigiri::qa::benchmark_results::read(
+      cista::memory_holder{cista::file{ref_path.c_str(), "r"}.content()});
+  auto const cmp_file = nigiri::qa::benchmark_results::read(
+      cista::memory_holder{cista::file{cmp_path.c_str(), "r"}.content()});
 
-  std::sort(begin(rating_timing), end(rating_timing),
-            [](auto const& a, auto const& b) { return a.second < b.second; });
-  print_result(rating_timing, "timing");
+  switch (m) {
+    case kHeuristic: compare_heuristic(*ref_file, *cmp_file); break;
+    case kAlgorithmic: compare_algorithmic(*ref_file, *cmp_file); break;
+  }
 
   return 0;
 }
