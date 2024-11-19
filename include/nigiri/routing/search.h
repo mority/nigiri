@@ -37,7 +37,7 @@ struct search_state {
   std::array<bitvec, kMaxVias> is_via_;
   std::vector<std::uint16_t> dist_to_dest_;
   std::vector<start> starts_;
-  std::variant<pareto_set<journey>, std::vector<std::chrono::minutes>> results_;
+  pareto_set<journey> results_;
 };
 
 struct search_stats {
@@ -58,14 +58,13 @@ struct search_stats {
 
 template <typename AlgoStats>
 struct routing_result {
-  std::variant<pareto_set<journey>, std::vector<std::chrono::minutes>> const*
-      journeys_{nullptr};
+  pareto_set<journey> const* journeys_{nullptr};
   interval<unixtime_t> interval_;
   search_stats search_stats_;
   AlgoStats algo_stats_;
 };
 
-template <direction SearchDir, typename Algo, bool ManyToAll = false>
+template <direction SearchDir, typename Algo>
 struct search {
   using algo_state_t = typename Algo::algo_state_t;
   using algo_stats_t = typename Algo::algo_stats_t;
