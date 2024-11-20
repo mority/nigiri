@@ -14,6 +14,8 @@ struct search_state;
 struct raptor_state;
 struct query;
 
+static constexpr auto const kNToAllUnreached = unixtime_t{duration_t{0}};
+
 template <direction SearchDir>
 void raptor_n_to_all(
     timetable const& tt,
@@ -31,7 +33,7 @@ void raptor_n_to_all(
     times[l].clear();
     for (auto i = 0U; i != kMaxTransfers + 1U; ++i) {
       auto const delta_to_unix_with_invalids = [&](auto&& base, auto&& delta) {
-        return delta == kInvalidDelta<SearchDir> ? unixtime_t{duration_t{0}}
+        return delta == kInvalidDelta<SearchDir> ? kNToAllUnreached
                                                  : delta_to_unix(base, delta);
       };
       times[l].emplace_back(
