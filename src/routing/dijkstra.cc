@@ -25,6 +25,10 @@ void dijkstra(timetable const& tt,
               vecvec<location_idx_t, footpath> const& lb_graph,
               std::vector<label::dist_t>& dists) {
   dists.resize(tt.n_locations());
+  if (q.destination_.empty()) {
+    utl::fill(dists, 0);
+    return;
+  }
   utl::fill(dists, std::numeric_limits<label::dist_t>::max());
 
   std::map<location_idx_t, label::dist_t> min;

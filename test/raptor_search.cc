@@ -107,7 +107,14 @@ std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
   static auto algo_state = algo_state_t{};
 
   auto times = std::vector<std::vector<unixtime_t>>{};
-  raptor_n_to_all(tt, rtt, search_state, algo_state, times, q, search_dir);
+  if (search_dir == direction::kForward) {
+    raptor_n_to_all<direction::kForward>(tt, rtt, search_state, algo_state,
+                                         times, q);
+  } else {
+    raptor_n_to_all<direction::kBackward>(tt, rtt, search_state, algo_state,
+                                          times, q);
+  }
+
   return times;
 }
 

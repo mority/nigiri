@@ -10,6 +10,19 @@ using namespace nigiri;
 using namespace nigiri::loader;
 using nigiri::test::raptor_n_to_all_search;
 
+void print(timetable const& tt,
+           std::vector<std::vector<unixtime_t>> const& times) {
+  for (auto l = 0U; l != tt.n_locations() && l != times.size(); ++l) {
+    std::cout << tt.locations_.get(location_idx_t{l}).name_ << ":\n";
+    for (auto i = 0U; i != times[l].size(); ++i) {
+      if (times[l][i] != unixtime_t{duration_t{0}}) {
+        std::cout << i << ": " << times[l][i] << "  ";
+      }
+    }
+    std::cout << "\n";
+  }
+}
+
 mem_dir n_to_all_files() {
   return mem_dir::read(R"__(
 "(
@@ -87,6 +100,8 @@ TEST(routing, one_to_all_forward) {
                              interval{unixtime_t{sys_days{2024_y / June / 8}},
                                       unixtime_t{sys_days{2024_y / June / 9}}},
                              direction::kForward);
+
+  print(tt, times);
 }
 
 TEST(routing, one_to_all_backward) {}
