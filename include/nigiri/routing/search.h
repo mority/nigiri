@@ -11,6 +11,7 @@
 #include "nigiri/for_each_meta.h"
 #include "nigiri/get_otel_tracer.h"
 #include "nigiri/logging.h"
+#include "nigiri/routing/base_day.h"
 #include "nigiri/routing/dijkstra.h"
 #include "nigiri/routing/get_fastest_direct.h"
 #include "nigiri/routing/interval_estimate.h"
@@ -123,27 +124,20 @@ struct search {
 #endif
     }
 
-    return Algo{
-        tt_,
-        rtt_,
-        algo_state,
-        state_.is_destination_,
-        state_.is_via_,
-        state_.dist_to_dest_,
-        q_.td_dest_,
-        state_.travel_time_lower_bound_,
-        q_.via_stops_,
-        day_idx_t{
-            std::chrono::duration_cast<date::days>(
-                std::chrono::round<std::chrono::days>(
-                    search_interval_.from_ +
-                    ((search_interval_.to_ - search_interval_.from_) / 2)) -
-                tt_.internal_interval().from_)
-                .count()},
-        allowed_claszes,
-        require_bikes_allowed,
-        q_.prf_idx_ == 2U,
-        tts};
+    return Algo{tt_,
+                rtt_,
+                algo_state,
+                state_.is_destination_,
+                state_.is_via_,
+                state_.dist_to_dest_,
+                q_.td_dest_,
+                state_.travel_time_lower_bound_,
+                q_.via_stops_,
+                base_day_idx(tt_, q_),
+                allowed_claszes,
+                require_bikes_allowed,
+                q_.prf_idx_ == 2U,
+                tts};
   }
 
   search(timetable const& tt,
@@ -156,15 +150,7 @@ struct search {
         rtt_{rtt},
         state_{s},
         q_{std::move(q)},
-        search_interval_{std::visit(
-            utl::overloaded{[](interval<unixtime_t> const start_interval) {
-                              return start_interval;
-                            },
-                            [](unixtime_t const start_time) {
-                              return interval<unixtime_t>{start_time,
-                                                          start_time};
-                            }},
-            q_.start_time_)},
+        search_interval_{q_.get_search_interval()},
         fastest_direct_{get_fastest_direct(tt_, q_, SearchDir)},
         algo_{init(q_.allowed_claszes_,
                    q_.require_bike_transport_,

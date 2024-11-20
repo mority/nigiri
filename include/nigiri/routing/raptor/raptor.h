@@ -4,6 +4,7 @@
 
 #include "nigiri/common/delta_t.h"
 #include "nigiri/common/linear_lower_bound.h"
+#include "nigiri/routing/base_day.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/pareto_set.h"
@@ -255,9 +256,7 @@ struct raptor {
   }
 
 private:
-  date::sys_days base() const {
-    return tt_.internal_interval_days().from_ + as_int(base_) * date::days{1};
-  }
+  date::sys_days base() const { return base_date(tt_, base_); }
 
   template <bool WithClaszFilter, bool WithBikeFilter>
   bool loop_routes(unsigned const k) {
