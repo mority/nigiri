@@ -1,6 +1,7 @@
 #include "./raptor_search.h"
 
 #include "nigiri/routing/raptor/raptor.h"
+#include "nigiri/routing/raptor_n_to_all.h"
 #include "nigiri/routing/raptor_search.h"
 #include "nigiri/routing/search.h"
 #include "nigiri/timetable.h"
@@ -94,6 +95,34 @@ pareto_set<routing::journey> raptor_intermodal_search(
       .prf_idx_ = 0,
       .via_stops_ = {}};
   return raptor_search(tt, rtt, std::move(q), search_dir);
+}
+
+std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
+    timetable const& tt,
+    rt_timetable const* rtt,
+    routing::query q,
+    direction const search_dir) {
+  using algo_state_t = routing::raptor_state;
+  static auto search_state = routing::search_state{};
+  static auto algo_state = algo_state_t{};
+
+  auto times = std::vector<std::vector<unixtime_t>>{};
+  raptor_n_to_all(tt, rtt, search_state, algo_state, times, q, search_dir);
+  return times;
+}
+
+std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
+    timetable const& tt,
+    rt_timetable const* rtt,
+    std::string_view from,
+    routing::start_time_t const time,
+    direction const search_dir) {
+  auto q = routing::query{
+      .start_time_ = time,
+      .start_ = {{tt.locations_.location_id_to_idx_.at({from, source_idx_t{0}}),
+                  0_minutes, 0U}},
+  };
+  return raptor_n_to_all_search(tt, rtt, q, search_dir);
 }
 
 }  // namespace nigiri::test

@@ -8,6 +8,7 @@
 using namespace date;
 using namespace nigiri;
 using namespace nigiri::loader;
+using nigiri::test::raptor_n_to_all_search;
 
 mem_dir n_to_all_files() {
   return mem_dir::read(R"__(
@@ -81,10 +82,11 @@ TEST(routing, one_to_all_forward) {
   gtfs::load_timetable(config, src, n_to_all_files(), tt);
   finalize(tt);
 
-  auto const results =
-      raptor_search(tt, nullptr, "A0",
-                    interval{unixtime_t{sys_days{2024_y / June / 8}},
-                             unixtime_t{sys_days{2024_y / June / 9}}});
+  auto const times =
+      raptor_n_to_all_search(tt, nullptr, "A0",
+                             interval{unixtime_t{sys_days{2024_y / June / 8}},
+                                      unixtime_t{sys_days{2024_y / June / 9}}},
+                             direction::kForward);
 }
 
 TEST(routing, one_to_all_backward) {}

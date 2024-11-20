@@ -19,9 +19,9 @@ void raptor_n_to_all(
     rt_timetable const* rtt,
     search_state& s_state,
     raptor_state& r_state,
+    std::vector<std::vector<unixtime_t>>& times,
     query q,
     direction search_dir,
-    std::vector<std::vector<unixtime_t>>& times,
     std::optional<std::chrono::seconds> timeout = std::nullopt);
 
 }  // namespace nigiri::routing

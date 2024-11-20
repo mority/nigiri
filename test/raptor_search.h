@@ -45,9 +45,22 @@ pareto_set<routing::journey> raptor_intermodal_search(
     std::vector<routing::offset> start,
     std::vector<routing::offset> destination,
     routing::start_time_t,
-    direction = direction::kForward,
+    direction,
     std::uint8_t min_connection_count = 0U,
     bool extend_interval_earlier = false,
     bool extend_interval_later = false);
+
+std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
+    timetable const&,
+    rt_timetable const*,
+    routing::query,
+    direction = direction::kForward);
+
+std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
+    timetable const&,
+    rt_timetable const*,
+    std::string_view from,
+    routing::start_time_t,
+    direction);
 
 }  // namespace nigiri::test
