@@ -28,6 +28,17 @@ void print(std::ostream& out,
   out << "\n";
 }
 
+//                                                                11:00
+//          A0               B0                            C0--------------+
+//    08:00 |                | 09:00                       | 10:00         |
+//          |                |                             |               |
+//    09:00 V  10:00  11:00  V 10:00     12:00  13:00      V 11:00         |
+//          A1-------------->B1---------------+----------->C1              |
+//    10:00 |                | 12:00          |  12:30     | 14:00         |
+//          |                |                |            |               |
+//    11:00 V                V 12:10          |            V 15:00         |
+//          A2               B2---------------+            C2<-------------+
+//                              12:20                             12:00
 mem_dir n_to_all_files() {
   return mem_dir::read(R"__(
 "(
@@ -119,7 +130,7 @@ TEST(routing, one_to_all_fwd) {
   finalize(tt);
 
   auto const times = raptor_n_to_all_search(
-      tt, nullptr, "A0",
+      tt, nullptr, {"A0"},
       interval{unixtime_t{sys_days{2024_y / November / 20}},
                unixtime_t{sys_days{2024_y / November / 21}}},
       direction::kForward);
@@ -149,8 +160,9 @@ TEST(routing, one_to_all_bwd) {
   gtfs::load_timetable(loader_config{}, source_idx_t{0U}, n_to_all_files(), tt);
   finalize(tt);
 
+  std::vector<std::string> const from{"C2"};
   auto const times = raptor_n_to_all_search(
-      tt, nullptr, "C2",
+      tt, nullptr, from,
       interval{unixtime_t{sys_days{2024_y / November / 20}},
                unixtime_t{sys_days{2024_y / November / 21}}},
       direction::kBackward);
@@ -158,4 +170,66 @@ TEST(routing, one_to_all_bwd) {
   std::stringstream ss;
   print(ss, tt, times);
   EXPECT_EQ(std::string_view{one_to_all_bwd_times}, ss.str());
+}
+
+constexpr auto const two_to_all_fwd_times = R"(
+A0: (#rides: 0, 2024-11-20 08:00)
+A1: (#rides: 1, 2024-11-20 09:02)
+A2: (#rides: 1, 2024-11-20 11:02)
+B0: (#rides: 0, 2024-11-20 09:00)
+B1: (#rides: 1, 2024-11-20 10:02)
+B2: (#rides: 1, 2024-11-20 12:12)
+C0:
+C1: (#rides: 2, 2024-11-20 12:32)
+C2: (#rides: 3, 2024-11-20 15:02)
+
+)";
+
+TEST(routing, two_to_all_fwd) {
+  timetable tt;
+  tt.date_range_ = n_to_all_period();
+  register_special_stations(tt);
+  gtfs::load_timetable(loader_config{}, source_idx_t{0U}, n_to_all_files(), tt);
+  finalize(tt);
+
+  auto const times = raptor_n_to_all_search(
+      tt, nullptr, {"A0", "B0"},
+      interval{unixtime_t{sys_days{2024_y / November / 20}},
+               unixtime_t{sys_days{2024_y / November / 21}}},
+      direction::kForward);
+
+  std::stringstream ss;
+  print(ss, tt, times);
+  EXPECT_EQ(std::string_view{two_to_all_fwd_times}, ss.str());
+}
+
+constexpr auto const two_to_all_bwd_times = R"(
+A0: (#rides: 1, 2024-11-20 07:58)
+A1: (#rides: 1, 2024-11-20 09:58)
+A2: (#rides: 0, 2024-11-20 11:00)
+B0: (#rides: 3, 2024-11-20 08:58)
+B1: (#rides: 2, 2024-11-20 11:58)
+B2: (#rides: 2, 2024-11-20 12:18)
+C0: (#rides: 1, 2024-11-20 10:58)
+C1: (#rides: 1, 2024-11-20 13:58)
+C2: (#rides: 0, 2024-11-20 15:00)
+
+)";
+
+TEST(routing, two_to_all_bwd) {
+  timetable tt;
+  tt.date_range_ = n_to_all_period();
+  register_special_stations(tt);
+  gtfs::load_timetable(loader_config{}, source_idx_t{0U}, n_to_all_files(), tt);
+  finalize(tt);
+
+  auto const times = raptor_n_to_all_search(
+      tt, nullptr, {"A2", "C2"},
+      interval{unixtime_t{sys_days{2024_y / November / 20}},
+               unixtime_t{sys_days{2024_y / November / 21}}},
+      direction::kBackward);
+
+  std::stringstream ss;
+  print(ss, tt, times);
+  EXPECT_EQ(std::string_view{two_to_all_bwd_times}, ss.str());
 }

@@ -121,13 +121,22 @@ std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
 std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
     timetable const& tt,
     rt_timetable const* rtt,
-    std::string_view from,
+    std::vector<std::string> const& from,
     routing::start_time_t const time,
     direction const search_dir) {
+  auto const get_offsets = [&]() {
+    auto offsets = std::vector<nigiri::routing::offset>{};
+    for (auto& f : from) {
+      offsets.emplace_back(
+          tt.locations_.location_id_to_idx_.at({f, source_idx_t{0}}), 0_minutes,
+          0U);
+    }
+    return offsets;
+  };
+
   auto q = routing::query{
       .start_time_ = time,
-      .start_ = {{tt.locations_.location_id_to_idx_.at({from, source_idx_t{0}}),
-                  0_minutes, 0U}},
+      .start_ = get_offsets(),
   };
   return raptor_n_to_all_search(tt, rtt, q, search_dir);
 }

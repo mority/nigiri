@@ -50,16 +50,15 @@ pareto_set<routing::journey> raptor_intermodal_search(
     bool extend_interval_earlier = false,
     bool extend_interval_later = false);
 
-std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
-    timetable const&,
-    rt_timetable const*,
-    routing::query,
-    direction = direction::kForward);
+std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(timetable const&,
+                                                            rt_timetable const*,
+                                                            routing::query,
+                                                            direction);
 
 std::vector<std::vector<unixtime_t>> raptor_n_to_all_search(
     timetable const&,
     rt_timetable const*,
-    std::string_view from,
+    std::vector<std::string> const& from,
     routing::start_time_t,
     direction);
 
