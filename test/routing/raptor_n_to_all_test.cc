@@ -135,4 +135,12 @@ TEST(routing, one_to_all_bwd) {
   register_special_stations(tt);
   gtfs::load_timetable(loader_config{}, source_idx_t{0U}, n_to_all_files(), tt);
   finalize(tt);
+
+  auto const times =
+      raptor_n_to_all_search(tt, nullptr, "C2",
+                             interval{unixtime_t{sys_days{2024_y / June / 8}},
+                                      unixtime_t{sys_days{2024_y / June / 9}}},
+                             direction::kBackward);
+
+  print(std::cout, tt, times);
 }
