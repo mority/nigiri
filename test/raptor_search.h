@@ -45,7 +45,7 @@ pareto_set<routing::journey> raptor_intermodal_search(
     std::vector<routing::offset> start,
     std::vector<routing::offset> destination,
     routing::start_time_t,
-    direction,
+    direction = direction::kForward,
     std::uint8_t min_connection_count = 0U,
     bool extend_interval_earlier = false,
     bool extend_interval_later = false);
