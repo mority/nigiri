@@ -1,7 +1,7 @@
 #include "./raptor_search.h"
 
+#include "nigiri/routing/n_to_all/n_to_all.h"
 #include "nigiri/routing/raptor/raptor.h"
-#include "nigiri/routing/raptor_n_to_all.h"
 #include "nigiri/routing/raptor_search.h"
 #include "nigiri/routing/search.h"
 #include "nigiri/timetable.h"
