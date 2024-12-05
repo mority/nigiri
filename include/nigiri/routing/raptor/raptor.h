@@ -65,6 +65,7 @@ struct raptor {
     a.fill(kInvalid);
     return a;
   }();
+  static constexpr auto const kSupportsNToAll = true;
 
   static bool is_better(auto a, auto b) { return kFwd ? a < b : a > b; }
   static bool is_better_or_eq(auto a, auto b) { return kFwd ? a <= b : a >= b; }

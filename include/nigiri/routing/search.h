@@ -16,6 +16,7 @@
 #include "nigiri/routing/get_fastest_direct.h"
 #include "nigiri/routing/interval_estimate.h"
 #include "nigiri/routing/journey.h"
+#include "nigiri/routing/n_to_all/n_to_all.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/routing/sanitize_via_stops.h"
@@ -38,7 +39,8 @@ struct search_state {
   std::array<bitvec, kMaxVias> is_via_;
   std::vector<std::uint16_t> dist_to_dest_;
   std::vector<start> starts_;
-  pareto_set<journey> results_;
+  std::variant<pareto_set<journey>, std::vector<std::vector<n_to_all_label>>>
+      results_;
 };
 
 struct search_stats {
@@ -59,13 +61,15 @@ struct search_stats {
 
 template <typename AlgoStats>
 struct routing_result {
-  pareto_set<journey> const* journeys_{nullptr};
+  std::variant<pareto_set<journey>,
+               std::vector<std::vector<n_to_all_label>>> const* journeys_{
+      nullptr};
   interval<unixtime_t> interval_;
   search_stats search_stats_;
   AlgoStats algo_stats_;
 };
 
-template <direction SearchDir, typename Algo>
+template <direction SearchDir, typename Algo, bool NToAll = false>
 struct search {
   using algo_state_t = typename Algo::algo_state_t;
   using algo_stats_t = typename Algo::algo_stats_t;
@@ -82,7 +86,7 @@ struct search {
     stats_.fastest_direct_ =
         static_cast<std::uint64_t>(fastest_direct_.count());
 
-    utl::verify(q_.via_stops_.size() <= kMaxVias,
+    utl::verify(q_.via_stops_.size() <= (NToAll ? 0U : kMaxVias),
                 "too many via stops: {}, limit: {}", q_.via_stops_.size(),
                 kMaxVias);
 
@@ -126,6 +130,9 @@ struct search {
 #endif
     }
 
+    static_assert(!NToAll || Algo::kSupportsNToAll,
+                  "algorithm does not support n-to-all routing");
+
     return Algo{tt_,
                 rtt_,
                 algo_state,
@@ -168,7 +175,25 @@ struct search {
     auto span = get_otel_tracer()->StartSpan("search::execute");
     auto scope = opentelemetry::trace::Scope{span};
 
-    state_.results_.clear();
+    std::visit(
+        utl::overloaded{[&](pareto_set<journey>&& p) {
+                          if constexpr (NToAll) {
+                            state_.results_ =
+                                std::vector<std::vector<n_to_all_label>>{};
+                          } else {
+                            p.clear();
+                          }
+                        },
+                        [&](std::vector<std::vector<n_to_all_label>>&& l) {
+                          if constexpr (NToAll) {
+                            for (auto& v : l) {
+                              v.clear();
+                            }
+                          } else {
+                            state_.results_ = pareto_set<journey>{};
+                          }
+                        }},
+        state_.results_);
 
     if (start_dest_overlap()) {
       return {&state_.results_, search_interval_, stats_, algo_.get_stats()};
