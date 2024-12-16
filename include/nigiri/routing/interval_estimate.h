@@ -20,15 +20,11 @@ struct interval_estimator {
             [](interval<unixtime_t> iut) { return iut; }},
         q.start_time_);
 
-    auto const interval =
-        q.fastest_direct_ ? std::chrono::days{1} : std::chrono::days{2};
-    data_type_max_interval_ = {
-        std::chrono::round<std::chrono::days>(
-            start_itv.from_ + ((start_itv.to_ - start_itv.from_) / 2)) -
-            interval,
-        std::chrono::round<std::chrono::days>(
-            start_itv.from_ + ((start_itv.to_ - start_itv.from_) / 2)) +
-            interval};
+    auto const max_interval_size =
+        q.fastest_direct_ ? kShortSearchIntervalSize : kMaxSearchIntervalSize;
+    max_interval_ = {
+        start_itv.from_ + (start_itv.size() / 2) - max_interval_size,
+        start_itv.from_ + (start_itv.size() / 2) + max_interval_size};
   }
 
   interval<unixtime_t> initial(interval<unixtime_t> const& itv) const {
@@ -38,33 +34,13 @@ struct interval_estimator {
     }
 
     auto new_itv = itv;
-    auto const ext = 1_hours * q_.min_connection_count_;
+    auto const ext = duration_t{q_.min_connection_count_ * 1_hours};
 
     if (can_extend_bad_dir(itv)) {
       if constexpr (SearchDir == direction::kForward) {
-        if (can_extend_earlier(itv)) {
-          new_itv.from_ -= 1_hours;
-        } else {
-          new_itv.to_ += 1_hours;
-        }
-        new_itv.to_ += ext;
+        new_itv.to_ = std::max(itv.from_ + ext, itv.to_);
       } else {
-        if (can_extend_later(itv)) {
-          new_itv.to_ += 1_hours;
-        } else {
-          new_itv.from_ -= 1_hours;
-        }
-        new_itv.from_ -= ext;
-      }
-    } else {
-      if constexpr (SearchDir == direction::kForward) {
-        if (q_.extend_interval_earlier_) {
-          new_itv.from_ -= 1_hours + ext;
-        }
-      } else {
-        if (q_.extend_interval_later_) {
-          new_itv.to_ += 1_hours + ext;
-        }
+        new_itv.from_ = std::min(itv.to_ - ext, itv.from_);
       }
     }
 
@@ -83,16 +59,8 @@ struct interval_estimator {
     auto new_itv = itv;
     auto const ext = itv.size() * num_con_req;
 
-    if (can_extend_both_dir(itv)) {
-      new_itv.from_ -= ext / 2;
-      new_itv.to_ += ext / 2;
-    } else {
-      if (q_.extend_interval_earlier_) {
-        new_itv.from_ -= ext;
-      }
-      if (q_.extend_interval_later_) {
-        new_itv.to_ += ext;
-      }
+    if (can_extend_bad_dir(itv)) {
+      extend_bad_dir(new_itv, ext);
     }
 
     clamp(new_itv);
@@ -118,20 +86,24 @@ private:
     }
   }
 
-  bool can_extend_both_dir(interval<unixtime_t> const& itv) const {
-    return can_extend_earlier(itv) && can_extend_later(itv);
+  void extend_bad_dir(interval<unixtime_t>& itv, duration_t const d) const {
+    if constexpr (SearchDir == direction::kForward) {
+      itv.to_ += d;
+    } else {
+      itv.from_ -= d;
+    }
   }
 
   void clamp(interval<unixtime_t>& itv) const {
     itv.from_ = tt_.external_interval().clamp(itv.from_);
     itv.to_ = tt_.external_interval().clamp(itv.to_);
-    itv.from_ = data_type_max_interval_.clamp(itv.from_);
-    itv.to_ = data_type_max_interval_.clamp(itv.to_);
+    itv.from_ = max_interval_.clamp(itv.from_);
+    itv.to_ = max_interval_.clamp(itv.to_);
   }
 
   timetable const& tt_;
   query const& q_;
-  interval<unixtime_t> data_type_max_interval_;
+  interval<unixtime_t> max_interval_;
 };
 
 }  // namespace nigiri::routing

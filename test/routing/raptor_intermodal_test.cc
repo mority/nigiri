@@ -246,12 +246,16 @@ TEST(routing, raptor_intermodal_backward) {
                            unixtime_t{sys_days{2020_y / March / 30}} + 6_hours},
       nigiri::direction::kBackward, 3U, true, true);
 
+  std::cout << "#journeys: " << results.size() << "\n";
+
   std::stringstream ss;
   ss << "\n";
   for (auto const& x : results) {
     x.print(ss, tt);
     ss << "\n\n";
   }
+
+  std::cout << ss.str() << "\n";
 
   EXPECT_EQ(std::string_view{bwd_journeys}, ss.str());
 }
