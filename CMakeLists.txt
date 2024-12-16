@@ -28,7 +28,7 @@ add_custom_command(
 add_library(gtfsrt ${CMAKE_CURRENT_BINARY_DIR}/generated/gtfsrt/gtfs-realtime.pb.cc)
 target_compile_features(gtfsrt PUBLIC cxx_std_23)
 target_include_directories(gtfsrt SYSTEM PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(gtfsrt protobuf)
+target_link_libraries(gtfsrt protobuf::libprotobuf)
 
 
 # --- LINT ---
@@ -57,11 +57,12 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
       -Wno-zero-as-null-pointer-constant
       -Wno-missing-noreturn
       -Wno-undefined-func-template
-      #       -Wno-unsafe-buffer-usage
+      -Wno-unsafe-buffer-usage
       -Wno-c++20-compat
-      -Werror
-      -march=native
-      -mtune=native
+      -Wno-reserved-macro-identifier
+      -Wno-documentation-unknown-command
+      -Wno-duplicate-enum
+      -Wno-switch-default
   )
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
   set(nigiri-compile-options -Wall -Wextra -Werror)
