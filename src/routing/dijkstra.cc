@@ -6,7 +6,7 @@
 
 #include "nigiri/common/dial.h"
 #include "nigiri/footpath.h"
-#include "nigiri/routing/for_each_meta.h"
+#include "nigiri/for_each_meta.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/query.h"
 
@@ -20,65 +20,52 @@
 
 namespace nigiri::routing {
 
-using dist_t = std::uint16_t;
-
-struct label {
-  label(location_idx_t const l, dist_t const d) : l_{l}, d_{d} {}
-  friend bool operator>(label const& a, label const& b) { return a.d_ > b.d_; }
-  location_idx_t l_;
-  dist_t d_;
-};
-
-struct get_bucket {
-  std::size_t operator()(label const& l) const {
-    return static_cast<std::size_t>(l.d_);
-  }
-};
-
 void dijkstra(timetable const& tt,
               query const& q,
               vecvec<location_idx_t, footpath> const& lb_graph,
-              std::vector<dist_t>& dists) {
+              std::vector<label::dist_t>& dists) {
   dists.resize(tt.n_locations());
-  utl::fill(dists, std::numeric_limits<dist_t>::max());
+  utl::fill(dists, std::numeric_limits<label::dist_t>::max());
 
-  std::map<location_idx_t, dist_t> min;
+  std::map<location_idx_t, label::dist_t> min;
+  auto const update_min = [&](location_idx_t const x, duration_t const d) {
+    auto const p = tt.locations_.parents_[x];
+    auto const l = (p == location_idx_t::invalid()) ? x : p;
+    auto& m = utl::get_or_create(min, l, [&]() { return dists[to_idx(l)]; });
+    m = std::min(static_cast<label::dist_t>(d.count()), m);
+  };
+
   for (auto const& start : q.destination_) {
     for_each_meta(
-        tt, q.dest_match_mode_, start.target_, [&](location_idx_t const x) {
-          auto const p = tt.locations_.parents_[x];
-          auto const l = (p == location_idx_t::invalid()) ? x : p;
-          auto& m =
-              utl::get_or_create(min, l, [&]() { return dists[to_idx(l)]; });
-          m = std::min(static_cast<dist_t>(start.duration().count()), m);
-        });
+        tt, q.dest_match_mode_, start.target_,
+        [&](location_idx_t const x) { update_min(x, start.duration()); });
   }
 
-  dial<label, kMaxTravelTime.count(), get_bucket> pq;
+  for (auto const& [from, td] : q.td_dest_) {
+    for (auto const& fp : td) {
+      if (fp.duration_ != footpath::kMaxDuration &&
+          fp.duration_ < q.max_travel_time_) {
+        update_min(from, fp.duration_);
+      }
+    }
+  }
+
+  auto pq = dial<label, get_bucket>{kMaxTravelTime.count()};
   for (auto const& [l, duration] : min) {
     auto const d = duration;
-    for_each_meta(tt, q.start_match_mode_, l, [&](location_idx_t const meta) {
+    for_each_meta(tt, q.dest_match_mode_, l, [&](location_idx_t const meta) {
       pq.push(label{meta, d});
       dists[to_idx(meta)] = std::min(d, dists[to_idx(meta)]);
       trace("DIJKSTRA INIT @{}: {}\n", location{tt, meta}, duration);
     });
   }
 
-  while (!pq.empty()) {
-    auto l = pq.top();
-    pq.pop();
+  dijkstra(lb_graph, pq, dists);
 
-    if (dists[to_idx(l.l_)] < l.d_) {
-      continue;
-    }
-
-    for (auto const& e : lb_graph[l.l_]) {
-      auto const new_dist = l.d_ + e.duration().count();
-      if (new_dist < dists[to_idx(e.target())] &&
-          new_dist <= kMaxTravelTime.count()) {
-        dists[to_idx(e.target())] = static_cast<dist_t>(new_dist);
-        pq.push(label(e.target(), static_cast<dist_t>(new_dist)));
-      }
+  for (auto i = 0U; i != tt.n_locations(); ++i) {
+    auto const lb = dists[i];
+    for (auto const c : tt.locations_.children_[location_idx_t{i}]) {
+      dists[to_idx(c)] = std::min(lb, dists[to_idx(c)]);
     }
   }
 }

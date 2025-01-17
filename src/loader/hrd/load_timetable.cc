@@ -26,8 +26,9 @@ bool applicable(config const& c, dir const& d) {
                  auto const exists = d.exists(path);
                  if (!exists) {
                    log(log_lvl::info, "loader.hrd",
-                       "input={}, missing file for config {}: {}", d.path(),
-                       c.version_.view(), path);
+                       "input={}, missing file for config {}: {}",
+                       d.path().generic_string(), c.version_.view(),
+                       path.generic_string());
                  }
                  return exists;
                });
@@ -60,6 +61,15 @@ void load_timetable(source_idx_t const src,
                     config const& c,
                     dir const& d,
                     timetable& tt) {
+  auto local_bitfield_indices = hash_map<bitfield, bitfield_idx_t>{};
+  return load_timetable(src, c, d, tt, local_bitfield_indices);
+}
+
+void load_timetable(source_idx_t const src,
+                    config const& c,
+                    dir const& d,
+                    timetable& tt,
+                    hash_map<bitfield, bitfield_idx_t>& bitfield_indices) {
   auto st = stamm{c, tt, d};
 
   auto progress_tracker = utl::get_active_progress_tracker();
@@ -74,7 +84,7 @@ void load_timetable(source_idx_t const src,
                | utl::sum());
   auto total_bytes_processed = std::uint64_t{0U};
 
-  auto sb = service_builder{st, tt};
+  auto sb = service_builder{st, tt, bitfield_indices};
   for (auto const& path : d.list_files(c.prefix(d) / c.fplan_)) {
     if (path.filename().generic_string().starts_with(".") ||
         (!c.fplan_file_extension_.empty() &&
@@ -82,7 +92,8 @@ void load_timetable(source_idx_t const src,
       continue;
     }
 
-    log(log_lvl::info, "loader.hrd.services", "loading {}", path);
+    log(log_lvl::info, "loader.hrd.services", "loading {}",
+        path.generic_string());
     auto const file = d.get_file(path);
     sb.add_services(
         c, relative(path, c.fplan_).string().c_str(), file.data(),

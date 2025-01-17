@@ -46,8 +46,11 @@ void service_builder::add_service(ref_service&& s) {
   }
 }
 
-service_builder::service_builder(stamm& s, timetable& tt)
-    : stamm_{s}, tt_{tt} {}
+service_builder::service_builder(
+    stamm& s,
+    timetable& tt,
+    hash_map<bitfield, bitfield_idx_t>& bitfield_indices)
+    : stamm_{s}, tt_{tt}, bitfield_indices_(bitfield_indices) {}
 
 void service_builder::add_services(config const& c,
                                    const char* filename,
@@ -62,10 +65,12 @@ void service_builder::add_services(config const& c,
 
 void service_builder::write_services(source_idx_t const src) {
   auto const timer = scoped_timer{"loader.hrd.services.write"};
+  auto const empty_bikes_allowed = bitvec{};  // not implemented for hrd
   for (auto const& [key, sub_routes] : route_services_) {
     for (auto const& services : sub_routes) {
       auto const& [stop_seq, sections_clasz] = key;
-      auto const route_idx = tt_.register_route(stop_seq, sections_clasz);
+      auto const route_idx =
+          tt_.register_route(stop_seq, sections_clasz, empty_bikes_allowed);
 
       for (auto const& s : stop_seq) {
         auto s_routes = location_routes_[stop{s}.location_idx()];
@@ -80,11 +85,11 @@ void service_builder::write_services(source_idx_t const src) {
           auto const stops = s.stops(store_);
 
           trip_id_buf_.clear();
-          fmt::format_to(trip_id_buf_, "{}/{:07}/{}/{:07}/{}/{}",
-                         ref.initial_train_num_, to_idx(stops.front().eva_num_),
-                         s.utc_times_.front().count(),
-                         to_idx(stops.back().eva_num_),
-                         s.utc_times_.back().count(), s.line_info(store_));
+          fmt::format_to(
+              std::back_inserter(trip_id_buf_), "{}/{:07}/{}/{:07}/{}/{}",
+              ref.initial_train_num_, to_idx(stops.front().eva_num_),
+              s.utc_times_.front().count(), to_idx(stops.back().eva_num_),
+              s.utc_times_.back().count(), s.line_info(store_));
 
           auto const id = tt_.register_trip_id(
               trip_id_buf_, src, ref.display_name(tt_), ref.origin_.dbg_,
@@ -209,7 +214,8 @@ void service_builder::write_services(source_idx_t const src) {
               .section_providers_ = section_providers_,
               .section_directions_ = section_directions_,
               .section_lines_ = section_lines_,
-              .stop_seq_numbers_ = stop_seq_numbers_});
+              .stop_seq_numbers_ = stop_seq_numbers_,
+              .route_colors_ = route_colors_});
         } catch (std::exception const& e) {
           log(log_lvl::error, "loader.hrd.service",
               "unable to load service {}: {}", ref.origin_, e.what());

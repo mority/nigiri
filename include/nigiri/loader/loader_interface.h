@@ -1,19 +1,23 @@
 #pragma once
 
+#include <array>
 #include <string_view>
 
+#include "nigiri/loader/assistance.h"
 #include "nigiri/loader/dir.h"
 #include "nigiri/types.h"
 
 namespace nigiri {
+struct shapes_storage;
 struct timetable;
-}
+}  // namespace nigiri
 
 namespace nigiri::loader {
 
 struct loader_config {
-  unsigned link_stop_distance_;
-  std::string_view default_tz_;
+  unsigned link_stop_distance_{100U};
+  std::string default_tz_;
+  std::array<bool, kNumClasses> bikes_allowed_default_{};
 };
 
 struct loader_interface {
@@ -22,7 +26,10 @@ struct loader_interface {
   virtual void load(loader_config const&,
                     source_idx_t,
                     dir const&,
-                    timetable&) const = 0;
+                    timetable&,
+                    hash_map<bitfield, bitfield_idx_t>&,
+                    assistance_times*,
+                    shapes_storage*) const = 0;
   virtual cista::hash_t hash(dir const&) const = 0;
   virtual std::string_view name() const = 0;
 };

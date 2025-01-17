@@ -3,6 +3,7 @@
 #include "utl/pairwise.h"
 
 #include "nigiri/loader/gtfs/stop_seq_number_encoding.h"
+#include "nigiri/get_otel_tracer.h"
 #include "nigiri/logging.h"
 #include "nigiri/rt/frun.h"
 #include "nigiri/rt/gtfsrt_resolve_run.h"
@@ -70,9 +71,12 @@ delay_propagation update_delay(timetable const& tt,
                                duration_t const delay,
                                std::optional<unixtime_t> const min) {
   auto const static_time = tt.event_time(r.t_, stop_idx, ev_type);
-  rtt.update_time(r.rt_, stop_idx, ev_type,
-                  min.has_value() ? std::max(*min, static_time + delay)
-                                  : static_time + delay);
+  auto const lower_bounded_new_time = min.has_value()
+                                          ? std::max(*min, static_time + delay)
+                                          : static_time + delay;
+  rtt.update_time(r.rt_, stop_idx, ev_type, lower_bounded_new_time);
+  rtt.dispatch_delay(r, stop_idx, ev_type,
+                     lower_bounded_new_time - static_time);
   return {rtt.unix_event_time(r.rt_, stop_idx, ev_type), delay};
 }
 
@@ -93,10 +97,12 @@ delay_propagation update_event(timetable const& tt,
     auto const new_time =
         unixtime_t{std::chrono::duration_cast<unixtime_t::duration>(
             std::chrono::seconds{ev.time()})};
-    rtt.update_time(
-        r.rt_, stop_idx, ev_type,
-        pred_time.has_value() ? std::max(*pred_time, new_time) : new_time);
-    return {new_time, new_time - static_time};
+    auto const lower_bounded_new_time =
+        pred_time.has_value() ? std::max(*pred_time, new_time) : new_time;
+    rtt.update_time(r.rt_, stop_idx, ev_type, lower_bounded_new_time);
+    rtt.dispatch_delay(r, stop_idx, ev_type,
+                       lower_bounded_new_time - static_time);
+    return {lower_bounded_new_time, new_time - static_time};
   }
 }
 
@@ -105,11 +111,31 @@ void cancel_run(timetable const&, rt_timetable& rtt, run& r) {
     rtt.rt_transport_is_cancelled_.set(to_idx(r.rt_), true);
   }
   if (r.is_scheduled()) {
-    auto const& bf = rtt.bitfields_[rtt.transport_traffic_days_[r.t_.t_idx_]];
+    auto const bf = rtt.bitfields_[rtt.transport_traffic_days_[r.t_.t_idx_]];
     rtt.bitfields_.emplace_back(bf).set(to_idx(r.t_.day_), false);
     rtt.transport_traffic_days_[r.t_.t_idx_] =
         bitfield_idx_t{rtt.bitfields_.size() - 1U};
+
+    for (auto i = r.stop_range_.from_; i != r.stop_range_.to_; ++i) {
+      rtt.dispatch_stop_change(r, i, event_type::kArr, std::nullopt, false);
+      rtt.dispatch_stop_change(r, i, event_type::kDep, std::nullopt, false);
+    }
   }
+}
+
+unixtime_t fallback_pred(rt_timetable const& rtt,
+                         run const& r,
+                         std::optional<delay_propagation> const pred,
+                         stop_idx_t const stop_idx,
+                         event_type const ev_type) {
+  if (pred.has_value()) {
+    return pred->pred_time_;
+  }
+  if (stop_idx == 0U) {
+    return unixtime_t{0_minutes};
+  }
+  return rtt.unix_event_time(
+      r.rt_, ev_type == event_type::kDep ? stop_idx - 1U : stop_idx, ev_type);
 }
 
 void update_run(
@@ -156,28 +182,53 @@ void update_run(
       auto& stp = rtt.rt_transport_location_seq_[r.rt_][stop_idx];
       if (upd_it->schedule_relationship() ==
           gtfsrt::TripUpdate_StopTimeUpdate_ScheduleRelationship_SKIPPED) {
+        auto l_idx = stop{stp}.location_idx();
         // Cancel skipped stops (in_allowed = out_allowed = false).
-        stp = stop{stop{stp}.location_idx(), false, false}.value();
-      } else if (upd_it->stop_time_properties().has_assigned_stop_id()) {
+        stp = stop{l_idx, false, false, false, false}.value();
+        rtt.dispatch_stop_change(r, stop_idx, event_type::kArr, l_idx, false);
+        rtt.dispatch_stop_change(r, stop_idx, event_type::kDep, l_idx, false);
+      } else if (upd_it->stop_time_properties().has_assigned_stop_id() ||
+                 (upd_it->has_stop_id() &&
+                  upd_it->stop_id() !=
+                      tt.locations_
+                          .ids_[stop{location_seq[stop_idx]}.location_idx()]
+                          .view())) {
         // Handle track change.
-        auto const& new_id = upd_it->stop_time_properties().assigned_stop_id();
+        auto const& new_id =
+            upd_it->stop_time_properties().has_assigned_stop_id()
+                ? upd_it->stop_time_properties().assigned_stop_id()
+                : upd_it->stop_id();
         auto const l_it = tt.locations_.location_id_to_idx_.find(
             {.id_ = new_id, .src_ = src});
         if (l_it != end(tt.locations_.location_id_to_idx_)) {
-          stp = stop{l_it->second, stop{stp}.in_allowed(),
-                     stop{stp}.out_allowed()}
+          auto const s = stop{stp};
+          stp = stop{l_it->second, s.in_allowed(), s.out_allowed(),
+                     s.in_allowed_wheelchair(), s.out_allowed_wheelchair()}
                     .value();
           auto transports = rtt.location_rt_transports_[l_it->second];
           if (utl::find(transports, r.rt_) == end(transports)) {
             transports.push_back(r.rt_);
           }
+          rtt.dispatch_stop_change(r, stop_idx, event_type::kArr, l_it->second,
+                                   s.out_allowed());
+          rtt.dispatch_stop_change(r, stop_idx, event_type::kDep, l_it->second,
+                                   s.in_allowed());
         } else {
           log(log_lvl::error, "gtfsrt.stop_assignment",
               "stop assignment: src={}, stop_id=\"{}\" not found", src, new_id);
         }
       } else {
         // Just reset in case a track change / skipped stop got reversed.
-        stp = location_seq[stop_idx];
+        if (location_seq[stop_idx] != stp) {
+          stp = location_seq[stop_idx];
+          auto reset_stop = stop{stp};
+          rtt.dispatch_stop_change(r, stop_idx, event_type::kArr,
+                                   reset_stop.location_idx(),
+                                   reset_stop.out_allowed());
+          rtt.dispatch_stop_change(r, stop_idx, event_type::kDep,
+                                   reset_stop.location_idx(),
+                                   reset_stop.in_allowed());
+        }
       }
     }
 
@@ -187,7 +238,7 @@ void update_run(
           (upd_it->arrival().has_delay() || upd_it->arrival().has_time())) {
         pred = update_event(
             tt, rtt, r, stop_idx, event_type::kArr, upd_it->arrival(),
-            pred.has_value() ? pred->pred_time_ : unixtime_t{0_minutes});
+            fallback_pred(rtt, r, pred, stop_idx, event_type::kDep));
       } else if (pred.has_value()) {
         pred = update_delay(tt, rtt, r, stop_idx, event_type::kArr,
                             pred->pred_delay_, pred->pred_time_);
@@ -209,7 +260,7 @@ void update_run(
           (upd_it->departure().has_time() || upd_it->departure().has_delay())) {
         pred = update_event(
             tt, rtt, r, stop_idx, event_type::kDep, upd_it->departure(),
-            pred.has_value() ? pred->pred_time_ : unixtime_t{0_minutes});
+            fallback_pred(rtt, r, pred, stop_idx, event_type::kArr));
       } else if (pred.has_value()) {
         pred = update_delay(tt, rtt, r, stop_idx, event_type::kDep,
                             pred->pred_delay_, pred->pred_time_);
@@ -220,6 +271,13 @@ void update_run(
       ++upd_it;
     }
   }
+
+  auto const n_not_cancelled_stops = utl::count_if(
+      rtt.rt_transport_location_seq_[r.rt_],
+      [](stop::value_type const s) { return !stop{s}.is_cancelled(); });
+  if (n_not_cancelled_stops <= 1U) {
+    cancel_run(tt, rtt, r);
+  }
 }
 
 statistics gtfsrt_update_msg(timetable const& tt,
@@ -227,49 +285,102 @@ statistics gtfsrt_update_msg(timetable const& tt,
                              source_idx_t const src,
                              std::string_view tag,
                              gtfsrt::FeedMessage const& msg) {
+  auto span = get_otel_tracer()->StartSpan("gtfsrt_update_msg", {{"tag", tag}});
+  auto scope = opentelemetry::trace::Scope{span};
+
   if (!msg.has_header()) {
+    span->SetStatus(opentelemetry::trace::StatusCode::kError, "missing header");
     return {.no_header_ = true};
   }
 
-  auto stats = statistics{.total_entities_ = msg.entity_size()};
   auto const message_time =
       date::sys_seconds{std::chrono::seconds{msg.header().timestamp()}};
   auto const today =
       std::chrono::time_point_cast<date::sys_days::duration>(message_time);
+  auto stats = statistics{.total_entities_ = msg.entity_size(),
+                          .feed_timestamp_ = message_time};
+
+  span->SetAttribute("nigiri.gtfsrt.header.timestamp",
+                     msg.header().timestamp());
+  span->SetAttribute("nigiri.gtfsrt.total_entities", msg.entity_size());
+
   for (auto const& entity : msg.entity()) {
-    if (entity.is_deleted()) {
-      ++stats.unsupported_deleted_;
-      continue;
-    } else if (entity.has_alert()) {
-      ++stats.unsupported_alert_;
-      continue;
-    } else if (entity.has_vehicle()) {
-      ++stats.unsupported_vehicle_;
-      continue;
-    } else if (!entity.has_trip_update()) {
+    auto const unsupported = [&](bool const is_set, char const* field,
+                                 int& stat) {
+      if (is_set) {
+        log(log_lvl::error, "rt.gtfs.unsupported",
+            R"(ignoring unsupported "{}" field (tag={}, id={}))", field, tag,
+            entity.id());
+        ++stat;
+      }
+    };
+
+    unsupported(entity.has_vehicle(), "vehicle", stats.unsupported_vehicle_);
+    unsupported(entity.has_alert(), "alert", stats.unsupported_alert_);
+    unsupported(entity.has_is_deleted() && entity.is_deleted(), "deleted",
+                stats.unsupported_deleted_);
+
+    if (!entity.has_trip_update()) {
+      log(log_lvl::error, "rt.gtfs.unsupported",
+          R"(unsupported: no "trip_update" field (tag={}, id={}), skipping message)",
+          tag, entity.id());
       ++stats.no_trip_update_;
       continue;
-    } else if (!entity.trip_update().has_trip()) {
+    }
+
+    if (!entity.trip_update().has_trip()) {
+      log(log_lvl::error, "rt.gtfs.unsupported",
+          R"(unsupported: no "trip" field in "trip_update" field (tag={}, id={}), skipping message)",
+          tag, entity.id());
       ++stats.trip_update_without_trip_;
       continue;
-    } else if (!entity.trip_update().trip().has_trip_id()) {
+    }
+
+    if (!entity.trip_update().trip().has_trip_id()) {
+      log(log_lvl::error, "rt.gtfs.unsupported",
+          R"(unsupported: no "trip_id" field in "trip_update.trip" (tag={}, id={}), skipping message)",
+          tag, entity.id());
       ++stats.unsupported_no_trip_id_;
       continue;
-    } else if (entity.trip_update().trip().schedule_relationship() !=
-                   gtfsrt::TripDescriptor_ScheduleRelationship_SCHEDULED &&
-               entity.trip_update().trip().schedule_relationship() !=
-                   gtfsrt::TripDescriptor_ScheduleRelationship_CANCELED) {
+    }
+
+    if (entity.trip_update().trip().schedule_relationship() !=
+            gtfsrt::TripDescriptor_ScheduleRelationship_SCHEDULED &&
+        entity.trip_update().trip().schedule_relationship() !=
+            gtfsrt::TripDescriptor_ScheduleRelationship_CANCELED) {
+      log(log_lvl::error, "rt.gtfs.unsupported",
+          "unsupported schedule relationship {} (tag={}, id={}), skipping "
+          "message",
+          TripDescriptor_ScheduleRelationship_Name(
+              entity.trip_update().trip().schedule_relationship()),
+          tag, entity.id());
       ++stats.unsupported_schedule_relationship_;
       continue;
     }
 
     try {
       auto const td = entity.trip_update().trip();
-      auto [r, trip] = gtfsrt_resolve_run(today, tt, rtt, src, td);
+      auto [r, trip] = gtfsrt_resolve_run(today, tt, &rtt, src, td);
 
       if (!r.valid()) {
         log(log_lvl::error, "rt.gtfs.resolve", "could not resolve (tag={}) {}",
-            tag, remove_nl(entity.trip_update().trip().DebugString()));
+            tag, remove_nl(td.DebugString()));
+        span->AddEvent(
+            "unresolved trip",
+            {
+                {"entity.id", entity.id()},
+                {"trip.trip_id", td.has_trip_id() ? td.trip_id() : ""},
+                {"trip.route_id", td.has_route_id() ? td.route_id() : ""},
+                {"trip.direction_id", td.direction_id()},
+                {"trip.start_time", td.has_start_time() ? td.start_time() : ""},
+                {"trip.start_date", td.has_start_date() ? td.start_date() : ""},
+                {"trip.schedule_relationship",
+                 td.has_schedule_relationship()
+                     ? TripDescriptor_ScheduleRelationship_Name(
+                           td.schedule_relationship())
+                     : ""},
+                {"trip.str", remove_nl(td.DebugString())},
+            });
         ++stats.trip_resolve_error_;
         continue;
       }
@@ -285,9 +396,13 @@ statistics gtfsrt_update_msg(timetable const& tt,
     } catch (const std::exception& e) {
       ++stats.total_entities_fail_;
       log(log_lvl::error, "rt.gtfs",
-          "GTFS-RT error (tag={}): time={}, entitiy={}, message={}, error={}",
+          "GTFS-RT error (tag={}): time={}, entity={}, message={}, error={}",
           tag, date::format("%T", message_time), entity.id(),
           remove_nl(entity.DebugString()), e.what());
+      span->AddEvent("exception",
+                     {{"exception.message", e.what()},
+                      {"entity.id", entity.id()},
+                      {"message", remove_nl(entity.DebugString())}});
     }
   }
 
@@ -298,8 +413,9 @@ statistics gtfsrt_update_buf(timetable const& tt,
                              rt_timetable& rtt,
                              source_idx_t const src,
                              std::string_view tag,
-                             std::string_view protobuf) {
-  gtfsrt::FeedMessage msg;
+                             std::string_view protobuf,
+                             gtfsrt::FeedMessage& msg) {
+  msg.Clear();
 
   auto const success =
       msg.ParseFromArray(reinterpret_cast<void const*>(protobuf.data()),
@@ -312,6 +428,15 @@ statistics gtfsrt_update_buf(timetable const& tt,
   }
 
   return gtfsrt_update_msg(tt, rtt, src, tag, msg);
+}
+
+statistics gtfsrt_update_buf(timetable const& tt,
+                             rt_timetable& rtt,
+                             source_idx_t const src,
+                             std::string_view tag,
+                             std::string_view protobuf) {
+  auto msg = gtfsrt::FeedMessage{};
+  return gtfsrt_update_buf(tt, rtt, src, tag, protobuf, msg);
 }
 
 }  // namespace nigiri::rt

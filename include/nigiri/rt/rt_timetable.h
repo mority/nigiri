@@ -4,11 +4,20 @@
 
 #include "nigiri/common/delta_t.h"
 #include "nigiri/common/interval.h"
+#include "nigiri/rt/run.h"
 #include "nigiri/stop.h"
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
 
 namespace nigiri {
+
+using change_callback_t =
+    std::function<void(transport const transport,
+                       stop_idx_t const stop_idx,
+                       event_type const ev_type,
+                       std::optional<location_idx_t> const location_idx,
+                       std::optional<bool> const in_out_allowed,
+                       std::optional<duration_t> const delay)>;
 
 // General note:
 // - The real-time timetable does not use bitfields. It requires an initial copy
@@ -49,6 +58,42 @@ struct rt_timetable {
                               rt_transport_stop_times_[rt_t].size());
     rt_transport_stop_times_[rt_t][static_cast<std::size_t>(ev_idx)] =
         unix_to_delta(new_time);
+  }
+
+  void set_change_callback(change_callback_t callback) {
+    change_callback_ = callback;
+  }
+
+  void reset_change_callback() { change_callback_ = nullptr; }
+
+  void dispatch_event(rt::run const& r,
+                      stop_idx_t const stop_idx,
+                      event_type const ev_type,
+                      std::optional<location_idx_t> const location_idx,
+                      std::optional<bool> const in_out_allowed,
+                      std::optional<duration_t> const delay) {
+    if (change_callback_ &&
+        ((ev_type == event_type::kArr && stop_idx != r.stop_range_.from_) ||
+         (ev_type == event_type::kDep && stop_idx != r.stop_range_.to_ - 1))) {
+      change_callback_(r.t_, stop_idx, ev_type, location_idx, in_out_allowed,
+                       delay);
+    }
+  }
+
+  void dispatch_delay(rt::run const& r,
+                      stop_idx_t const stop_idx,
+                      event_type const ev_type,
+                      duration_t const delay) {
+    dispatch_event(r, stop_idx, ev_type, std::nullopt, std::nullopt, delay);
+  }
+
+  void dispatch_stop_change(rt::run const& r,
+                            stop_idx_t const stop_idx,
+                            event_type const ev_type,
+                            std::optional<location_idx_t> const location_idx,
+                            std::optional<bool> const in_out_allowed) {
+    dispatch_event(r, stop_idx, ev_type, location_idx, in_out_allowed,
+                   std::nullopt);
   }
 
   unixtime_t unix_event_time(rt_transport_idx_t const rt_t,
@@ -97,6 +142,11 @@ struct rt_timetable {
     return rt_transport_src_.size();
   }
 
+  array<bitvec_map<location_idx_t>, kMaxProfiles> has_td_footpaths_out_;
+  array<bitvec_map<location_idx_t>, kMaxProfiles> has_td_footpaths_in_;
+  array<vecvec<location_idx_t, td_footpath>, kMaxProfiles> td_footpaths_out_;
+  array<vecvec<location_idx_t, td_footpath>, kMaxProfiles> td_footpaths_in_;
+
   // Updated transport traffic days from the static timetable.
   // Initial: 100% copy from static, then adapted according to real-time
   // updates
@@ -104,7 +154,8 @@ struct rt_timetable {
   vector_map<bitfield_idx_t, bitfield> bitfields_;
 
   // Location -> RT transports that stop at this location
-  vecvec<location_idx_t, rt_transport_idx_t> location_rt_transports_;
+  mutable_fws_multimap<location_idx_t, rt_transport_idx_t>
+      location_rt_transports_;
 
   // Base-day: all real-time timestamps (departures + arrivals in
   // rt_transport_stop_times_) are given relative to this base day.
@@ -142,6 +193,15 @@ struct rt_timetable {
 
   // RT transport -> canceled flag
   bitvec rt_transport_is_cancelled_;
+
+  // RT transport * 2 -> bikes allowed along the transport
+  // RT transport * 2 + 1 -> bikes along parts of the transport
+  bitvec rt_transport_bikes_allowed_;
+
+  // RT transport -> bikes allowed for each section
+  vecvec<rt_transport_idx_t, bool> rt_bikes_allowed_per_section_;
+
+  change_callback_t change_callback_;
 };
 
 }  // namespace nigiri

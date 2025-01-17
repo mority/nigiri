@@ -1,7 +1,10 @@
 #include "nigiri/clasz.h"
 
-#include "nigiri/logging.h"
 #include "cista/hash.h"
+
+#include "utl/verify.h"
+
+#include "nigiri/logging.h"
 
 namespace nigiri {
 
@@ -198,13 +201,33 @@ clasz get_clasz(std::string_view s) {
     case hash("Drahtseilbahn"):
     case hash("Standseilbahn"):
     case hash("Sesselbahn"):
-    case hash("Gondola): return claszle car"):
+    case hash("Gondola"):
     case hash("Aufzug"):
     case hash("Elevator"): [[fallthrough]];
     case hash("ASC"): return clasz::kOther;
+    default:
+      log(log_lvl::error, "loader.hrd.clasz", "cannot assign {}", s);
+      return clasz::kOther;
   }
-  log(log_lvl::error, "loader.hrd.clasz", "cannot assign {}", s);
-  return clasz::kOther;
+}
+
+clasz to_clasz(std::string_view s) {
+  switch (cista::hash(s)) {
+    case cista::hash("AIR"): return clasz::kAir;
+    case cista::hash("HIGHSPEED"): return clasz::kHighSpeed;
+    case cista::hash("LONGDISTANCE"): return clasz::kLongDistance;
+    case cista::hash("COACH"): return clasz::kCoach;
+    case cista::hash("NIGHT"): return clasz::kNight;
+    case cista::hash("REGIONALFAST"): return clasz::kRegionalFast;
+    case cista::hash("REGIONAL"): return clasz::kRegional;
+    case cista::hash("METRO"): return clasz::kMetro;
+    case cista::hash("SUBWAY"): return clasz::kSubway;
+    case cista::hash("TRAM"): return clasz::kTram;
+    case cista::hash("BUS "): return clasz::kBus;
+    case cista::hash("SHIP "): return clasz::kShip;
+    case cista::hash("OTHER "): return clasz::kOther;
+  }
+  throw utl::fail("{} is not a valid clasz", s);
 }
 
 }  // namespace nigiri

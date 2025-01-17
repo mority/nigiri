@@ -12,7 +12,16 @@ rt_timetable create_rt_timetable(timetable const& tt,
   rtt.bitfields_ = tt.bitfields_;
   rtt.base_day_ = base_day;
   rtt.base_day_idx_ = tt.day_idx(rtt.base_day_);
-  rtt.location_rt_transports_.resize(tt.n_locations());
+  // resize for later memory accesses
+  rtt.location_rt_transports_[location_idx_t{tt.n_locations() - 1U}];
+  for (auto i = 0U; i != kMaxProfiles; ++i) {
+    if (!tt.locations_.footpaths_out_[i].empty()) {
+      rtt.has_td_footpaths_out_[i].resize(tt.n_locations());
+      rtt.has_td_footpaths_in_[i].resize(tt.n_locations());
+      rtt.td_footpaths_out_[i].resize(tt.n_locations());
+      rtt.td_footpaths_in_[i].resize(tt.n_locations());
+    }
+  }
   return rtt;
 }
 

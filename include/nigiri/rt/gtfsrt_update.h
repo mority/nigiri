@@ -5,6 +5,8 @@
 #endif
 #include "gtfsrt/gtfs-realtime.pb.h"
 
+#include "date/date.h"
+
 #include "nigiri/types.h"
 
 namespace nigiri {
@@ -30,6 +32,7 @@ struct statistics {
   int trip_update_without_trip_{0};
   int trip_resolve_error_{0};
   int unsupported_schedule_relationship_{0};
+  date::sys_seconds feed_timestamp_{};
 };
 
 statistics gtfsrt_update_msg(timetable const&,
@@ -37,6 +40,13 @@ statistics gtfsrt_update_msg(timetable const&,
                              source_idx_t const,
                              std::string_view tag,
                              transit_realtime::FeedMessage const&);
+
+statistics gtfsrt_update_buf(timetable const& tt,
+                             rt_timetable& rtt,
+                             source_idx_t const src,
+                             std::string_view tag,
+                             std::string_view protobuf,
+                             transit_realtime::FeedMessage& msg);
 
 statistics gtfsrt_update_buf(timetable const&,
                              rt_timetable&,

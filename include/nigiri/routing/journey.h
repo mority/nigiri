@@ -97,16 +97,25 @@ struct journey {
     return duration_t{std::abs((dest_time_ - start_time_).count())};
   }
 
+  unixtime_t departure_time() const {
+    return start_time_ <= dest_time_ ? start_time_ : dest_time_;
+  }
+
+  unixtime_t arrival_time() const {
+    return start_time_ <= dest_time_ ? dest_time_ : start_time_;
+  }
+
   void print(std::ostream&,
              timetable const&,
              rt_timetable const* = nullptr,
              bool debug = false) const;
 
-  std::vector<leg> legs_;
-  unixtime_t start_time_;
-  unixtime_t dest_time_;
-  location_idx_t dest_;
+  std::vector<leg> legs_{};
+  unixtime_t start_time_{};
+  unixtime_t dest_time_{};
+  location_idx_t dest_{};
   std::uint8_t transfers_{0U};
+  bool error_{false};
 #ifdef TB_MIN_WALK
   std::uint16_t time_walk_{0U};
 #elifdef TB_TRANSFER_CLASS
