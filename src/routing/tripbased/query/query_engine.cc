@@ -1,6 +1,6 @@
 #include <ranges>
 
-#include "nigiri/routing/for_each_meta.h"
+#include "nigiri/for_each_meta.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/settings.h"
@@ -17,13 +17,27 @@ using namespace nigiri;
 using namespace nigiri::routing;
 using namespace nigiri::routing::tripbased;
 
-query_engine::query_engine(timetable const& tt,
-                           rt_timetable const* rtt,
-                           query_state& state,
-                           std::vector<bool>& is_dest,
-                           std::vector<std::uint16_t>& dist_to_dest,
-                           std::vector<std::uint16_t>& lb,
-                           day_idx_t const base)
+query_engine::query_engine(
+    timetable const& tt,
+    rt_timetable const* rtt,
+    query_state& state,
+    bitvec& is_dest,
+    std::optional<std::array<bitvec, kMaxVias>> const is_via
+    [[maybe_unused]],  // unsupported
+    std::vector<std::uint16_t>& dist_to_dest,
+    std::optional<hash_map<location_idx_t, std::vector<td_offset>>> const
+        td_dist_to_dest [[maybe_unused]],  // unsupported
+    std::vector<std::uint16_t>& lb,
+    std::optional<std::vector<via_stop>> const via_stops
+    [[maybe_unused]],  // unsupported
+    day_idx_t const base,
+    std::optional<clasz_mask_t> const allowed_claszes
+    [[maybe_unused]],  // unsupported
+    std::optional<bool> const require_bike_transport
+    [[maybe_unused]],  // unsupported
+    std::optional<bool> const is_wheelchair [[maybe_unused]],  // unsupported
+    std::optional<transfer_time_settings> const tts
+    [[maybe_unused]])  // unsupported
     : tt_{tt},
       rtt_{rtt},
       state_{state},
@@ -69,7 +83,8 @@ query_engine::query_engine(timetable const& tt,
         // virtual reflexive incoming footpath
         create_l_entry(footpath{dest, duration_t{0U}});
         // iterate incoming footpaths of target location
-        for (auto const fp : tt_.locations_.footpaths_in_[dest]) {
+        for (auto const fp :
+             tt_.locations_.footpaths_in_[profile_idx_t{0U}][dest]) {
           create_l_entry(fp);
         }
       }
@@ -100,7 +115,8 @@ query_engine::query_engine(timetable const& tt,
         // virtual reflexive incoming footpath
         create_l_entry(footpath{dest, duration_t{0U}});
         // iterate incoming footpaths of target location
-        for (auto const fp : tt_.locations_.footpaths_in_[dest]) {
+        for (auto const fp :
+             tt_.locations_.footpaths_in_[profile_idx_t{0U}][dest]) {
           create_l_entry(fp);
         }
       }
@@ -111,6 +127,7 @@ query_engine::query_engine(timetable const& tt,
 void query_engine::execute(unixtime_t const start_time,
                            std::uint8_t const max_transfers,
                            unixtime_t const worst_time_at_dest,
+                           profile_idx_t const,
                            pareto_set<journey>& results) {
 #ifndef NDEBUG
   TBDL << "Executing with start_time: " << unix_dhhmm(tt_, start_time)
@@ -762,7 +779,8 @@ void query_engine::handle_start(query_start const& start) {
 #endif
   handle_start_footpath(d, tau, footpath{start.location_, duration_t{0U}});
   // iterate outgoing footpaths of source location
-  for (auto const fp : tt_.locations_.footpaths_out_[start.location_]) {
+  for (auto const fp :
+       tt_.locations_.footpaths_out_[profile_idx_t{0U}][start.location_]) {
 #ifndef NDEBUG
     TBDL << "Examining routes at location: " << location_name(tt_, fp.target())
          << " reached after walking " << fp.duration() << " minutes"

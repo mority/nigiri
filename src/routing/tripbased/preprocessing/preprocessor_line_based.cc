@@ -1,4 +1,4 @@
-#include "nigiri/routing/for_each_meta.h"
+#include "nigiri/for_each_meta.h"
 #include "nigiri/routing/tripbased/settings.h"
 
 #ifdef TB_PREPRO_LB_PRUNING
@@ -382,7 +382,8 @@ void preprocessor::build_part(preprocessor* const pp) {
               p_t_i,
               tau_arr_t_i + pp->tt_.locations_.transfer_time_[p_t_i].count(),
               beta_t, nullptr);
-          for (auto const& fp : pp->tt_.locations_.footpaths_out_[p_t_i]) {
+          for (auto const& fp :
+               pp->tt_.locations_.footpaths_out_[profile_idx_t{0U}][p_t_i]) {
             rr_arr.update(fp.target(), tau_arr_t_i + fp.duration_, beta_t,
                           nullptr);
             rr_ch.update(fp.target(), tau_arr_t_i + fp.duration_, beta_t,
@@ -481,7 +482,8 @@ void preprocessor::build_part(preprocessor* const pp) {
                            transfer->bf_, &impr);
 #endif
               for (auto const& fp_r :
-                   pp->tt_.locations_.footpaths_out_[p_u_l]) {
+                   pp->tt_.locations_
+                       .footpaths_out_[profile_idx_t{0U}][p_u_l]) {
                 std::uint16_t const eta = tau_arr_t_u_l + fp_r.duration_;
 #ifdef TB_MIN_WALK
                 std::uint16_t const walk_time_r =
@@ -559,7 +561,8 @@ void preprocessor::line_transfers(
         neighborhood);
 
     // outgoing footpaths
-    for (auto const& fp : tt_.locations_.footpaths_out_[location_from]) {
+    for (auto const& fp :
+         tt_.locations_.footpaths_out_[profile_idx_t{0U}][location_from]) {
       line_transfers_fp(route_from, i, fp, neighborhood);
     }
   }

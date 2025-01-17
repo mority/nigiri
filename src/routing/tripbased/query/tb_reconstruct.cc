@@ -1,6 +1,6 @@
 #include <ranges>
 
-#include "nigiri/routing/for_each_meta.h"
+#include "nigiri/for_each_meta.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/tripbased/dbg.h"
 #include "nigiri/routing/tripbased/query/query_engine.h"
@@ -126,7 +126,8 @@ std::optional<query_engine::journey_end> query_engine::reconstruct_journey_end(
               // or there exists a footpath with matching duration to a
               // destination
               for (auto const& fp :
-                   tt_.locations_.footpaths_out_[le_location_idx]) {
+                   tt_.locations_
+                       .footpaths_out_[profile_idx_t{0U}][le_location_idx]) {
                 if (fp.duration().count() == le.time_ &&
                     is_dest_[fp.target().v_]) {
                   return journey_end{q_cur, le, le_location_idx, fp.target()};
@@ -143,7 +144,8 @@ std::optional<query_engine::journey_end> query_engine::reconstruct_journey_end(
               // or there exists a footpath such that footpath duration and
               // dist_to_dest of footpath target match the time of the l_entry
               for (auto const& fp :
-                   tt_.locations_.footpaths_out_[le_location_idx]) {
+                   tt_.locations_
+                       .footpaths_out_[profile_idx_t{0U}][le_location_idx]) {
                 if (fp.duration().count() + dist_to_dest_[fp.target().v_] ==
                     le.time_) {
                   return journey_end{q_cur, le, le_location_idx, fp.target()};
@@ -183,7 +185,8 @@ void query_engine::add_final_footpath(query const& q,
     }
     // add footpath if location of l_entry and journey end destination differ
     if (!matches(tt_, q.dest_match_mode_, je.le_location_, je.last_location_)) {
-      for (auto const fp : tt_.locations_.footpaths_out_[je.le_location_]) {
+      for (auto const fp :
+           tt_.locations_.footpaths_out_[profile_idx_t{0U}][je.le_location_]) {
         if (fp.target() == je.last_location_) {
           unixtime_t const fp_time_end = j.legs_.back().dep_time_;
           unixtime_t const fp_time_start = fp_time_end - fp.duration();
@@ -217,7 +220,8 @@ void query_engine::add_final_footpath(query const& q,
 #endif
     } else {
       // add footpath between location of l_entry and destination
-      for (auto const fp : tt_.locations_.footpaths_out_[je.le_location_]) {
+      for (auto const fp :
+           tt_.locations_.footpaths_out_[profile_idx_t{0U}][je.le_location_]) {
         if (fp.target() == je.last_location_) {
           j.add(journey::leg{direction::kForward, je.le_location_,
                              je.last_location_, j.dest_time_ - fp.duration(),
@@ -349,8 +353,8 @@ std::optional<transport_segment> query_engine::reconstruct_transfer(
               exit_location_idx.value(),
               tt_.locations_.transfer_time_[exit_location_idx.value()]};
         } else {
-          for (auto const& fp :
-               tt_.locations_.footpaths_out_[exit_location_idx.value()]) {
+          for (auto const& fp : tt_.locations_.footpaths_out_[profile_idx_t{
+                   0U}][exit_location_idx.value()]) {
             if (fp.target() == target_location_idx) {
               fp_transfer = fp;
               break;
@@ -457,7 +461,8 @@ void query_engine::add_initial_footpath(query const& q, journey& j) const {
     // -> add footpath leg
     std::optional<footpath> fp_initial = std::nullopt;
     auto duration_min = duration_t::max();
-    for (auto const& fp : tt_.locations_.footpaths_in_[j.legs_.back().from_]) {
+    for (auto const& fp : tt_.locations_.footpaths_in_[profile_idx_t{0U}]
+                                                      [j.legs_.back().from_]) {
       // choose the shortest initial footpath if there is more than one
       if (is_start_location(q, fp.target()) && fp.duration() < duration_min) {
         duration_min = fp.duration();

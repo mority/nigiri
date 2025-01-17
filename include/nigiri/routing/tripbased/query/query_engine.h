@@ -37,13 +37,22 @@ struct query_engine {
   static constexpr bool kUseLowerBounds = false;
 #endif
 
-  query_engine(timetable const& tt,
-               rt_timetable const* rtt,
-               query_state& state,
-               std::vector<bool>& is_dest,
-               std::vector<std::uint16_t>& dist_to_dest,
-               std::vector<std::uint16_t>& lb,
-               day_idx_t const base);
+  query_engine(
+      timetable const& tt,
+      rt_timetable const* rtt,
+      query_state& state,
+      bitvec& is_dest,
+      std::optional<std::array<bitvec, kMaxVias>> is_via,  // unsupported
+      std::vector<std::uint16_t>& dist_to_dest,
+      std::optional<hash_map<location_idx_t, std::vector<td_offset>>>
+          td_dist_to_dest,  // unsupported
+      std::vector<std::uint16_t>& lb,
+      std::optional<std::vector<via_stop>> via_stops,  // unsupported
+      day_idx_t const base,
+      std::optional<clasz_mask_t> allowed_claszes,  // unsupported
+      std::optional<bool> require_bike_transport,  // unsupported
+      std::optional<bool> is_wheelchair,  // unsupported
+      std::optional<transfer_time_settings> tts);  // unsupported
 
   algo_stats_t get_stats() const { return stats_; }
 
@@ -76,6 +85,7 @@ struct query_engine {
   void execute(unixtime_t const start_time,
                std::uint8_t const max_transfers,
                unixtime_t const worst_time_at_dest,
+               profile_idx_t const,
                pareto_set<journey>& results);
 
   void reconstruct(query const& q, journey& j) const;
@@ -157,7 +167,7 @@ private:
   timetable const& tt_;
   rt_timetable const* rtt_;
   query_state& state_;
-  std::vector<bool>& is_dest_;
+  bitvec& is_dest_;
   std::vector<std::uint16_t>& dist_to_dest_;
   std::vector<std::uint16_t>& lb_;
   day_idx_t const base_;

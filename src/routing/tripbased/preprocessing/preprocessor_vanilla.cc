@@ -1,4 +1,4 @@
-#include "nigiri/routing/for_each_meta.h"
+#include "nigiri/for_each_meta.h"
 #include "nigiri/routing/tripbased/settings.h"
 
 #ifdef TB_PREPRO_VANILLA

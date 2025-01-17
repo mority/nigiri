@@ -40,10 +40,13 @@ TEST(tb_query, enqueue) {
   // init query
   day_idx_t const base{5U};
   query_state state{tt, ts};
-  std::vector<bool> is_dest;
+  bitvec is_dest;
   std::vector<std::uint16_t> dist_to_dest;
   std::vector<std::uint16_t> lb;
-  query_engine tbq{tt, nullptr, state, is_dest, dist_to_dest, lb, base};
+  query_engine tbq{tt,           nullptr,      state,        is_dest,
+                   std::nullopt, dist_to_dest, std::nullopt, lb,
+                   std::nullopt, base,         std::nullopt, std::nullopt,
+                   std::nullopt, std::nullopt};
 
   transport_idx_t const tpi0{0U};
   auto const si3{3U};
