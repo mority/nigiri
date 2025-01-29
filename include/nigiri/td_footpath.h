@@ -16,6 +16,7 @@ namespace nigiri {
 constexpr auto const kNull = unixtime_t{0_minutes};
 constexpr auto const kInfeasible =
     duration_t{std::numeric_limits<duration_t::rep>::max()};
+constexpr auto const kMaxLookAhead = std::chrono::hours{24};
 
 struct td_footpath {
   CISTA_FRIEND_COMPARABLE(td_footpath)
@@ -33,67 +34,49 @@ std::optional<duration_t> get_td_duration(Collection const& c,
 
   using Type = std::decay_t<decltype(*from)>;
 
+  auto min = std::optional<duration_t>{};
+
   if constexpr (SearchDir == direction::kForward) {
-    Type const* pred = nullptr;
 
-    auto const get = [&]() -> std::optional<duration_t> {
-      auto const start = std::max(pred->valid_from_, t);
-      auto const target_time = start + pred->duration_;
-      auto const duration_with_waiting = target_time - t;
-      if (duration_with_waiting < footpath::kMaxDuration) {
-        return duration_with_waiting;
-      } else {
-        return std::nullopt;
-      }
+    auto const duration_with_waiting = [&](auto const td_fp) {
+      auto const start = std::max(td_fp.valid_from_, t);
+      auto const end = start + td_fp.duration_;
+      return end - t;
     };
 
-    for (auto it = from; it != to; ++it) {
-      if (pred == nullptr || pred->duration_ == footpath::kMaxDuration ||
-          it->valid_from_ < t + pred->duration_) {
-        pred = &*it;
-      } else {
-        return get();
+    for (auto const it = from; it != to; ++it) {
+      if (it->valid_from_ - kMaxLookAhead > t) {
+        // reached elements too far in the future
+        break;
       }
+
+      auto const next = std::next(it);
+      if (it->duration_ == footpath::kMaxDuration ||
+          (next != to && next->valid_from_ < t)) {
+        // current element is not valid or outdated
+        continue;
+      }
+
+      min = min ? std::min(*min, duration_with_waiting(*it))
+                : duration_with_waiting(*it);
     }
 
-    if (pred != nullptr && pred->duration_ != footpath::kMaxDuration) {
-      return get();
-    }
+  } else /* SearchDir == direction::kBackward */ {
 
-    return std::nullopt;
-  } else /* (SearchDir == direction::kBackward) */ {
-    auto const get =
-        [&](unixtime_t const valid_from,
-            duration_t const duration) -> std::optional<duration_t> {
-      auto const start = std::min(valid_from, t);
-      auto const target_time = start - duration;
-      auto const duration_with_waiting = t - target_time;
-      if (duration_with_waiting < footpath::kMaxDuration) {
-        return duration_with_waiting;
-      } else {
-        return std::nullopt;
-      }
+    auto const duration_with_waiting = [&](auto const td_fp) {
+      auto const start = std::min(td_fp.valid_from_, t);
+      auto const end = start - td_fp.duration_;
+      return t - end;
     };
 
-    if (from != to && from->valid_from_ <= t) {
-      if (from->duration_ != footpath::kMaxDuration) {
-        return get(t, from->duration_);
-      } else if (auto const next = std::next(from); next != to) {
-        return get(from->valid_from_, next->duration_);
+    for (auto const it = from; it != to; ++it) {
+      if (it->valid_from_ > t) {
+        continue;
       }
     }
-
-    using namespace std::chrono_literals;
-    for (auto const [a, b] : utl::pairwise(it_range{from, to})) {
-      if (b.duration_ != footpath::kMaxDuration &&
-          (t >= a.valid_from_ ||
-           interval{b.valid_from_, a.valid_from_ + 1min}.contains(t))) {
-        return get(a.valid_from_, b.duration_);
-      }
-    }
-
-    return std::nullopt;
   }
+
+  return (min && *min < footpath::kMaxDuration) ? min : std::nullopt;
 }
 
 template <typename Collection>
