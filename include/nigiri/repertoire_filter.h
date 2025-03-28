@@ -7,14 +7,8 @@
 
 namespace nigiri {
 
-struct repertoire_filter {
-  repertoire_filter(nigiri::timetable const& tt);
-
-  void filter(std::vector<nigiri::location_idx_t> const& sorted_in,
-              std::vector<nigiri::location_idx_t>& out);
-
-  nigiri::timetable const& tt_;
-  bitvec repertoire_;
-};
+void repertoire_filter(std::vector<nigiri::location_idx_t> const& sorted_in,
+                       std::vector<nigiri::location_idx_t>& out,
+                       nigiri::timetable const&);
 
 }  // namespace nigiri
