@@ -6,21 +6,22 @@ namespace nigiri {
 
 namespace n = nigiri;
 
-constexpr auto const kFilterThreshold = 100U;
+constexpr auto const kStationsPerRoute = std::uint8_t{2U};
 
 void repertoire_filter(std::vector<n::location_idx_t> const& sorted_in,
                        std::vector<n::location_idx_t>& out,
                        n::timetable const& tt) {
-  auto repertoire = bitvec{tt.n_routes()};
+  auto repertoire = std::vector<std::uint8_t>{};
+  repertoire.resize(tt.n_routes());
   for (auto const [i, l] : utl::enumerate(sorted_in)) {
     auto expands_repertoire = false;
     for (auto const r : tt.location_routes_[l]) {
-      if (!repertoire.test(r.v_)) {
+      if (repertoire[r.v_] < kStationsPerRoute) {
         expands_repertoire = true;
       }
-      repertoire.set(r.v_);
+      ++repertoire[r.v_];
     }
-    if (i < kFilterThreshold || expands_repertoire) {
+    if (expands_repertoire) {
       out.emplace_back(l);
     }
   }
