@@ -13,7 +13,7 @@ void repertoire_filter(std::vector<n::location_idx_t> const& sorted_in,
                        n::timetable const& tt) {
   auto repertoire = std::vector<std::uint8_t>{};
   repertoire.resize(tt.n_routes());
-  for (auto const [i, l] : utl::enumerate(sorted_in)) {
+  for (auto const l : sorted_in) {
     auto expands_repertoire = false;
     for (auto const r : tt.location_routes_[l]) {
       if (repertoire[r.v_] < kStationsPerRoute) {
