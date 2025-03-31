@@ -7,11 +7,10 @@
 
 namespace nigiri {
 
-void repertoire_filter(std::vector<nigiri::location_idx_t>& in,
+void repertoire_filter(std::vector<nigiri::location_idx_t>& sorted_in,
                        std::vector<nigiri::location_idx_t>& out,
-                       geo::latlng const&,
                        nigiri::timetable const&,
-                       std::uint32_t filter_threshold,
+                       std::uint32_t start_index,
                        std::uint8_t stations_per_route);
 
 }  // namespace nigiri
