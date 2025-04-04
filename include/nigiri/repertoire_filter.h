@@ -8,11 +8,12 @@
 namespace nigiri {
 
 template <typename T>
-void repertoire_filter(std::vector<T>& sorted_in,
-                       std::vector<T>& sorted_out,
-                       std::function<location_idx_t(const T&)> get_loc,
-                       nigiri::timetable const& tt,
-                       std::uint8_t stations_per_route) {
+void repertoire_filter(
+    std::vector<T>& sorted_in,
+    std::vector<T>& sorted_out,
+    nigiri::timetable const& tt,
+    std::uint8_t stations_per_route,
+    std::function<location_idx_t(const T&)> get_loc = std::identity{}) {
   auto repertoire = std::vector<std::uint8_t>{};
   repertoire.resize(tt.n_routes());
   for (auto const e : sorted_in) {
