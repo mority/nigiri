@@ -47,6 +47,7 @@ struct search_stats {
   std::map<std::string, std::uint64_t> to_map() const {
     return {
         {"lb_time", lb_time_},
+        {"lb_dist", lb_dist_},
         {"fastest_direct", fastest_direct_},
         {"interval_extensions", interval_extensions_},
         {"execute_time", execute_time_.count()},
@@ -54,6 +55,7 @@ struct search_stats {
   }
 
   std::uint64_t lb_time_{0ULL};
+  std::uint16_t lb_dist_{0ULL};
   std::uint64_t fastest_direct_{0ULL};
   std::uint64_t interval_extensions_{0ULL};
   std::chrono::milliseconds execute_time_{0LL};
@@ -113,6 +115,16 @@ struct search {
                state_.travel_time_lower_bound_);
       UTL_STOP_TIMING(lb);
       stats_.lb_time_ = static_cast<std::uint64_t>(UTL_TIMING_MS(lb));
+      auto const lb_dist_max = std::max_element(
+          begin(q_.destination_), end(q_.destination_),
+          [&](auto const& a, auto const& b) {
+            return state_.travel_time_lower_bound_[to_idx(a.target())] <
+                   state_.travel_time_lower_bound_[to_idx(b.target())];
+          });
+      stats_.lb_dist_ =
+          lb_dist_max != end(q_.destination_)
+              ? state_.travel_time_lower_bound_[to_idx(lb_dist_max->target())]
+              : 0ULL;
 
 #if defined(NIGIRI_TRACING)
       for (auto const& o : q_.start_) {
