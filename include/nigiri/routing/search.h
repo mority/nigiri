@@ -116,13 +116,12 @@ struct search {
       UTL_STOP_TIMING(lb);
       stats_.lb_time_ = static_cast<std::uint64_t>(UTL_TIMING_MS(lb));
       auto const lb_dist_max = std::max_element(
-          begin(q_.destination_), end(q_.destination_),
-          [&](auto const& a, auto const& b) {
+          begin(q_.start_), end(q_.start_), [&](auto const& a, auto const& b) {
             return state_.travel_time_lower_bound_[to_idx(a.target())] <
                    state_.travel_time_lower_bound_[to_idx(b.target())];
           });
       stats_.lb_dist_ =
-          lb_dist_max != end(q_.destination_)
+          lb_dist_max != end(q_.start_)
               ? state_.travel_time_lower_bound_[to_idx(lb_dist_max->target())]
               : 0ULL;
 
