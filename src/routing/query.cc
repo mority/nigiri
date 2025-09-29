@@ -48,6 +48,9 @@ void sanitize_via_stops(timetable const& tt, query& q) {
 }
 
 void query::sanitize(timetable const& tt) {
+  utl::verify(via_stops_.size() <= kMaxVias,
+              "too many via stops: {}, limit: {}", via_stops_.size(), kMaxVias);
+
   sanitize_query(*this);
   sanitize_via_stops(tt, *this);
 }

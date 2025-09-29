@@ -290,25 +290,30 @@ nigiri::pareto_set<nigiri::routing::journey> raptor_search(
     nigiri::rt_timetable const* rtt,
     nigiri::routing::query q,
     bool backward_search) {
-  static auto search_state = nigiri::routing::search_state{};
-  static auto algo_state = nigiri::routing::raptor_state{};
-  if (backward_search) {
-    using algo_t =
-        nigiri::routing::raptor<nigiri::direction::kBackward, true, 0,
-                                nigiri::routing::search_mode::kOneToOne>;
-    return *(nigiri::routing::search<nigiri::direction::kBackward, algo_t>{
-        tt, rtt, search_state, algo_state, std::move(q)}
-                 .execute()
-                 .journeys_);
-  } else {
-    using algo_t =
-        nigiri::routing::raptor<nigiri::direction::kForward, true, 0,
-                                nigiri::routing::search_mode::kOneToOne>;
-    return *(nigiri::routing::search<nigiri::direction::kForward, algo_t>{
-        tt, rtt, search_state, algo_state, std::move(q)}
-                 .execute()
-                 .journeys_);
-  }
+  CISTA_UNUSED_PARAM(tt)
+  CISTA_UNUSED_PARAM(rtt)
+  CISTA_UNUSED_PARAM(q)
+  CISTA_UNUSED_PARAM(backward_search)
+  return {};
+  // static auto search_state = nigiri::routing::search_state{};
+  // static auto algo_state = nigiri::routing::raptor_state{};
+  // if (backward_search) {
+  //   using algo_t =
+  //       nigiri::routing::raptor<nigiri::direction::kBackward, true, 0,
+  //                               nigiri::routing::search_mode::kOneToOne>;
+  //   return *(nigiri::routing::search<nigiri::direction::kBackward, algo_t>{
+  //       tt, rtt, search_state, algo_state, std::move(q)}
+  //                .execute()
+  //                .journeys_);
+  // } else {
+  //   using algo_t =
+  //       nigiri::routing::raptor<nigiri::direction::kForward, true, 0,
+  //                               nigiri::routing::search_mode::kOneToOne>;
+  //   return *(nigiri::routing::search<nigiri::direction::kForward, algo_t>{
+  //       tt, rtt, search_state, algo_state, std::move(q)}
+  //                .execute()
+  //                .journeys_);
+  // }
 }
 
 nigiri_pareto_set_t* nigiri_get_journeys(nigiri_timetable_t const* t,

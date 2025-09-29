@@ -67,42 +67,62 @@ struct routing_result {
   std::map<std::string, std::uint64_t> algo_stats_;
 };
 
-template <direction SearchDir, typename Algo>
+template <direction SearchDir, template <direction> typename Algo>
 struct search {
-  using algo_state_t = typename Algo::algo_state_t;
-  static constexpr auto const kFwd = (SearchDir == direction::kForward);
-  static constexpr auto const kBwd = (SearchDir == direction::kBackward);
+  using algo_state_t = typename Algo<SearchDir>::algo_state_t;
 
-  Algo init(clasz_mask_t const allowed_claszes,
-            bool const require_bikes_allowed,
-            bool const require_cars_allowed,
-            transfer_time_settings& tts,
-            algo_state_t& algo_state) {
+  search(timetable const& tt,
+         rt_timetable const* rtt,
+         search_state& s,
+         algo_state_t& algo_state,
+         query q,
+         std::optional<std::chrono::seconds> timeout = std::nullopt)
+      : tt_{tt},
+        rtt_{rtt},
+        state_{s},
+        q_{std::move(q)},
+        search_interval_{std::visit(
+            utl::overloaded{[](interval<unixtime_t> const start_interval) {
+                              return start_interval;
+                            },
+                            [](unixtime_t const start_time) {
+                              return interval<unixtime_t>{start_time,
+                                                          start_time};
+                            }},
+            q_.start_time_)},
+        fastest_direct_{get_fastest_direct(tt_, q_, SearchDir)},
+        algo_{init<SearchDir>(q_.allowed_claszes_,
+                              q_.require_bike_transport_,
+                              q_.require_car_transport_,
+                              q_.transfer_time_settings_,
+                              algo_state)},
+        timeout_(timeout) {
+    stats_.fastest_direct_ =
+        static_cast<std::uint64_t>(fastest_direct_.count());
+    utl::sort(q_.start_);
+    utl::sort(q_.destination_);
+    q_.sanitize(tt);
+  }
+
+  template <direction Dir>
+  Algo<Dir> init(clasz_mask_t const allowed_claszes,
+                 bool const require_bikes_allowed,
+                 bool const require_cars_allowed,
+                 transfer_time_settings& tts,
+                 algo_state_t& algo_state) {
+    static constexpr auto const kFwd = (Dir == direction::kForward);
+    static constexpr auto const kBwd = (Dir == direction::kBackward);
+
     auto span = get_otel_tracer()->StartSpan("search::init");
     auto scope = opentelemetry::trace::Scope{span};
 
-    stats_.fastest_direct_ =
-        static_cast<std::uint64_t>(fastest_direct_.count());
-
-    utl::verify(q_.via_stops_.size() <= kMaxVias,
-                "too many via stops: {}, limit: {}", q_.via_stops_.size(),
-                kMaxVias);
-
-    tts.factor_ = std::max(tts.factor_, 1.0F);
-    tts.min_transfer_time_ = std::max(tts.min_transfer_time_, 0_minutes);
-    tts.additional_time_ = std::max(tts.additional_time_, 0_minutes);
-    tts.default_ = tts.factor_ == 1.0F  //
-                   && tts.min_transfer_time_ == 0_minutes  //
-                   && tts.additional_time_ == 0_minutes;
-
     collect_destinations(tt_, q_.destination_, q_.dest_match_mode_,
                          state_.is_destination_, state_.dist_to_dest_);
-
     for (auto const [i, via] : utl::enumerate(q_.via_stops_)) {
       collect_via_destinations(tt_, via.location_, state_.is_via_[i]);
     }
 
-    if constexpr (Algo::kUseLowerBounds) {
+    if constexpr (Algo<Dir>::kUseLowerBounds) {
       auto lb_span = get_otel_tracer()->StartSpan("lower bounds");
       auto lb_scope = opentelemetry::trace::Scope{lb_span};
       UTL_START_TIMING(lb);
@@ -129,7 +149,7 @@ struct search {
 #endif
     }
 
-    return Algo{
+    return Algo<Dir>{
         tt_,
         rtt_,
         algo_state,
@@ -153,38 +173,12 @@ struct search {
         tts};
   }
 
-  search(timetable const& tt,
-         rt_timetable const* rtt,
-         search_state& s,
-         algo_state_t& algo_state,
-         query q,
-         std::optional<std::chrono::seconds> timeout = std::nullopt)
-      : tt_{tt},
-        rtt_{rtt},
-        state_{s},
-        q_{std::move(q)},
-        search_interval_{std::visit(
-            utl::overloaded{[](interval<unixtime_t> const start_interval) {
-                              return start_interval;
-                            },
-                            [](unixtime_t const start_time) {
-                              return interval<unixtime_t>{start_time,
-                                                          start_time};
-                            }},
-            q_.start_time_)},
-        fastest_direct_{get_fastest_direct(tt_, q_, SearchDir)},
-        algo_{init(q_.allowed_claszes_,
-                   q_.require_bike_transport_,
-                   q_.require_car_transport_,
-                   q_.transfer_time_settings_,
-                   algo_state)},
-        timeout_(timeout) {
-    utl::sort(q_.start_);
-    utl::sort(q_.destination_);
-    q_.sanitize(tt);
-  }
+  routing_result pingpong() {}
 
   routing_result execute() {
+    static constexpr auto const kFwd = (SearchDir == direction::kForward);
+    static constexpr auto const kBwd = (SearchDir == direction::kBackward);
+
     auto span = get_otel_tracer()->StartSpan("search::execute");
     auto scope = opentelemetry::trace::Scope{span};
 
@@ -406,9 +400,10 @@ private:
                q_.max_start_offset_, q_.start_match_mode_,
                q_.use_start_footpaths_, state_.starts_, add_ontrip, q_.prf_idx_,
                q_.transfer_time_settings_);
-    std::sort(
-        begin(state_.starts_), end(state_.starts_),
-        [&](start const& a, start const& b) { return kFwd ? b < a : a < b; });
+    std::sort(begin(state_.starts_), end(state_.starts_),
+              [&](start const& a, start const& b) {
+                return SearchDir == direction::kForward ? b < a : a < b;
+              });
   }
 
   void remove_ontrip_results() {
@@ -441,7 +436,7 @@ private:
            * It will not find journeys with the same duration
            */
           auto const worst_time_at_dest =
-              start_time + (kFwd ? 1 : -1) *
+              start_time + (SearchDir == direction::kForward ? 1 : -1) *
                                (std::min(fastest_direct_, q_.max_travel_time_) +
                                 duration_t{1});
           algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
@@ -476,7 +471,7 @@ private:
   interval<unixtime_t> search_interval_;
   search_stats stats_;
   duration_t fastest_direct_;
-  Algo algo_;
+  Algo<SearchDir> algo_;
   std::optional<std::chrono::seconds> timeout_;
 };
 

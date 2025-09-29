@@ -5,16 +5,26 @@
 namespace nigiri::routing {
 
 struct transfer_time_settings {
+  transfer_time_settings(duration_t min_transfer_time,
+                         duration_t additional_time,
+                         float factor)
+      : factor_{std::max(factor, 1.0F)},
+        min_transfer_time_{std::max(min_transfer_time, 0_minutes)},
+        additional_time_{std::max(additional_time, 0_minutes)},
+        default_{factor == 1.0F  //
+                 && min_transfer_time == 0_minutes  //
+                 && additional_time == 0_minutes} {}
+
   bool operator==(transfer_time_settings const& o) const {
     return default_ == o.default_ ||
            std::tie(min_transfer_time_, additional_time_, factor_) ==
                std::tie(o.min_transfer_time_, additional_time_, o.factor_);
   }
 
-  bool default_{true};
-  duration_t min_transfer_time_{0};
-  duration_t additional_time_{0};
-  float factor_{1.0F};
+  float factor_;
+  duration_t min_transfer_time_;
+  duration_t additional_time_;
+  bool default_;
 };
 
 template <typename T>

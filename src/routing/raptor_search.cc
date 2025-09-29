@@ -20,6 +20,15 @@ namespace nigiri::routing {
 
 namespace {
 
+template <bool Rt, via_offset_t Vias, search_mode SearchMode>
+struct raptor_curry_search_dir {
+  template <direction SearchDir>
+  struct type : public raptor<SearchDir, Rt, Vias, SearchMode> {
+    using parent = raptor<SearchDir, Rt, Vias, SearchMode>;
+    using parent::parent;
+  };
+};
+
 template <direction SearchDir, via_offset_t Vias>
 routing_result raptor_search_with_vias(
     timetable const& tt,
@@ -28,17 +37,18 @@ routing_result raptor_search_with_vias(
     raptor_state& r_state,
     query q,
     std::optional<std::chrono::seconds> const timeout) {
-  if (rtt == nullptr) {
-    using algo_t = raptor<SearchDir, false, Vias, search_mode::kOneToOne>;
-    return search<SearchDir, algo_t>{tt,      rtt,          s_state,
-                                     r_state, std::move(q), timeout}
-        .execute();
-  } else {
-    using algo_t = raptor<SearchDir, true, Vias, search_mode::kOneToOne>;
-    return search<SearchDir, algo_t>{tt,      rtt,          s_state,
-                                     r_state, std::move(q), timeout}
-        .execute();
-  }
+  // if (rtt == nullptr) {
+  return search<SearchDir,
+                raptor_curry_search_dir<false, Vias,
+                                        search_mode::kOneToOne>::template type>{
+      tt, rtt, s_state, r_state, std::move(q), timeout}
+      .execute();
+  // } else {
+  // using algo_t = raptor<SearchDir, true, Vias, search_mode::kOneToOne>;
+  // return search<SearchDir, algo_t>{tt,      rtt,          s_state,
+  //                                  r_state, std::move(q), timeout}
+  //     .execute();
+  // }
 }
 
 template <direction SearchDir>
