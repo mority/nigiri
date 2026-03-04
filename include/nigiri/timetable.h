@@ -411,6 +411,10 @@ struct timetable {
   // Lower bound graph.
   std::array<vecvec<location_idx_t, footpath>, kNProfiles> fwd_search_lb_graph_;
   std::array<vecvec<location_idx_t, footpath>, kNProfiles> bwd_search_lb_graph_;
+  std::array<vecvec<location_idx_t, location_idx_t>, kNProfiles>
+      fwd_search_adjacency_;
+  std::array<vecvec<location_idx_t, location_idx_t>, kNProfiles>
+      bwd_search_adjacency_;
 
   // profile name -> profile_idx_t
   hash_map<string, profile_idx_t> profiles_;

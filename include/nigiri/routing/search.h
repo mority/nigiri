@@ -18,6 +18,7 @@
 #include "nigiri/routing/get_fastest_direct.h"
 #include "nigiri/routing/interval_estimate.h"
 #include "nigiri/routing/journey.h"
+#include "nigiri/routing/lb_hops.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
@@ -38,6 +39,8 @@ struct search_state {
   ~search_state() = default;
 
   std::vector<std::uint16_t> travel_time_lower_bound_;
+  vector_map<location_idx_t, std::uint8_t> hops_lower_bound_;
+  std::vector<location_idx_t> hops_queue_;
   bitvec is_destination_;
   std::array<bitvec, kMaxVias> is_via_;
   std::vector<std::uint16_t> dist_to_dest_;
@@ -142,6 +145,12 @@ struct search {
       }
 #endif
     }
+
+    UTL_START_TIMING(lb_transfers);
+    lb_hops<SearchDir>(tt_, q_, state_.hops_lower_bound_);
+    UTL_STOP_TIMING(lb_transfers);
+    auto of = std::ofstream{"lb_transfers_time.txt", std::ios::app};
+    of << UTL_TIMING_MS(lb_transfers) << "\n";
 
     return Algo{
         tt_,
