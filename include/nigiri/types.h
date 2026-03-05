@@ -167,6 +167,7 @@ using string_idx_t = cista::strong<std::uint32_t, struct _string_idx>;
 using bitfield_idx_t = cista::strong<std::uint32_t, struct _bitfield_idx>;
 using location_idx_t = cista::strong<std::uint32_t, struct _location_idx>;
 using route_idx_t = cista::strong<std::uint32_t, struct _route_idx>;
+using lb_route_idx_t = cista::strong<std::uint32_t, struct _lb_route_idx>;
 using section_idx_t = cista::strong<std::uint32_t, struct _section_idx>;
 using section_db_idx_t = cista::strong<std::uint32_t, struct _section_db_idx>;
 using shape_idx_t = cista::strong<std::uint32_t, struct _shape_idx>;
