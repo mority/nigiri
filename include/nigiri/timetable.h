@@ -419,8 +419,9 @@ struct timetable {
   // lower bound per route for lbRAPTOR
   std::array<vecvec<location_idx_t, lb_route_idx_t>, kNProfiles>
       location_lb_routes_;
-  std::array<vecvec<lb_route_idx_t, duration_t>, kNProfiles>
-      lb_route_times_;
+  std::array<vecvec<lb_route_idx_t, duration_t>, kNProfiles> lb_route_times_;
+  std::array<vector_map<lb_route_idx_t, route_idx_t>, kNProfiles>
+      lb_route_route_;
 
   // profile name -> profile_idx_t
   hash_map<string, profile_idx_t> profiles_;
