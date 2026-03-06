@@ -14,11 +14,11 @@ struct query;
 static constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
 
 struct lb_raptor_state {
-  void resize(unsigned const n) {
-    location_round_lb_.resize(n);
-    station_mark_.resize(n);
-    prev_station_mark_.resize(n);
-    is_start_.resize(n);
+  void resize(unsigned const n_locations, unsigned const n_lb_routes) {
+    location_round_lb_.resize(n_locations);
+    station_mark_.resize(n_locations);
+    prev_station_mark_.resize(n_locations);
+    lb_route_mark_.resize(n_lb_routes);
   }
 
   void clear() {
@@ -29,7 +29,7 @@ struct lb_raptor_state {
     }();
     utl::fill(location_round_lb_, kRoundLbInit);
     utl::fill(station_mark_.blocks_, 0U);
-    utl::fill(is_start_.blocks_, 0U);
+    utl::fill(lb_route_mark_.blocks_, 0U);
   }
 
   void zeroize() {
@@ -45,7 +45,7 @@ struct lb_raptor_state {
       location_round_lb_;
   bitvec station_mark_;
   bitvec prev_station_mark_;
-  bitvec is_start_;
+  bitvec lb_route_mark_;
 };
 
 template <direction SearchDir>

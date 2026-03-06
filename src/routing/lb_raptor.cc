@@ -1,6 +1,5 @@
 #include "nigiri/routing/lb_raptor.h"
 
-#include "utl/enumerate.h"
 #include "utl/get_or_create.h"
 #include "utl/timing.h"
 #include "utl/zip.h"
@@ -17,7 +16,7 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
       (SearchDir == direction::kForward ? tt.fwd_lb_adjacency_
                                         : tt.bwd_lb_adjacency_)[q.prf_idx_];
 
-  state.resize(tt.n_locations());
+  state.resize(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
   state.clear();
 
   // init (k = 0)
@@ -49,19 +48,33 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
       state.station_mark_.set(to_idx(meta), true);
     });
   }
-  for (auto const& s : q.start_) {
-    state.is_start_.set(to_idx(s.target()), true);
-  }
-  for (auto const& [l, _] : q.td_start_) {
-    state.is_start_.set(to_idx(l), true);
-  }
 
   // run
   for (auto k = 1U; k != std::min(q.max_transfers_, kMaxTransfers) + 2U; ++k) {
+    auto any_marked = false;
+    state.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+      for (auto const r :
+           tt.location_lb_routes_[q.prf_idx_][location_idx_t{i}]) {
+        any_marked = true;
+        state.lb_route_mark_.set(to_idx(r), true);
+      }
+    });
+    if (!any_marked) {
+      break;
+    }
+
     std::swap(state.prev_station_mark_, state.station_mark_);
     utl::fill(state.station_mark_.blocks_, 0U);
 
-    auto any_marked = false;
+    any_marked = false;
+    state.lb_route_mark_.for_each_set_bit([&](auto const r) {
+
+    });
+
+    if (!any_marked) {
+      break;
+    }
+
     state.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       auto const l = location_idx_t{i};
 
@@ -69,20 +82,14 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
         auto const lb_pt = static_cast<std::uint16_t>(
             state.location_round_lb_[l][k - 1U] + n.pt_duration_);
 
-        if (state.is_start_.test(to_idx(n.l_)) &&
-            lb_pt < state.location_round_lb_[n.l_][k]) [[unlikely]] {
+        auto const lb_transfer = static_cast<std::uint16_t>(
+            lb_pt + adjusted_transfer_time(q.transfer_time_settings_,
+                                           n.transfer_duration_));
+        if (lb_transfer < state.location_round_lb_[n.l_][k]) {
           std::fill(begin(state.location_round_lb_[n.l_]) + k,
-                    end(state.location_round_lb_[n.l_]), lb_pt);
-        } else {
-          auto const lb_transfer = static_cast<std::uint16_t>(
-              lb_pt + adjusted_transfer_time(q.transfer_time_settings_,
-                                             n.transfer_duration_));
-          if (lb_transfer < state.location_round_lb_[n.l_][k]) {
-            std::fill(begin(state.location_round_lb_[n.l_]) + k,
-                      end(state.location_round_lb_[n.l_]), lb_transfer);
-            state.station_mark_.set(to_idx(n.l_), true);
-            any_marked = true;
-          }
+                    end(state.location_round_lb_[n.l_]), lb_transfer);
+          state.station_mark_.set(to_idx(n.l_), true);
+          any_marked = true;
         }
       };
 

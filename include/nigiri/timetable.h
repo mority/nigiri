@@ -416,12 +416,14 @@ struct timetable {
   std::array<vecvec<location_idx_t, lb_neighbor>, kNProfiles> fwd_lb_adjacency_;
   std::array<vecvec<location_idx_t, lb_neighbor>, kNProfiles> bwd_lb_adjacency_;
 
-  // lower bound per route for lbRAPTOR
+  // root location -> lb routes at location
   std::array<vecvec<location_idx_t, lb_route_idx_t>, kNProfiles>
       location_lb_routes_;
+  // segment - layover - segment - layover - ... - segment
   std::array<vecvec<lb_route_idx_t, duration_t>, kNProfiles> lb_route_times_;
-  std::array<vector_map<lb_route_idx_t, route_idx_t>, kNProfiles>
-      lb_route_route_;
+  // lb_route -> root location sequence
+  std::array<vecvec<lb_route_idx_t, location_idx_t>, kNProfiles>
+      lb_route_root_seq_;
 
   // profile name -> profile_idx_t
   hash_map<string, profile_idx_t> profiles_;
