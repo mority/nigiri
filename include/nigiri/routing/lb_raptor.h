@@ -18,6 +18,7 @@ struct lb_raptor_state {
     location_round_lb_.resize(n_locations);
     station_mark_.resize(n_locations);
     prev_station_mark_.resize(n_locations);
+    is_start_.resize(n_locations);
     lb_route_mark_.resize(n_lb_routes);
   }
 
@@ -29,6 +30,7 @@ struct lb_raptor_state {
     }();
     utl::fill(location_round_lb_, kRoundLbInit);
     utl::fill(station_mark_.blocks_, 0U);
+    utl::fill(is_start_.blocks_, 0U);
     utl::fill(lb_route_mark_.blocks_, 0U);
   }
 
@@ -43,8 +45,10 @@ struct lb_raptor_state {
 
   vector_map<location_idx_t, std::array<std::uint16_t, kMaxTransfers + 2U>>
       location_round_lb_;
+  vector_map<location_idx_t,std:> tmp_
   bitvec station_mark_;
   bitvec prev_station_mark_;
+  bitvec is_start_;
   bitvec lb_route_mark_;
 };
 

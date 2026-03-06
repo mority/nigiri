@@ -56,7 +56,10 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     });
   }
 
-  // run
+  for (auto const& o : q.start_) {
+    state.is_start_.set(to_idx(tt.locations_.get_root_idx(o.target())), true);
+  }
+ // run
   for (auto k = 1U; k != std::min(q.max_transfers_, kMaxTransfers) + 2U; ++k) {
     auto any_marked = false;
     state.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
