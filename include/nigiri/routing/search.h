@@ -146,7 +146,7 @@ struct search {
         state_.is_via_,
         state_.dist_to_dest_,
         q_.td_dest_,
-        state_.lb_raptor_state_.location_round_lb_,
+        state_.lb_raptor_state_.round_times_,
         q_.via_stops_,
         day_idx_t{
             std::chrono::duration_cast<date::days>(

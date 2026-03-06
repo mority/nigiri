@@ -14,41 +14,33 @@ struct query;
 static constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
 
 struct lb_raptor_state {
-  void resize(unsigned const n_locations, unsigned const n_lb_routes) {
-    location_round_lb_.resize(n_locations);
+  void reset(unsigned const n_locations, unsigned const n_lb_routes) {
+    for (auto& a : round_times_) {
+      a.resize(n_locations);
+    }
     station_mark_.resize(n_locations);
     prev_station_mark_.resize(n_locations);
-    is_start_.resize(n_locations);
     lb_route_mark_.resize(n_lb_routes);
-  }
 
-  void clear() {
-    static constexpr auto kRoundLbInit = []() {
-      auto ret = std::array<std::uint16_t, kMaxTransfers + 2>{};
-      ret.fill(kUnreachable);
-      return ret;
-    }();
-    utl::fill(location_round_lb_, kRoundLbInit);
+    for (auto& a : round_times_) {
+      utl::fill(a, kUnreachable);
+    }
     utl::fill(station_mark_.blocks_, 0U);
-    utl::fill(is_start_.blocks_, 0U);
     utl::fill(lb_route_mark_.blocks_, 0U);
   }
 
   void zeroize() {
-    static constexpr auto kLbZero = [] {
-      auto a = std::array<std::uint16_t, kMaxTransfers + 2U>{};
-      a.fill(0U);
-      return a;
-    }();
-    utl::fill(location_round_lb_, kLbZero);
+    for (auto& a : round_times_) {
+      utl::fill(a, 0U);
+    }
   }
 
-  vector_map<location_idx_t, std::array<std::uint16_t, kMaxTransfers + 2U>>
-      location_round_lb_;
-  vector_map<location_idx_t,std:> tmp_
+  std::array<vector_map<location_idx_t, std::uint16_t>, kMaxTransfers + 2U>
+      round_times_;
+  vector_map<location_idx_t, std::uint16_t> tmp_;
+  vector_map<location_idx_t, std::uint16_t> best_;
   bitvec station_mark_;
   bitvec prev_station_mark_;
-  bitvec is_start_;
   bitvec lb_route_mark_;
 };
 

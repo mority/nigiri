@@ -152,33 +152,33 @@ TEST(routing, lb_raptor) {
 
   ASSERT_EQ(kMaxTransfers, 14U);
   EXPECT_EQ(kExpLbP,
-            state.location_round_lb_[tt.find(location_id{"P", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"P", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbF,
-            state.location_round_lb_[tt.find(location_id{"F", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"F", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbS,
-            state.location_round_lb_[tt.find(location_id{"S", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"S", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbB1,
-            state.location_round_lb_[tt.find(location_id{"B1", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"B1", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbC1,
-            state.location_round_lb_[tt.find(location_id{"C1", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"C1", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbC2,
-            state.location_round_lb_[tt.find(location_id{"C2", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"C2", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbD1,
-            state.location_round_lb_[tt.find(location_id{"D1", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"D1", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbD2,
-            state.location_round_lb_[tt.find(location_id{"D2", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"D2", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbD3,
-            state.location_round_lb_[tt.find(location_id{"D3", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"D3", source_idx_t{}})
                                          .value()]);
   EXPECT_EQ(kExpLbT,
-            state.location_round_lb_[tt.find(location_id{"T", source_idx_t{}})
+            state.round_times_[tt.find(location_id{"T", source_idx_t{}})
                                          .value()]);
 }

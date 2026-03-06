@@ -8,6 +8,7 @@
 #include "nigiri/routing/query.h"
 #include "nigiri/timetable.h"
 
+#include "absl/strings/internal/str_format/constexpr_parser.h"
 #include "utl/enumerate.h"
 
 namespace nigiri::routing {
@@ -20,15 +21,14 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
   auto const& route_times = tt.lb_route_times_[q.prf_idx_];
   auto const& route_root_seq = tt.lb_route_root_seq_[q.prf_idx_];
 
-  state.resize(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
-  state.clear();
+  state.reset(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
 
   // init (k = 0)
   std::map<location_idx_t, std::uint16_t> min;
   auto const update_min = [&](location_idx_t const l, std::uint16_t const d) {
     auto const root = tt.locations_.get_root_idx(l);
-    auto& m = utl::get_or_create(
-        min, root, [&] { return state.location_round_lb_[root][0]; });
+    auto& m = utl::get_or_create(min, root,
+                                 [&] { return state.round_times_[0][root]; });
     m = std::min(d, m);
   };
 
@@ -50,17 +50,19 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
 
   for (auto const& [l, t] : min) {
     for_each_meta(tt, q.dest_match_mode_, l, [&](location_idx_t const meta) {
-      state.location_round_lb_[meta].fill(std::min(
-          t, state.location_round_lb_[meta][0]));  // necessary to min again?
+      state.round_times_[0][meta] =
+          std::min(t, state.round_times_[0][meta]);  // necessary to min again?
       state.station_mark_.set(to_idx(meta), true);
     });
   }
 
-  for (auto const& o : q.start_) {
-    state.is_start_.set(to_idx(tt.locations_.get_root_idx(o.target())), true);
-  }
- // run
+  // run
   for (auto k = 1U; k != std::min(q.max_transfers_, kMaxTransfers) + 2U; ++k) {
+    for (auto const l :
+         interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
+      state.round_times_[k][l] = state.round_times_[k - 1U][l];
+    }
+
     auto any_marked = false;
     state.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       for (auto const r : routes[location_idx_t{i}]) {
@@ -81,29 +83,30 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
       auto const& segment_layovers = route_times[r];
       auto const& seq = route_root_seq[r];
 
-      for (auto s = 1U; s != seq.size(); ++s) {
-        auto const stop_idx = kFwd ? s : seq.size() - s - 1U;
-        auto const l = seq[stop_idx];
+      for (auto x = 1U; x != seq.size(); ++x) {
+        auto const in = kFwd ? x : seq.size() - x - 1U;
+        auto const l_in = seq[in];
 
-        if (!state.prev_station_mark_.test(to_idx(l))) {
+        if (!state.prev_station_mark_.test(to_idx(l_in))) {
           continue;
         }
 
-        auto lb = state.location_round_lb_[l][k - 1U];
+        auto lb = state.round_times_[k - 1U][l_in];
         auto const step = kFwd ? -1 : 1;
-        for (auto t = static_cast<std::int32_t>(stop_idx + step);
-             0 <= t && t < static_cast<std::int32_t>(seq.size()); t += step) {
-          auto const segment =
-              kFwd ? segment_layovers[t * 2] : segment_layovers[(t - 1) * 2];
+        for (auto out = static_cast<std::int32_t>(in + step);
+             0 <= out && out < static_cast<std::int32_t>(seq.size());
+             out += step) {
+          auto const l_out = seq[out];
+          auto const segment = kFwd ? segment_layovers[out * 2]
+                                    : segment_layovers[(out - 1) * 2];
 
           lb += segment.count();
-          if (lb < state.location_round_lb_[seq[t]][k]) {
-            std::fill(begin(state.location_round_lb_[seq[t]]) + k,
-                      end(state.location_round_lb_[seq[t]]), lb);
-            state.station_mark_.set(to_idx(seq[t]), true);
+          if (lb < std::min(state.round_times_[k][l_out], state.tmp_[l_out])) {
+            state.tmp_[l_out] = lb;
+            state.station_mark_.set(to_idx(l_out), true);
             any_marked = true;
 
-            auto const layover = segment_layovers[t * 2 - 1].count();
+            auto const layover = segment_layovers[out * 2 - 1].count();
             lb += layover;
           } else {
             break;
@@ -124,23 +127,38 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     state.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       auto const l = location_idx_t{i};
 
-      auto const visit = [&](lb_neighbor const n) {
-        auto const lb_pt = static_cast<std::uint16_t>(
-            state.location_round_lb_[l][k - 1U] + n.pt_duration_);
+      auto const time_after_transfer =
+          state.tmp_[l] +
+          adjusted_transfer_time(q.transfer_time_settings_,
+                                 tt.locations_.transfer_time_[l].count());
+      state.round_times_[k][l] = time_after_transfer;
+      state.station_mark_.set(i, true);
+    });
 
-        auto const lb_transfer = static_cast<std::uint16_t>(
-            lb_pt + adjusted_transfer_time(q.transfer_time_settings_,
-                                           n.transfer_duration_));
-        if (lb_transfer < state.location_round_lb_[n.l_][k]) {
-          std::fill(begin(state.location_round_lb_[n.l_]) + k,
-                    end(state.location_round_lb_[n.l_]), lb_transfer);
-          state.station_mark_.set(to_idx(n.l_), true);
-          any_marked = true;
+    state.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+      auto const l = location_idx_t{i};
+
+      auto const expand_fps = [&](auto const x) {
+        for (auto const fp :
+             kFwd ? tt.locations_.footpaths_in_[q.prf_idx_][x]
+                  : tt.locations_.footpaths_out_[q.prf_idx_][x]) {
+          auto const root = tt.locations_.get_root_idx(fp.target());
+          auto const time_after_fp =
+              state.tmp_[l] + adjusted_transfer_time(q.transfer_time_settings_,
+                                                     fp.duration().count());
+          if (time_after_fp < state.round_times_[k][root]) {
+            state.round_times_[k][root] = time_after_fp;
+            state.station_mark_.set(to_idx(root), true);
+          }
         }
       };
 
-      for (auto const n : adjacency[l]) {
-        visit(n);
+      expand_fps(l);
+      for (auto const c : tt.locations_.children_[l]) {
+        expand_fps(c);
+        for (auto const cc : tt.locations_.children_[c]) {
+          expand_fps(cc);
+        }
       }
     });
 
@@ -149,16 +167,17 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     }
   }
 
-  // propagate lb to children
-  // for (auto const l :
-  //      interval{location_idx_t{0}, location_idx_t{tt.n_locations()}}) {
-  //   for (auto const c : tt.locations_.children_[l]) {
-  //     for (auto [plb, clb] :
-  //          utl::zip(location_round_lb[l], location_round_lb[c])) {
-  //       clb = std::min(plb, clb);
-  //     }
-  //   }
-  // }
+  for (auto& times : state.round_times_) {
+    for (auto const l :
+         interval{location_idx_t{0}, location_idx_t{tt.n_locations()}}) {
+      for (auto const c : tt.locations_.children_[l]) {
+        times[c] = times[l];
+        for (auto const cc : tt.locations_.children_[c]) {
+          times[cc] = times[c];
+        }
+      }
+    }
+  }
 }
 
 template void lb_raptor<direction::kForward>(timetable const&,
