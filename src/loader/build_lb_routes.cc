@@ -38,10 +38,12 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
   };
 
   auto const pt = utl::get_active_progress_tracker();
-  pt->status("Compute lower bound adjacencies").in_high(tt.n_locations());
+  pt->status("Compute lower bound routes").in_high(tt.n_locations());
   for (auto const representative :
        interval{route_idx_t{0U}, route_idx_t{tt.n_routes()}}) {
-    if (route_lb_route[representative] != kUnset) {
+    if (route_lb_route[representative] != kUnset ||
+        (prf_idx == kCarProfile && !tt.has_car_transport(representative)) ||
+        (prf_idx == kBikeProfile && !tt.has_bike_transport(representative))) {
       continue;
     }
 
@@ -49,7 +51,9 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
     equivalence.push_back(representative);
     for (auto const r :
          interval{representative + 1U, route_idx_t{tt.n_routes()}}) {
-      if (route_lb_route[r] != kUnset) {
+      if (route_lb_route[r] != kUnset ||
+          (prf_idx == kCarProfile && !tt.has_car_transport(r)) ||
+          (prf_idx == kBikeProfile && !tt.has_bike_transport(r))) {
         continue;
       }
       if (equal_stops(representative, r)) {
