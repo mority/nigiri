@@ -75,17 +75,48 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     any_marked = false;
     state.lb_route_mark_.for_each_set_bit([&](auto const i) {
       auto const r = lb_route_idx_t{i};
-      auto const seq = tt.lb_route_root_seq_[q.prf_idx_][r];
+      auto const& segment_layovers = route_times[r];
+      auto const& seq = route_root_seq[r];
 
-      for (auto s = 0U; s != seq.size(); ++s) {
-        auto const stop_idx =
-            static_cast<stop_idx_t>(kFwd ? s : seq.size() - s - 1U);
+      for (auto s = 1U; s != seq.size(); ++s) {
+        auto const stop_idx = kFwd ? s : seq.size() - s - 1U;
+        auto const l = seq[stop_idx];
+
+        if (!state.prev_station_mark_.test(to_idx(l))) {
+          continue;
+        }
+
+        auto lb = state.location_round_lb_[l][k - 1U];
+        auto const step = kFwd ? -1 : 1;
+        for (auto t = static_cast<std::int32_t>(stop_idx + step);
+             0 <= t && t < static_cast<std::int32_t>(seq.size()); t += step) {
+          auto const segment =
+              kFwd ? segment_layovers[t * 2] : segment_layovers[(t - 1) * 2];
+
+          lb += segment.count();
+          if (lb < state.location_round_lb_[seq[t]][k]) {
+            std::fill(begin(state.location_round_lb_[seq[t]]) + k,
+                      end(state.location_round_lb_[seq[t]]), lb);
+            state.station_mark_.set(to_idx(seq[t]), true);
+            any_marked = true;
+
+            auto const layover = segment_layovers[t * 2 - 1].count();
+            lb += layover;
+          } else {
+            break;
+          }
+        }
       }
     });
 
     if (!any_marked) {
       break;
     }
+
+    utl::fill(state.lb_route_mark_.blocks_, 0U);
+
+    std::swap(state.prev_station_mark_, state.station_mark_);
+    utl::fill(state.station_mark_.blocks_, 0U);
 
     state.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       auto const l = location_idx_t{i};
