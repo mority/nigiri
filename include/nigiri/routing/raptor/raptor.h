@@ -103,8 +103,8 @@ struct raptor {
       std::array<bitvec, kMaxVias>& is_via,
       std::vector<std::uint16_t>& dist_to_dest,
       hash_map<location_idx_t, std::vector<td_offset>> const& td_dist_to_dest,
-      vector_map<location_idx_t, std::array<std::uint16_t, kMaxTransfers + 2U>>&
-          location_round_lb,
+      std::array<vector_map<location_idx_t, std::uint16_t>, kMaxTransfers + 2U>&
+          lb_round_times,
       std::vector<via_stop> const& via_stops,
       day_idx_t const base,
       clasz_mask_t const allowed_claszes,
@@ -126,7 +126,7 @@ struct raptor {
         is_via_{is_via},
         dist_to_end_{dist_to_dest},
         td_dist_to_end_{td_dist_to_dest},
-        location_round_lb_{location_round_lb},
+        lb_round_times_{lb_round_times},
         via_stops_{via_stops},
         base_{base},
         allowed_claszes_{allowed_claszes},
@@ -478,11 +478,10 @@ private:
 
         if (is_better(fp_target_time, best_[i][target_v]) &&
             is_better(fp_target_time, time_at_dest_[k])) {
-          if (location_round_lb_[location_idx_t{i}][remaining_k] ==
-                  kUnreachable ||
+          if (lb_round_times_[location_idx_t{i}][remaining_k] == kUnreachable ||
               !is_better(
                   fp_target_time - transfer_time +
-                      dir(location_round_lb_[location_idx_t{i}][remaining_k]),
+                      dir(lb_round_times_[location_idx_t{i}][remaining_k]),
                   time_at_dest_[k])) {
             ++stats_.fp_update_prevented_by_lower_bound_;
             return;
@@ -549,11 +548,10 @@ private:
 
           if (is_better(fp_target_time, best_[target][target_v]) &&
               is_better(fp_target_time, time_at_dest_[k])) {
-            if (location_round_lb_[fp.target()][remaining_k] == kUnreachable ||
-                !is_better(
-                    fp_target_time - transfer_time +
-                        dir(location_round_lb_[fp.target()][remaining_k]),
-                    time_at_dest_[k])) {
+            if (lb_round_times_[fp.target()][remaining_k] == kUnreachable ||
+                !is_better(fp_target_time - transfer_time +
+                               dir(lb_round_times_[fp.target()][remaining_k]),
+                           time_at_dest_[k])) {
               ++stats_.fp_update_prevented_by_lower_bound_;
               trace_upd(
                   "┊ ├k={} *** LB NO UPD: (from={}, tmp={}) --{}--> (to={}, "
@@ -651,11 +649,10 @@ private:
 
           if (is_better(fp_target_time, best_[target][target_v]) &&
               is_better(fp_target_time, time_at_dest_[k])) {
-            if (location_round_lb_[fp.target()][remaining_k] == kUnreachable ||
-                !is_better(
-                    fp_target_time - fp_time +
-                        dir(location_round_lb_[fp.target()][remaining_k]),
-                    time_at_dest_[k])) {
+            if (lb_round_times_[fp.target()][remaining_k] == kUnreachable ||
+                !is_better(fp_target_time - fp_time +
+                               dir(lb_round_times_[fp.target()][remaining_k]),
+                           time_at_dest_[k])) {
               ++stats_.fp_update_prevented_by_lower_bound_;
               trace_upd(
                   "┊ ├k={} *** LB NO TD FP UPD: (from={}, tmp={}) --{}--> "
@@ -866,11 +863,11 @@ private:
                          tmp_[l_idx][target_v], best_[l_idx][target_v]);
 
             if (is_better(by_transport, time_at_dest_[k]) &&
-                location_round_lb_[stp.location_idx()][remaining_k] !=
+                lb_round_times_[stp.location_idx()][remaining_k] !=
                     kUnreachable &&
                 is_better(
-                    by_transport + dir(location_round_lb_[stp.location_idx()]
-                                                         [remaining_k]),
+                    by_transport +
+                        dir(lb_round_times_[stp.location_idx()][remaining_k]),
                     time_at_dest_[k])) {
               trace_upd(
                   "┊ │k={}    RT | name={}, dbg={}, time_by_transport={}, "
@@ -895,7 +892,7 @@ private:
         }
       }
 
-      if (location_round_lb_[stp.location_idx()][remaining_k] == kUnreachable) {
+      if (lb_round_times_[stp.location_idx()][remaining_k] == kUnreachable) {
         break;
       }
 
@@ -1009,11 +1006,11 @@ private:
           assert(by_transport != std::numeric_limits<delta_t>::min() &&
                  by_transport != std::numeric_limits<delta_t>::max());
           if (is_better(by_transport, time_at_dest_[k]) &&
-              location_round_lb_[stp.location_idx()][remaining_k] !=
+              lb_round_times_[stp.location_idx()][remaining_k] !=
                   kUnreachable &&
               is_better(
                   by_transport +
-                      dir(location_round_lb_[stp.location_idx()][remaining_k]),
+                      dir(lb_round_times_[stp.location_idx()][remaining_k]),
                   time_at_dest_[k])) {
             trace_upd(
                 "┊ │k={} v={}->{}    name={}, dbg={}, time_by_transport={}, "
@@ -1078,7 +1075,7 @@ private:
         continue;
       }
 
-      if (location_round_lb_[stp.location_idx()][remaining_k] == kUnreachable) {
+      if (lb_round_times_[stp.location_idx()][remaining_k] == kUnreachable) {
         break;
       }
 
@@ -1164,7 +1161,7 @@ private:
         if (is_better_or_eq(
                 time_at_dest_[k],
                 to_delta(day, ev_mam) +
-                    dir(location_round_lb_[l][remaining_k] -
+                    dir(lb_round_times_[l][remaining_k] -
                         adjusted_transfer_time(
                             transfer_time_settings_,
                             tt_.locations_.transfer_time_[l].count())))) {
@@ -1294,9 +1291,8 @@ private:
   std::array<bitvec, kMaxVias> const& is_via_;
   std::vector<std::uint16_t> const& dist_to_end_;
   hash_map<location_idx_t, std::vector<td_offset>> const& td_dist_to_end_;
-  vector_map<location_idx_t,
-             std::array<std::uint16_t, kMaxTransfers + 2U>> const&
-      location_round_lb_;
+  std::array<vector_map<location_idx_t, std::uint16_t>,
+             kMaxTransfers + 2U> const& lb_round_times_;
   std::vector<via_stop> const& via_stops_;
   std::array<delta_t, kMaxTransfers + 2> time_at_dest_;
   day_idx_t base_;

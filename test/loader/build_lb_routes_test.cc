@@ -66,22 +66,20 @@ TEST(loader, build_lb_routes) {
     auto const l = tt.find(location_id{id, source_idx_t{}}).value();
     ASSERT_EQ(tt.location_lb_routes_[kDefaultProfile][l].size(), 1U);
     auto const lbr = tt.location_lb_routes_[kDefaultProfile][l].front();
-    ASSERT_EQ(
-        tt.route_location_seq_[tt.lb_route_route_[kDefaultProfile][lbr]].size(),
-        3U);
+    ASSERT_EQ(tt.lb_route_root_seq_[kDefaultProfile][lbr].size(), 3U);
     EXPECT_EQ(
         tt.get_default_name(stop{
-            tt.route_location_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][0]}
+            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][0]}
                                 .location_idx()),
         "A");
     EXPECT_EQ(
         tt.get_default_name(stop{
-            tt.route_location_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][1]}
+            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][1]}
                                 .location_idx()),
         "B");
     EXPECT_EQ(
         tt.get_default_name(stop{
-            tt.route_location_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][2]}
+            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][2]}
                                 .location_idx()),
         "C");
     ASSERT_EQ(tt.lb_route_times_[kDefaultProfile][lbr].size(), 3U);
@@ -95,16 +93,16 @@ TEST(loader, build_lb_routes) {
     ASSERT_EQ(tt.location_lb_routes_[kDefaultProfile][l].size(), 1U);
     auto const lbr = tt.location_lb_routes_[kDefaultProfile][l].front();
     ASSERT_EQ(
-        tt.route_location_seq_[tt.lb_route_route_[kDefaultProfile][lbr]].size(),
+        tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]].size(),
         2U);
     EXPECT_EQ(
         tt.get_default_name(stop{
-            tt.route_location_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][0]}
+            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][0]}
                                 .location_idx()),
         "X");
     EXPECT_EQ(
         tt.get_default_name(stop{
-            tt.route_location_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][1]}
+            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][1]}
                                 .location_idx()),
         "Y");
     ASSERT_EQ(tt.lb_route_times_[kDefaultProfile][lbr].size(), 1U);
