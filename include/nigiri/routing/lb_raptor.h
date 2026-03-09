@@ -20,6 +20,8 @@ struct lb_raptor_state {
     }
     station_mark_.resize(n_locations);
     prev_station_mark_.resize(n_locations);
+    tmp_.resize(n_locations);
+    best_.resize(n_locations);
     lb_route_mark_.resize(n_lb_routes);
 
     for (auto& a : round_times_) {
