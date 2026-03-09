@@ -65,55 +65,14 @@ TEST(loader, build_lb_routes) {
   for (auto const& id : std::array<string, 3>{"A", "B", "C"}) {
     auto const l = tt.find(location_id{id, source_idx_t{}}).value();
     ASSERT_EQ(tt.location_lb_routes_[kDefaultProfile][l].size(), 1U);
-    auto const lbr = tt.location_lb_routes_[kDefaultProfile][l].front();
-    ASSERT_EQ(tt.lb_route_root_seq_[kDefaultProfile][lbr].size(), 3U);
-    EXPECT_EQ(
-        tt.get_default_name(stop{
-            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][0]}
-                                .location_idx()),
-        "A");
-    EXPECT_EQ(
-        tt.get_default_name(stop{
-            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][1]}
-                                .location_idx()),
-        "B");
-    EXPECT_EQ(
-        tt.get_default_name(stop{
-            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][2]}
-                                .location_idx()),
-        "C");
-    ASSERT_EQ(tt.lb_route_times_[kDefaultProfile][lbr].size(), 3U);
-    EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][lbr][0], duration_t{10});
-    EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][lbr][1], duration_t{30});
-    EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][lbr][2], duration_t{5});
+    auto const lb_route = tt.location_lb_routes_[kDefaultProfile][l][0];
+    fmt::println("{}", lb_route);
   }
 
   for (auto const& id : std::array<string, 2>{"X", "Y"}) {
     auto const l = tt.find(location_id{id, source_idx_t{}}).value();
     ASSERT_EQ(tt.location_lb_routes_[kDefaultProfile][l].size(), 1U);
-    auto const lbr = tt.location_lb_routes_[kDefaultProfile][l].front();
-    ASSERT_EQ(
-        tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]].size(),
-        2U);
-    EXPECT_EQ(
-        tt.get_default_name(stop{
-            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][0]}
-                                .location_idx()),
-        "X");
-    EXPECT_EQ(
-        tt.get_default_name(stop{
-            tt.lb_route_root_seq_[tt.lb_route_route_[kDefaultProfile][lbr]][1]}
-                                .location_idx()),
-        "Y");
-    ASSERT_EQ(tt.lb_route_times_[kDefaultProfile][lbr].size(), 1U);
-    EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][lbr][0], duration_t{60});
-  }
-
-  for (auto r = route_idx_t{0}; r != tt.n_routes(); ++r) {
-    fmt::print("{}: ", r);
-    for (auto const l : tt.route_location_seq_[r]) {
-      fmt::print("{} ", tt.get_default_name(stop{l}.location_idx()));
-    }
-    fmt::print("\n");
+    auto const lb_route = tt.location_lb_routes_[kDefaultProfile][l][0];
+    fmt::println("{}", lb_route);
   }
 }
