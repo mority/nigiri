@@ -188,4 +188,15 @@ template void lb_raptor<direction::kBackward>(timetable const&,
                                               query const&,
                                               lb_raptor_state&);
 
+std::array<vector_map<location_idx_t, std::uint16_t>, kMaxTransfers + 2U>
+get_zero_lb(unsigned const n_locations) {
+  auto a = std::array<vector_map<location_idx_t, std::uint16_t>,
+                      kMaxTransfers + 2U>{};
+  for (auto& v : a) {
+    v.resize(n_locations);
+    utl::fill(v, 0U);
+  }
+  return a;
+}
+
 }  // namespace nigiri::routing

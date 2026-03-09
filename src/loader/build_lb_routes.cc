@@ -16,6 +16,10 @@ static constexpr auto kUnset =
 void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
   auto const timer = scoped_timer{"loader.build_lb_routes"};
 
+  tt.location_lb_routes_[prf_idx].clear();
+  tt.lb_route_root_seq_[prf_idx].clear();
+  tt.lb_route_times_[prf_idx].clear();
+
   auto route_lb_route = vector_map<route_idx_t, lb_route_idx_t>{};
   route_lb_route.resize(tt.n_routes());
   utl::fill(route_lb_route, kUnset);
@@ -23,15 +27,24 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
   auto root_seq = std::vector<location_idx_t>{};
   auto const set_root_seq = [&](route_idx_t const r) {
     root_seq.clear();
+    fmt::print("set root sequence: ");
     for (auto const s : tt.route_location_seq_[r]) {
       root_seq.push_back(tt.locations_.get_root_idx(stop{s}.location_idx()));
+      fmt::print("{} ", tt.get_default_name(root_seq.back()));
     }
+    fmt::print("\n");
   };
 
   auto equivalence = std::vector<route_idx_t>{};
   auto const set_equivalence = [&](route_idx_t const representative) {
     equivalence.clear();
-    equivalence.push_back(representative);
+
+    auto const add = [&](route_idx_t const r) {
+      equivalence.push_back(r);
+      route_lb_route[r] = lb_route_idx_t{tt.lb_route_times_[prf_idx].size()};
+    };
+
+    add(representative);
 
     auto const equal_root_stops = [&](auto const r) {
       auto const& seq = tt.route_location_seq_[r];
@@ -57,6 +70,16 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
         equivalence.push_back(r);
       }
     }
+
+    fmt::print("set equivalence: ");
+    for (auto const r : equivalence) {
+      fmt::print("{}: ", r);
+      for (auto const s : tt.route_location_seq_[r]) {
+        fmt::print("{} ", tt.get_default_name(stop{s}.location_idx()));
+      }
+      fmt::print(", ");
+    }
+    fmt::print("\n");
   };
 
   auto lb_segments_layovers = std::vector<duration_t>{};
@@ -102,6 +125,12 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
       pt->increment();
     }
 
+    fmt::print("lb_segments_layovers: ");
+    for (auto const x : lb_segments_layovers) {
+      fmt::print("{} ", x);
+    }
+    fmt::print("\n");
+
     tt.lb_route_times_[prf_idx].emplace_back(lb_segments_layovers);
     tt.lb_route_root_seq_[prf_idx].emplace_back(root_seq);
   }
@@ -130,6 +159,11 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
         add_lb_routes(cc);
       }
     }
+    fmt::print("adding lb routes for {}: ", tt.get_default_name(l));
+    for (auto const r : lb_routes) {
+      fmt::print("{}", r);
+    }
+    fmt::print("\n");
 
     tt.location_lb_routes_[prf_idx].emplace_back(lb_routes);
   }
@@ -138,4 +172,5 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
       "Merged {} routes into {} LB routes", tt.n_routes(),
       tt.lb_route_times_[prf_idx].size());
 }
+
 }  // namespace nigiri::loader

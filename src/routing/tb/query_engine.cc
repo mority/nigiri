@@ -34,9 +34,8 @@ query_engine<UseLowerBounds>::query_engine(
     std::array<bitvec, kMaxVias> const&,
     std::vector<std::uint16_t> const& dist_to_dest,
     hash_map<location_idx_t, std::vector<td_offset>> const&,
-    vector_map<location_idx_t,
-               std::array<std::uint16_t, kMaxTransfers + 2U>> const&
-        location_round_lb,
+    std::array<vector_map<location_idx_t, std::uint16_t>,
+               kMaxTransfers + 2U> const& lb_round_times,
     std::vector<via_stop> const&,
     day_idx_t const base,
     clasz_mask_t,
@@ -48,7 +47,7 @@ query_engine<UseLowerBounds>::query_engine(
       state_{state},
       is_dest_{is_dest},
       dist_to_dest_{dist_to_dest},
-      location_round_lb_{location_round_lb},
+      lb_round_times_{lb_round_times},
       base_{base - QUERY_DAY_SHIFT} {
   state_.q_n_.base_ = base_;
   stats_.lower_bound_pruning_ = UseLowerBounds;
@@ -192,7 +191,7 @@ void query_engine<UseLowerBounds>::seg_prune(std::uint8_t const k,
   if constexpr (UseLowerBounds) {
     auto const l = stop{tt_.route_location_seq_[tt_.transport_route_[t]][i]}
                        .location_idx();
-    arr_time += duration_t{location_round_lb_[l][remaining_k]};
+    arr_time += duration_t{lb_round_times_[remaining_k][l]};
   }
   if (arr_time > state_.t_min_[k + 1]) {
     tb_debug("PRUNING {}", seg(segment, qe));

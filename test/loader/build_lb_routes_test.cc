@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#include "utl/enumerate.h"
+#include <sstream>
 
 #include "nigiri/timetable.h"
 
@@ -65,14 +65,30 @@ TEST(loader, build_lb_routes) {
   for (auto const& id : std::array<string, 3>{"A", "B", "C"}) {
     auto const l = tt.find(location_id{id, source_idx_t{}}).value();
     ASSERT_EQ(tt.location_lb_routes_[kDefaultProfile][l].size(), 1U);
-    auto const lb_route = tt.location_lb_routes_[kDefaultProfile][l][0];
-    fmt::println("{}", lb_route);
+    auto const r = tt.location_lb_routes_[kDefaultProfile][l][0];
+    ASSERT_EQ(tt.lb_route_root_seq_[kDefaultProfile][r].size(), 3U);
+    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][0]),
+              "A");
+    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][1]),
+              "B");
+    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][2]),
+              "C");
+    ASSERT_EQ(tt.lb_route_times_[kDefaultProfile][r].size(), 3U);
+    EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][r][0], duration_t{10});
+    EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][r][1], duration_t{30});
+    EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][r][2], duration_t{5});
   }
 
   for (auto const& id : std::array<string, 2>{"X", "Y"}) {
     auto const l = tt.find(location_id{id, source_idx_t{}}).value();
     ASSERT_EQ(tt.location_lb_routes_[kDefaultProfile][l].size(), 1U);
-    auto const lb_route = tt.location_lb_routes_[kDefaultProfile][l][0];
-    fmt::println("{}", lb_route);
+    auto const r = tt.location_lb_routes_[kDefaultProfile][l][0];
+    ASSERT_EQ(tt.lb_route_root_seq_[kDefaultProfile][r].size(), 2U);
+    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][0]),
+              "X");
+    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][1]),
+              "Y");
+    ASSERT_EQ(tt.lb_route_times_[kDefaultProfile][r].size(), 1U);
+    EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][r][0], duration_t{60});
   }
 }

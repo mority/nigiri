@@ -47,4 +47,7 @@ struct lb_raptor_state {
 template <direction SearchDir>
 void lb_raptor(timetable const&, query const&, lb_raptor_state&);
 
+std::array<vector_map<location_idx_t, std::uint16_t>, kMaxTransfers + 2U>
+get_zero_lb(unsigned n_locations);
+
 }  // namespace nigiri::routing
