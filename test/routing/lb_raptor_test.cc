@@ -7,12 +7,21 @@
 #include "nigiri/timetable.h"
 
 #include "../util.h"
+#include "utl/enumerate.h"
 
 using namespace date;
 using namespace nigiri;
 using namespace nigiri::loader;
 using namespace nigiri::routing;
 
+// routes:
+// X -> Y -> P | P -> S | S -> T
+//                      | S -> B1 | B1 -> T
+//                      | S -> C1 | C1 -> C2 | C2 -> T
+//                      | S -> D1 | D1 -> D2 | D2 -> D3 | D3 -> T
+//
+// footpaths:
+// F -> S
 mem_dir lb_test_tt() {
   return mem_dir::read(R"__(
 "(
@@ -26,6 +35,9 @@ SID,20260227,1
 
 # stops.txt
 stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+O,O,,,,,,
+X,X,,,,,,
+Y,Y,,,,,,
 P,P,,,,,,
 F,F,,,,,,
 S,S,,,,,,
@@ -39,6 +51,7 @@ T,T,,,,,,
 
 # routes.txt
 route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+XYP,MTA,XYP,XYP,X -> Y -> P,0
 PS,MTA,PS,PS,P -> S,0
 A,MTA,A,A,S -> T,0
 B1,MTA,B1,B1,S -> B1,0
@@ -53,6 +66,7 @@ D4,MTA,D4,D4,D3 -> T,0
 
 # trips.txt
 route_id,service_id,trip_id,trip_headsign,block_id
+XYP,SID,XYP,XYP,0
 PS,SID,PS,PS,1
 A,SID,A,A,2
 B1,SID,B1,B1,3
@@ -67,6 +81,9 @@ D4,SID,D4,D4,11
 
 # stop_times.txt
 trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+XYP,12:00,12:15,X,0,0,0
+XYP,13:00,14:15,Y,1,0,0
+XYP,15:00,15:15,P,2,0,0
 PS,03:00,03:00,P,0,0,0
 PS,04:00,04:00,S,1,0,0
 A,08:00,08:00,S,0,0,0
@@ -99,9 +116,18 @@ F,S,2,600
 constexpr auto kGtfsDateRange = interval{sys_days{2026_y / February / 27},
                                          sys_days{2026_y / February / 28}};
 
+constexpr auto kExpLbO = std::array<std::uint16_t, 16U>{
+    65535U, 65535U, 65535U, 65535U, 65535U, 65535U, 65535U, 65535U,
+    65535U, 65535U, 65535U, 65535U, 65535U, 65535U, 65535U, 65535U};
+constexpr auto kExpLbX = std::array<std::uint16_t, 16U>{
+    65535U, 65535U, 65535U, 838U, 660U, 422U, 319U, 246U,
+    246U,   246U,   246U,   246U, 246U, 246U, 246U, 246U};
+constexpr auto kExpLbY = std::array<std::uint16_t, 16U>{
+    65535U, 65535U, 65535U, 718U, 540U, 302U, 199U, 199U,
+    199U,   199U,   199U,   199U, 199U, 199U, 199U, 199U};
 constexpr auto kExpLbP = std::array<std::uint16_t, 16U>{
-    65535U, 65535U, 669U, 491U, 253U, 150U, 150U, 150U,
-    150U,   150U,   150U, 150U, 150U, 150U, 150U, 150U};
+    65535U, 65535U, 671U, 493U, 255U, 152U, 152U, 152U,
+    152U,   152U,   152U, 152U, 152U, 152U, 152U, 152U};
 constexpr auto kExpLbF = std::array<std::uint16_t, 16U>{
     65535U, 617U, 439U, 201U, 98U, 98U, 98U, 98U,
     98U,    98U,  98U,  98U,  98U, 98U, 98U, 98U};
@@ -151,6 +177,15 @@ TEST(routing, lb_raptor) {
   lb_raptor<direction::kForward>(tt, q, state);
 
   ASSERT_EQ(kMaxTransfers, 14U);
+
+  auto const get_round_times = [&](location_idx_t const l) {
+    auto a = std::array<std::uint16_t, 16U>{};
+    for (auto const [round, times] : utl::enumerate(state.round_times_)) {
+      a[round] = times[l];
+    }
+    return a;
+  };
+
   for (auto const l :
        interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
     auto const name = tt.get_default_name(l);
@@ -161,40 +196,30 @@ TEST(routing, lb_raptor) {
     fmt::print("\n");
   }
 
-  // EXPECT_EQ(
-  //     kExpLbP,
-  //     state.round_times_[tt.find(location_id{"P", source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbF,
-  //     state.round_times_[tt.find(location_id{"F", source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbS,
-  //     state.round_times_[tt.find(location_id{"S", source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbB1,
-  //     state.round_times_[tt.find(location_id{"B1",
-  //     source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbC1,
-  //     state.round_times_[tt.find(location_id{"C1",
-  //     source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbC2,
-  //     state.round_times_[tt.find(location_id{"C2",
-  //     source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbD1,
-  //     state.round_times_[tt.find(location_id{"D1",
-  //     source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbD2,
-  //     state.round_times_[tt.find(location_id{"D2",
-  //     source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbD3,
-  //     state.round_times_[tt.find(location_id{"D3",
-  //     source_idx_t{}}).value()]);
-  // EXPECT_EQ(
-  //     kExpLbT,
-  //     state.round_times_[tt.find(location_id{"T", source_idx_t{}}).value()]);
+  EXPECT_EQ(kExpLbO,
+            get_round_times(tt.find(location_id{"O", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbX,
+            get_round_times(tt.find(location_id{"X", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbY,
+            get_round_times(tt.find(location_id{"Y", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbP,
+            get_round_times(tt.find(location_id{"P", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbF,
+            get_round_times(tt.find(location_id{"F", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbS,
+            get_round_times(tt.find(location_id{"S", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbB1, get_round_times(
+                          tt.find(location_id{"B1", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbC1, get_round_times(
+                          tt.find(location_id{"C1", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbC2, get_round_times(
+                          tt.find(location_id{"C2", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbD1, get_round_times(
+                          tt.find(location_id{"D1", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbD2, get_round_times(
+                          tt.find(location_id{"D2", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbD3, get_round_times(
+                          tt.find(location_id{"D3", source_idx_t{}}).value()));
+  EXPECT_EQ(kExpLbT,
+            get_round_times(tt.find(location_id{"T", source_idx_t{}}).value()));
 }
