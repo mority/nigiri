@@ -117,7 +117,7 @@ struct search {
       if (q_.prf_idx_ == kDefaultProfile) {
         lb_raptor<SearchDir>(tt_, q_, state_.lb_raptor_state_);
       } else {
-        state_.lb_raptor_state_.zeroize();
+        state_.lb_raptor_state_.zero_round_times();
       }
       UTL_STOP_TIMING(lb);
       stats_.lb_time_ = static_cast<std::uint64_t>(UTL_TIMING_MS(lb));

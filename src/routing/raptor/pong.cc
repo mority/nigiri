@@ -286,7 +286,7 @@ routing_result pong(timetable const& tt,
   if (q.prf_idx_ == kDefaultProfile) {
     lb_raptor<SearchDir>(tt, q, ping_lb);
   } else {
-    ping_lb.zeroize();
+    ping_lb.zero_round_times();
   }
   UTL_STOP_TIMING(ping_lb);
 
@@ -326,7 +326,7 @@ routing_result pong(timetable const& tt,
   if (q.prf_idx_ == kDefaultProfile) {
     lb_raptor<SearchDir>(tt, q, pong_lb);
   } else {
-    pong_lb.zeroize();
+    pong_lb.zero_round_times();
   }
   UTL_STOP_TIMING(pong_lb);
 
