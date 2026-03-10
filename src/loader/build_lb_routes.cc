@@ -48,12 +48,10 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
       if (root_seq.size() != seq.size()) {
         return false;
       }
-      for (auto const [i, j] : utl::zip(root_seq, seq)) {
-        if (i != tt.locations_.get_root_idx(stop{j}.location_idx())) {
-          return false;
-        }
-      }
-      return true;
+      return utl::all_of(utl::zip(root_seq, seq), [&](auto&& p) {
+        auto const& [a, b] = p;
+        return a == tt.locations_.get_root_idx(stop{b}.location_idx());
+      });
     };
 
     for (auto const r :
@@ -64,7 +62,7 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
         continue;
       }
       if (equal_root_stops(r)) {
-        equivalence.push_back(r);
+        add(r);
       }
     }
   };
