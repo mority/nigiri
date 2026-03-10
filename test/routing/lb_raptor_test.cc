@@ -186,16 +186,6 @@ TEST(routing, lb_raptor) {
     return a;
   };
 
-  for (auto const l :
-       interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
-    auto const name = tt.get_default_name(l);
-    fmt::print("{}: ", name);
-    for (auto const& round : state.round_times_) {
-      fmt::print("{} ", round[l]);
-    }
-    fmt::print("\n");
-  }
-
   EXPECT_EQ(kExpLbO,
             get_round_times(tt.find(location_id{"O", source_idx_t{}}).value()));
   EXPECT_EQ(kExpLbX,
