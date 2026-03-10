@@ -59,8 +59,6 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
   // run
   auto early_termination = false;
   for (auto k = 1U; k != std::min(q.max_transfers_, kMaxTransfers) + 2U; ++k) {
-    fmt::println("k: {}", k);
-
     for (auto const l :
          interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
       state.round_times_[k][l] = state.round_times_[k - 1U][l];
@@ -72,21 +70,10 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
 
     auto any_marked = false;
     state.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-      fmt::print("{} marked, marking lb routes:",
-                 tt.get_default_name(location_idx_t{i}));
-
       for (auto const r : routes[location_idx_t{i}]) {
-        fmt::print(" [ ");
-        for (auto const s : tt.lb_route_root_seq_[q.prf_idx_][r]) {
-          fmt::print("{} ", tt.get_default_name(s));
-        }
-        fmt::print("]");
-
         any_marked = true;
         state.lb_route_mark_.set(to_idx(r), true);
       }
-
-      fmt::print("\n");
     });
     if (!any_marked) {
       early_termination = true;
@@ -102,12 +89,6 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
       auto const& segment_layovers = route_times[r];
       auto const& seq = route_root_seq[r];
 
-      fmt::print("route marked: {} [ ", i);
-      for (auto const s : tt.lb_route_root_seq_[q.prf_idx_][r]) {
-        fmt::print("{} ", tt.get_default_name(s));
-      }
-      fmt::print("]\n");
-
       for (auto x = 1U; x != seq.size(); ++x) {
         auto const in = kFwd ? x : seq.size() - x - 1U;
         auto const l_in = seq[in];
@@ -115,9 +96,6 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
         if (!state.prev_station_mark_.test(to_idx(l_in))) {
           continue;
         }
-
-        fmt::println("found entry from previous round: {}",
-                     tt.get_default_name(l_in));
 
         auto lb = state.round_times_[k - 1U][l_in];
         auto const step = kFwd ? -1 : 1;
@@ -129,13 +107,6 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
                                     : segment_layovers[(out - 1) * 2];
 
           lb += segment.count();
-
-          fmt::println(
-              "reaching {} with lb = {}, round_times[{}][{}] = {}, "
-              "state.tmp_[{}] = {}",
-              tt.get_default_name(l_out), lb, k, tt.get_default_name(l_out),
-              state.round_times_[k][l_out], tt.get_default_name(l_out),
-              state.tmp_[l_out]);
           if (lb < std::min(state.round_times_[k][l_out], state.tmp_[l_out])) {
             state.tmp_[l_out] = lb;
             state.station_mark_.set(to_idx(l_out), true);
