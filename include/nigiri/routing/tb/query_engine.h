@@ -87,8 +87,7 @@ struct query_engine {
                std::array<bitvec, kMaxVias> const&,
                std::vector<std::uint16_t> const& dist_to_dest,
                hash_map<location_idx_t, std::vector<td_offset>> const&,
-               std::array<vector_map<location_idx_t, std::uint16_t>,
-                          kMaxTransfers + 2U> const& lb_round_times,
+               std::vector<std::uint16_t> const& lb,
                std::vector<via_stop> const&,
                day_idx_t base,
                clasz_mask_t,
@@ -121,7 +120,7 @@ struct query_engine {
 
 private:
   void seg_dest(std::uint8_t k, queue_idx_t);
-  void seg_prune(std::uint8_t k, unsigned remaining_k, queue_entry&);
+  void seg_prune(std::uint8_t k, queue_entry&);
   void seg_transfers(queue_idx_t, std::uint8_t k);
 
   segment_info seg(segment_idx_t, queue_entry const&) const;
@@ -131,8 +130,7 @@ private:
   query_state& state_;
   bitvec const& is_dest_;
   std::vector<std::uint16_t> const& dist_to_dest_;
-  std::array<vector_map<location_idx_t, std::uint16_t>,
-             kMaxTransfers + 2U> const& lb_round_times_;
+  std::vector<std::uint16_t> const& lb_;
   day_idx_t base_;
   query_stats stats_;
 };

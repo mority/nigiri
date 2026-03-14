@@ -3,12 +3,12 @@
 #include "nigiri/loader/gtfs/load_timetable.h"
 #include "nigiri/loader/hrd/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
+#include "nigiri/routing/raptor/debug.h"
 #include "nigiri/routing/search.h"
 #include "nigiri/routing/tb/preprocess.h"
 #include "nigiri/routing/tb/query_engine.h"
 
 #include "../loader/hrd/hrd_timetable.h"
-#include "../util.h"
 
 using namespace date;
 using namespace nigiri;
@@ -17,9 +17,15 @@ using namespace nigiri::loader;
 using namespace std::chrono_literals;
 using namespace nigiri::test_data::hrd_timetable;
 
-constexpr auto kGtfsDateRange = interval{date::sys_days{2021_y / March / 1},
-                                         date::sys_days{2021_y / March / 8}};
-
+timetable load_gtfs(auto const& files) {
+  timetable tt;
+  tt.date_range_ = {date::sys_days{2021_y / March / 1},
+                    date::sys_days{2021_y / March / 8}};
+  register_special_stations(tt);
+  gtfs::load_timetable({}, source_idx_t{0}, files(), tt);
+  finalize(tt);
+  return tt;
+}
 timetable load_hrd(auto const& files) {
   timetable tt;
   tt.date_range_ = full_period();
@@ -125,7 +131,7 @@ R1_THU,07:00:00,07:00:00,S2,1,0,0
 }
 
 TEST(tb_preprocess, no_transfer) {
-  auto const tt = load_gtfs(no_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(no_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   for (auto const transfers : tbd.segment_transfers_) {
     EXPECT_TRUE(transfers.empty());
@@ -168,7 +174,7 @@ R1_MON,13:00:00,13:00:00,S2,1,0,0
 }
 
 TEST(tb_preprocess, same_day_transfer) {
-  auto const tt = load_gtfs(same_day_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(same_day_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_EQ(1U, tbd.segment_transfers_[s].size());
@@ -198,7 +204,7 @@ leg 3: (S2, S2) [2021-03-01 13:00] -> (S2, S2) [2021-03-01 13:00]
 )";
 
 TEST(tb_query, same_day_transfer) {
-  auto const tt = load_gtfs(same_day_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(same_day_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const results = tripbased_search(
       tt, tbd, "S0", "S2", unixtime_t{sys_days{February / 28 / 2021} + 23h});
@@ -243,7 +249,7 @@ R1_TUE,08:00:00,08:00:00,S2,1,0,0
 }
 
 TEST(tb_preprocess, next_day_transfer) {
-  auto const tt = load_gtfs(next_day_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(next_day_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
@@ -291,7 +297,7 @@ R1_THU,07:00:00,07:00:00,S2,1,0,0
 }
 
 TEST(tb_preprocess, long_transfer) {
-  auto const tt = load_gtfs(long_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(long_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
@@ -338,7 +344,7 @@ R1_WD,03:00:00,03:00:00,S2,1,0,0
 }
 
 TEST(tb_preprocess, weekday_transfer) {
-  auto const tt = load_gtfs(weekday_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(weekday_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
@@ -385,7 +391,7 @@ R1_DLY,04:00:00,04:00:00,S2,1,0,0
 }
 
 TEST(tb_preprocess, daily_transfer) {
-  auto const tt = load_gtfs(daily_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(daily_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
@@ -441,7 +447,7 @@ R0_MON1,09:00:00,09:00:00,S4,5,0,0
 }
 
 TEST(tb_preprocess, earlier_stop_transfer) {
-  auto const tt = load_gtfs(earlier_stop_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(earlier_stop_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}] + 3U;
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
@@ -472,7 +478,7 @@ leg 3: (S2, S2) [2021-03-01 06:00] -> (S2, S2) [2021-03-01 06:00]
 )";
 
 TEST(tb_query, early_stop_transfer) {
-  auto const tt = load_gtfs(earlier_stop_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(earlier_stop_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const results = tripbased_search(
       tt, tbd, "S3", "S2", unixtime_t{sys_days{February / 28 / 2021} + 23h});
@@ -481,7 +487,7 @@ TEST(tb_query, early_stop_transfer) {
 }
 
 TEST(tb_query, no_journey_possible) {
-  auto const tt = load_gtfs(earlier_stop_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(earlier_stop_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const results = tripbased_search(
       tt, tbd, "S4", "S0", unixtime_t{sys_days{February / 28 / 2021} + 23h});
@@ -533,7 +539,7 @@ R0_MON1,06:00:00,06:00:00,S4,5,0,0
 }
 
 TEST(tb_preprocess, earlier_transport_transfer) {
-  auto const tt = load_gtfs(earlier_transport_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(earlier_transport_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const s = tbd.transport_first_segment_[transport_idx_t{1U}];
   ASSERT_EQ(1U, tbd.segment_transfers_[s].size());
@@ -585,7 +591,7 @@ R1_MON,05:00:00,05:00:00,S3,2,0,0
 }
 
 TEST(tb_preprocess, uturn_transfer) {
-  auto const tt = load_gtfs(uturn_transfer_files, kGtfsDateRange);
+  auto const tt = load_gtfs(uturn_transfer_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   for (auto s = tb::segment_idx_t{1U}; s < tbd.segment_transfers_.size(); ++s) {
     EXPECT_TRUE(tbd.segment_transfers_[s].empty());
@@ -637,7 +643,7 @@ R1_MON,04:00:00,04:00:00,S2,1,0,0
 }
 
 TEST(tb_preprocess, unnecessary_transfer_1) {
-  auto const tt = load_gtfs(unnecessary_transfer_1_files, kGtfsDateRange);
+  auto const tt = load_gtfs(unnecessary_transfer_1_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   for (auto const transfers : tbd.segment_transfers_) {
     EXPECT_TRUE(transfers.empty());
@@ -687,7 +693,7 @@ R1_MON,03:10:00,03:10:00,S5,3,0,0
 }
 
 TEST(tb_preprocess, unnecessary_transfer_2) {
-  auto const tt = load_gtfs(unnecessary_transfer_2_files, kGtfsDateRange);
+  auto const tt = load_gtfs(unnecessary_transfer_2_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}] + 1U;
   ASSERT_EQ(1U, tbd.segment_transfers_[s].size());
@@ -756,7 +762,7 @@ leg 3: (S3, S3) [2021-03-04 09:00] -> (S3, S3) [2021-03-04 09:00]
 )";
 
 TEST(tb_preprocess, early_train_journeys) {
-  auto const tt = load_gtfs(early_train_files, kGtfsDateRange);
+  auto const tt = load_gtfs(early_train_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   tbd.print(std::cout, tt);
   ASSERT_EQ("R1", tt.transport_name(transport_idx_t{1U}));
@@ -765,7 +771,7 @@ TEST(tb_preprocess, early_train_journeys) {
 }
 
 TEST(tb_query, early_train) {
-  auto const tt = load_gtfs(early_train_files, kGtfsDateRange);
+  auto const tt = load_gtfs(early_train_files);
   auto const tbd = tb::preprocess(tt, profile_idx_t{0});
   auto const results = tripbased_search(
       tt, tbd, "S1", "S3", unixtime_t{sys_days{March / 04 / 2021} + 5h});

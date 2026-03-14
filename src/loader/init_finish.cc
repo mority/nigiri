@@ -7,7 +7,6 @@
 #include "geo/box.h"
 
 #include "nigiri/loader/build_footpaths.h"
-#include "nigiri/loader/build_lb_adjacency.h"
 #include "nigiri/loader/build_lb_graph.h"
 #include "nigiri/loader/build_lb_routes.h"
 #include "nigiri/loader/register.h"

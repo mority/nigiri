@@ -9,7 +9,6 @@
 #include "utl/verify.h"
 
 #include "nigiri/for_each_meta.h"
-#include "nigiri/routing/lb_raptor.h"
 #include "nigiri/routing/raptor/raptor.h"
 #include "nigiri/routing/start_times.h"
 
@@ -66,7 +65,7 @@ raptor_state one_to_all(timetable const& tt,
   auto is_dest = bitvec{tt.n_locations()};  // Keep footpath time for each stop
   auto is_via = std::array<bitvec, kMaxVias>{};
   auto dist_to_dest = std::vector<std::uint16_t>{};
-  auto lb = get_zero_lb(tt.n_locations());
+  auto lb = std::vector<std::uint16_t>(tt.n_locations(), 0U);
   auto const base = make_base(tt, start_time);
   auto const is_wheelchair = q.prf_idx_ == kWheelchairProfile;
 

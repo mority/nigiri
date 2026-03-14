@@ -412,10 +412,6 @@ struct timetable {
   std::array<vecvec<location_idx_t, footpath>, kNProfiles> fwd_search_lb_graph_;
   std::array<vecvec<location_idx_t, footpath>, kNProfiles> bwd_search_lb_graph_;
 
-  // lower bound adjacency
-  std::array<vecvec<location_idx_t, lb_neighbor>, kNProfiles> fwd_lb_adjacency_;
-  std::array<vecvec<location_idx_t, lb_neighbor>, kNProfiles> bwd_lb_adjacency_;
-
   // root location -> lb routes at location
   std::array<vecvec<location_idx_t, lb_route_idx_t>, kNProfiles>
       location_lb_routes_;
