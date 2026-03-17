@@ -8,7 +8,6 @@
 #include "nigiri/routing/query.h"
 #include "nigiri/timetable.h"
 
-#include "absl/strings/internal/str_format/constexpr_parser.h"
 #include "utl/enumerate.h"
 
 namespace nigiri::routing {
