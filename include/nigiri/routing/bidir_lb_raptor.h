@@ -12,7 +12,7 @@ struct query;
 
 static constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
 
-struct bidir_route_lb_tp_state {
+struct bidir_lb_raptor_state {
   void reset(unsigned const n_locations, unsigned const n_lb_routes) {
     auto const reset_round_times = [&](auto& round_times) {
       for (auto& a : round_times) {
@@ -58,7 +58,7 @@ struct bidir_route_lb_tp_state {
   std::map<location_idx_t, std::uint16_t> min_;
 };
 
-std::vector<std::vector<location_idx_t>> bidir_route_lb_tp(timetable const&,
-                                                           query const&);
+std::vector<std::vector<location_idx_t>> bidir_lb_raptor(timetable const&,
+                                                         query const&);
 
 }  // namespace nigiri::routing
