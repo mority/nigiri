@@ -1,9 +1,4 @@
-#include "../../../include/nigiri/routing/bidir_lb_raptor/bidir_lb_raptor.h"
-
-#include "nigiri/for_each_meta.h"
-#include "nigiri/routing/query.h"
-#include "nigiri/timetable.h"
-#include "nigiri/types.h"
+#include "nigiri/routing/bidir_lb_raptor/bidir_lb_raptor.h"
 
 #include <vector>
 
@@ -11,6 +6,12 @@
 #include "utl/erase_if.h"
 #include "utl/get_or_create.h"
 #include "utl/pipes/remove_if.h"
+
+#include "nigiri/for_each_meta.h"
+#include "nigiri/routing/bidir_lb_raptor/guess_journey.h"
+#include "nigiri/routing/query.h"
+#include "nigiri/timetable.h"
+#include "nigiri/types.h"
 
 namespace nigiri::routing {
 
@@ -110,7 +111,8 @@ template <direction SearchDir>
 bool run(timetable const& tt,
          query const& q,
          bidir_lb_raptor_state& state,
-         unsigned const k) {
+         unsigned const k,
+         pareto_set<journey>* results) {
   auto const& routes = tt.location_lb_routes_[q.prf_idx_];
   auto const& route_times = tt.lb_route_times_[q.prf_idx_];
   auto const& route_root_seq = tt.lb_route_root_seq_[q.prf_idx_];
@@ -262,6 +264,11 @@ bool run(timetable const& tt,
       station_mark.set(i, false);
       state.meetpoints_.push_back(location_idx_t{i});
       fmt::println(", adding meetpoint");
+      if (results != nullptr) {
+        if (auto j = guess_journey(tt, q, state, location_idx_t{i})) {
+          results->add(std::move(*j));
+        }
+      }
     } else {
       fmt::println(", no meetpoint");
     }
@@ -287,8 +294,8 @@ void cleanup(timetable const& tt,
 
 void bidir_lb_raptor(timetable const& tt,
                      query const& q,
-                     bidir_lb_raptor_state& state) {
-
+                     bidir_lb_raptor_state& state,
+                     pareto_set<journey>* results) {
   state.reset(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
 
   // init (k = 0)
@@ -303,10 +310,10 @@ void bidir_lb_raptor(timetable const& tt,
     fmt::println("k = {}: run_fwd: {}, run_bwd: {}", k,
                  run_fwd ? "true" : "false", run_bwd ? "true" : "false");
     if (run_fwd) {
-      run_fwd = run<direction::kForward>(tt, q, state, k);
+      run_fwd = run<direction::kForward>(tt, q, state, k, results);
     }
     if (run_bwd) {
-      run_bwd = run<direction::kBackward>(tt, q, state, k);
+      run_bwd = run<direction::kBackward>(tt, q, state, k, results);
     }
   }
 

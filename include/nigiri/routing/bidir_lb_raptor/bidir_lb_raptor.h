@@ -33,6 +33,9 @@ struct bidir_lb_raptor_state {
   vector<location_idx_t> meetpoints_;
 };
 
-void bidir_lb_raptor(timetable const&, query const&, bidir_lb_raptor_state&);
+void bidir_lb_raptor(timetable const&,
+                     query const&,
+                     bidir_lb_raptor_state&,
+                     pareto_set<journey>* results = nullptr);
 
 }  // namespace nigiri::routing
