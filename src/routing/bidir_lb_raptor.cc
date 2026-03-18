@@ -7,7 +7,10 @@
 
 #include <vector>
 
+#include "utl/erase_duplicates.h"
+#include "utl/erase_if.h"
 #include "utl/get_or_create.h"
+#include "utl/pipes/remove_if.h"
 
 namespace nigiri::routing {
 
@@ -44,9 +47,8 @@ void bidir_lb_raptor_state::reset(unsigned const n_locations,
   reset_bitvec(fwd_reached_, n_locations);
   reset_bitvec(bwd_reached_, n_locations);
   reset_bitvec(lb_route_mark_, n_lb_routes);
-  reset_bitvec(lb_route_reached_, n_lb_routes);
 
-  tps_.clear();
+  meetpoints_.clear();
 }
 
 template <direction SearchDir>
@@ -132,11 +134,8 @@ bool run(timetable const& tt,
     for (auto const r : routes[location_idx_t{i}]) {
       fmt::println("{}: marking route {}", kFwd ? "fwd" : "bwd",
                    route_str(tt, q.prf_idx_, r));
-      if (!state.lb_route_reached_.test(to_idx(r))) {
-        any_marked = true;
-        state.lb_route_mark_.set(to_idx(r), true);
-        state.lb_route_reached_.set(to_idx(r), true);
-      }
+      any_marked = true;
+      state.lb_route_mark_.set(to_idx(r), true);
     }
   });
   if (!any_marked) {
@@ -257,27 +256,33 @@ bool run(timetable const& tt,
   }
 
   station_mark.for_each_set_bit([&](auto const i) {
-    fmt::println("{}: meetpoint check at location {}", kFwd ? "fwd" : "bwd",
-                 tt.get_default_name(location_idx_t{i}));
+    fmt::print("{}: meetpoint check at location {}", kFwd ? "fwd" : "bwd",
+               tt.get_default_name(location_idx_t{i}));
     if (rev_reached.test(i)) {
-      fmt::println("{} already reached, saving meetpoint",
-                   kFwd ? "bwd" : "fwd");
       station_mark.set(i, false);
-      // handle meet point -> reconstruct transfer pattern
-      auto meetpoint = std::array<location_idx_t, kMaxTransfers>{};
-      meetpoint[k - 1U] = location_idx_t{i};
-      state.tps_.push_back(meetpoint);
-
-      fmt::print("{}: meetpoint: ", kFwd ? "fwd" : "bwd");
-      for (auto const l : state.tps_.back()) {
-        fmt::print(" {}",
-                   l == location_idx_t{0} ? "-" : tt.get_default_name(l));
-      }
-      fmt::print("\n");
+      state.meetpoints_.push_back(location_idx_t{i});
+      fmt::println(", adding meetpoint");
+    } else {
+      fmt::println(", no meetpoint");
     }
   });
 
   return station_mark.any();
+}
+
+void cleanup(timetable const& tt,
+             query const& q,
+             bidir_lb_raptor_state& state) {
+  utl::erase_duplicates(state.meetpoints_);
+  utl::erase_if(state.meetpoints_, [&](auto const l) {
+    return utl::find_if(q.start_,
+                        [&](auto const o) {
+                          return l == tt.locations_.get_root_idx(o.target());
+                        }) != end(q.start_) ||
+           utl::find_if(q.destination_, [&](auto const o) {
+             return l == tt.locations_.get_root_idx(o.target());
+           }) != end(q.destination_);
+  });
 }
 
 void bidir_lb_raptor(timetable const& tt,
@@ -304,5 +309,7 @@ void bidir_lb_raptor(timetable const& tt,
       run_bwd = run<direction::kBackward>(tt, q, state, k);
     }
   }
+
+  cleanup(tt, q, state);
 }
 }  // namespace nigiri::routing

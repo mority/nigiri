@@ -26,9 +26,8 @@ struct bidir_lb_raptor_state {
   bitvec fwd_reached_;
   bitvec bwd_reached_;
   bitvec lb_route_mark_;
-  bitvec lb_route_reached_;
   std::map<location_idx_t, std::uint16_t> min_;
-  vector<std::array<location_idx_t, kMaxTransfers>> tps_;
+  vector<location_idx_t> meetpoints_;
 };
 
 void bidir_lb_raptor(timetable const&, query const&, bidir_lb_raptor_state&);

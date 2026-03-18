@@ -285,4 +285,10 @@ TEST(routing, bidir_lb_raptor) {
 
   print_round_times(direction::kForward);
   print_round_times(direction::kBackward);
+
+  fmt::print("meetpoints: ");
+  for (auto const l : state.meetpoints_) {
+    fmt::print(" {}", tt.get_default_name(l));
+  }
+  fmt::print("\n");
 }
