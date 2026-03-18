@@ -1,4 +1,4 @@
-#include "nigiri/routing/bidir_route_lb_tp.h"
+#include "nigiri/routing/bidir_lb_raptor.h"
 
 #include "nigiri/for_each_meta.h"
 #include "nigiri/routing/query.h"
@@ -10,6 +10,44 @@
 #include "utl/get_or_create.h"
 
 namespace nigiri::routing {
+
+constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
+
+struct meet_point {
+  location_idx_t l_;
+  bool fwd_;
+  std::uint8_t k_;
+};
+
+void bidir_lb_raptor_state::reset(unsigned const n_locations,
+                                  unsigned const n_lb_routes) {
+  auto const reset_round_times = [&](auto& round_times) {
+    for (auto& a : round_times) {
+      a.resize(n_locations);
+      utl::fill(a, kUnreachable);
+    }
+  };
+  reset_round_times(fwd_round_times_);
+  reset_round_times(bwd_round_times_);
+
+  tmp_.resize(n_locations);
+  utl::fill(tmp_, kUnreachable);
+
+  auto const reset_bitvec = [&](auto& v, auto const size) {
+    v.resize(size);
+    utl::fill(v.blocks_, 0U);
+  };
+
+  reset_bitvec(fwd_station_mark_, n_locations);
+  reset_bitvec(bwd_station_mark_, n_locations);
+  reset_bitvec(prev_station_mark_, n_locations);
+  reset_bitvec(fwd_reached_, n_locations);
+  reset_bitvec(bwd_reached_, n_locations);
+  reset_bitvec(lb_route_mark_, n_lb_routes);
+  reset_bitvec(lb_route_reached_, n_lb_routes);
+
+  tps_.clear();
+}
 
 template <direction SearchDir>
 void init(timetable const& tt, query const& q, bidir_lb_raptor_state& state) {
@@ -54,6 +92,18 @@ void init(timetable const& tt, query const& q, bidir_lb_raptor_state& state) {
   }
 }
 
+std::string route_str(timetable const& tt,
+                      profile_idx_t const prf_idx,
+                      lb_route_idx_t const r) {
+  auto ss = std::stringstream{};
+  ss << "[" << r << ":";
+  for (auto const l : tt.lb_route_root_seq_[prf_idx][r]) {
+    ss << " " << tt.get_default_name(l);
+  }
+  ss << "]";
+  return ss.str();
+}
+
 template <direction SearchDir>
 bool run(timetable const& tt,
          query const& q,
@@ -73,12 +123,20 @@ bool run(timetable const& tt,
        interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
     round_times[k][l] = round_times[k - 1U][l];
   }
+  utl::fill(state.tmp_, kUnreachable);
 
   auto any_marked = false;
   station_mark.for_each_set_bit([&](std::uint64_t const i) {
+    fmt::println("{}: location {} is marked", kFwd ? "fwd" : "bwd",
+                 tt.get_default_name(location_idx_t{i}));
     for (auto const r : routes[location_idx_t{i}]) {
-      any_marked = true;
-      state.lb_route_mark_.set(to_idx(r), true);
+      fmt::println("{}: marking route {}", kFwd ? "fwd" : "bwd",
+                   route_str(tt, q.prf_idx_, r));
+      if (!state.lb_route_reached_.test(to_idx(r))) {
+        any_marked = true;
+        state.lb_route_mark_.set(to_idx(r), true);
+        state.lb_route_reached_.set(to_idx(r), true);
+      }
     }
   });
   if (!any_marked) {
@@ -94,13 +152,19 @@ bool run(timetable const& tt,
     auto const& segment_layovers = route_times[r];
     auto const& seq = route_root_seq[r];
 
-    for (auto x = 1U; x != seq.size(); ++x) {
+    fmt::println("{}: route {} is marked", kFwd ? "fwd" : "bwd",
+                 route_str(tt, q.prf_idx_, r));
+
+    for (auto x = 0U; x != seq.size(); ++x) {
       auto const in = kFwd ? x : seq.size() - x - 1U;
       auto const l_in = seq[in];
 
       if (!state.prev_station_mark_.test(to_idx(l_in))) {
         continue;
       }
+
+      fmt::println("{}: found entry location {}", kFwd ? "fwd" : "bwd",
+                   tt.get_default_name(l_in));
 
       auto lb = round_times[k - 1U][l_in];
       auto const step = kFwd ? 1 : -1;
@@ -112,11 +176,21 @@ bool run(timetable const& tt,
             kFwd ? segment_layovers[(out - 1) * 2] : segment_layovers[out * 2];
 
         lb += segment.count();
+        fmt::println(
+            "{}: reached exit location {} with lb = {}, round_times[k={}][{}] "
+            "= {}, state.tmp_[{}] = {}, rev_reached = {}",
+            kFwd ? "fwd" : "bwd", tt.get_default_name(l_out), lb, k,
+            tt.get_default_name(l_out), round_times[k][l_out],
+            tt.get_default_name(l_out), state.tmp_[l_out],
+            rev_reached.test(to_idx(l_out)));
         if (lb < std::min(round_times[k][l_out], state.tmp_[l_out])) {
           state.tmp_[l_out] = lb;
           station_mark.set(to_idx(l_out), true);
           reached.set(to_idx(l_out), true);
           any_marked = true;
+
+          fmt::println("{}: new lb, marking location {}", kFwd ? "fwd" : "bwd",
+                       tt.get_default_name(l_out));
 
           if (0 < out && out < static_cast<std::int32_t>(seq.size()) - 1) {
             auto const layover = segment_layovers[out * 2 - 1].count();
@@ -183,9 +257,23 @@ bool run(timetable const& tt,
   }
 
   station_mark.for_each_set_bit([&](auto const i) {
+    fmt::println("{}: meetpoint check at location {}", kFwd ? "fwd" : "bwd",
+                 tt.get_default_name(location_idx_t{i}));
     if (rev_reached.test(i)) {
+      fmt::println("{} already reached, saving meetpoint",
+                   kFwd ? "bwd" : "fwd");
       station_mark.set(i, false);
       // handle meet point -> reconstruct transfer pattern
+      auto meetpoint = std::array<location_idx_t, kMaxTransfers>{};
+      meetpoint[k - 1U] = location_idx_t{i};
+      state.tps_.push_back(meetpoint);
+
+      fmt::print("{}: meetpoint: ", kFwd ? "fwd" : "bwd");
+      for (auto const l : state.tps_.back()) {
+        fmt::print(" {}",
+                   l == location_idx_t{0} ? "-" : tt.get_default_name(l));
+      }
+      fmt::print("\n");
     }
   });
 
@@ -207,6 +295,8 @@ void bidir_lb_raptor(timetable const& tt,
   auto run_bwd = true;
   for (auto k = 1U; k != (std::min(q.max_transfers_, kMaxTransfers) + 2U) / 2U;
        ++k) {
+    fmt::println("k = {}: run_fwd: {}, run_bwd: {}", k,
+                 run_fwd ? "true" : "false", run_bwd ? "true" : "false");
     if (run_fwd) {
       run_fwd = run<direction::kForward>(tt, q, state, k);
     }

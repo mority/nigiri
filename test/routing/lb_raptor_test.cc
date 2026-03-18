@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 
+#include "nigiri/routing/bidir_lb_raptor.h"
 #include "nigiri/routing/lb_raptor.h"
-#include "nigiri/routing/raptor/raptor_state.h"
 #include "nigiri/rt/create_rt_timetable.h"
 #include "nigiri/rt/rt_timetable.h"
 #include "nigiri/timetable.h"
@@ -212,4 +212,77 @@ TEST(routing, lb_raptor) {
                           tt.find(location_id{"D3", source_idx_t{}}).value()));
   EXPECT_EQ(kExpLbT,
             get_round_times(tt.find(location_id{"T", source_idx_t{}}).value()));
+
+  auto const print_round_times = [&]() {
+    for (auto const& id :
+         std::vector<std::string>{"O", "X", "Y", "P", "F", "S", "B1", "C1",
+                                  "C2", "D1", "D2", "D3", "T"}) {
+      fmt::println(
+          "{}: {}", id,
+          get_round_times(tt.find(location_id{id, source_idx_t{}}).value()));
+    }
+  };
+  print_round_times();
+
+  auto const q_bwd = query{
+      .start_time_ = unixtime_t{sys_days{February / 27 / 2026}},
+      .start_ = {{tt.locations_.location_id_to_idx_.at({"T", source_idx_t{0U}}),
+                  13_minutes, 0U}},
+      .destination_ = {{tt.locations_.location_id_to_idx_.at(
+                            {"P", source_idx_t{0U}}),
+                        3_minutes, 0U}},
+      .td_start_{{tt.find(location_id{"T", source_idx_t{}}).value(),
+                  {{.valid_from_ = sys_days{2026_y / January / 27},
+                    .duration_ = 7_minutes,
+                    .transport_mode_id_ = 5},
+                   {.valid_from_ = sys_days{2026_y / January / 28},
+                    .duration_ = footpath::kMaxDuration,
+                    .transport_mode_id_ = 5}}}}};
+  lb_raptor<direction::kBackward>(tt, q_bwd, state);
+  print_round_times();
+}
+
+TEST(routing, bidir_lb_raptor) {
+  auto const tt = load_gtfs(lb_test_tt, kGtfsDateRange);
+  auto rtt = rt::create_rt_timetable(tt, sys_days{2026_y / February / 27});
+  auto const q = query{
+      .start_time_ = unixtime_t{sys_days{February / 27 / 2026}},
+      .start_ = {{tt.locations_.location_id_to_idx_.at({"P", source_idx_t{0U}}),
+                  3_minutes, 0U}},
+      .destination_ = {{tt.locations_.location_id_to_idx_.at(
+                            {"T", source_idx_t{0U}}),
+                        13_minutes, 0U}},
+      .td_dest_{{tt.find(location_id{"T", source_idx_t{}}).value(),
+                 {{.valid_from_ = sys_days{2026_y / January / 27},
+                   .duration_ = 7_minutes,
+                   .transport_mode_id_ = 5},
+                  {.valid_from_ = sys_days{2026_y / January / 28},
+                   .duration_ = footpath::kMaxDuration,
+                   .transport_mode_id_ = 5}}}}};
+  auto state = bidir_lb_raptor_state{};
+  bidir_lb_raptor(tt, q, state);
+
+  auto const get_round_times = [&](location_idx_t const l, direction dir) {
+    auto const& round_times = dir == direction::kForward
+                                  ? state.fwd_round_times_
+                                  : state.bwd_round_times_;
+    auto a = std::array<std::uint16_t, (kMaxTransfers + 2U) / 2U>{};
+    for (auto const [round, times] : utl::enumerate(round_times)) {
+      a[round] = times[l];
+    }
+    return a;
+  };
+
+  auto const print_round_times = [&](direction dir) {
+    for (auto const& id :
+         std::vector<std::string>{"O", "X", "Y", "P", "F", "S", "B1", "C1",
+                                  "C2", "D1", "D2", "D3", "T"}) {
+      fmt::println("{}: {}", id,
+                   get_round_times(
+                       tt.find(location_id{id, source_idx_t{}}).value(), dir));
+    }
+  };
+
+  print_round_times(direction::kForward);
+  print_round_times(direction::kBackward);
 }
