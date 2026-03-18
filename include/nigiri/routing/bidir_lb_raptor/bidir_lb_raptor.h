@@ -3,11 +3,14 @@
 #include "nigiri/routing/limits.h"
 #include "nigiri/types.h"
 
+#include "../pareto_set.h"
+
 namespace nigiri {
 struct timetable;
 }  // namespace nigiri
 
 namespace nigiri::routing {
+struct journey;
 struct query;
 
 struct bidir_lb_raptor_state {

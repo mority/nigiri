@@ -1,4 +1,4 @@
-#include "nigiri/routing/bidir_lb_raptor.h"
+#include "../../../include/nigiri/routing/bidir_lb_raptor/bidir_lb_raptor.h"
 
 #include "nigiri/for_each_meta.h"
 #include "nigiri/routing/query.h"
