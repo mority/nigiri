@@ -20,11 +20,11 @@ auto get_rounds(bidir_lb_raptor_state const& state,
                     get_round(state.bwd_round_times_)};
 }
 
-std::optional<journey> guess_journey(timetable const& tt,
-                                     query const& q,
-                                     bidir_lb_raptor_state const& state,
-                                     location_idx_t const meetpoint) {
-  auto const [fwd_round, bwd_round] = get_rounds(state, meetpoint);
+std::optional<journey> guess_journey(timetable const&,
+                                     query const&,
+                                     bidir_lb_raptor_state const&,
+                                     location_idx_t const) {
+  // auto const [fwd_round, bwd_round] = get_rounds(state, meetpoint);
 
   return std::nullopt;
 }

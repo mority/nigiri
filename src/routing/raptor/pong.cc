@@ -5,6 +5,7 @@
 #include "utl/sorted_diff.h"
 #include "utl/timing.h"
 
+#include "nigiri/routing/bidir_lb_raptor/bidir_lb_raptor.h"
 #include "nigiri/routing/get_earliest_transport.h"
 #include "nigiri/rt/frun.h"
 
@@ -258,6 +259,15 @@ routing_result pong(timetable const& tt,
   constexpr auto kFwd = (SearchDir == direction::kForward);
 
   q.sanitize(tt);
+
+  auto bidir_state = bidir_lb_raptor_state{};
+  UTL_START_TIMING(bidir);
+  bidir_lb_raptor(tt, q, bidir_state);
+  UTL_STOP_TIMING(bidir);
+  fmt::println("bidir took {}, meetpoints: ", UTL_TIMING_MS(bidir));
+  for (auto const l : bidir_state.meetpoints_) {
+    fmt::println("{}", tt.get_default_name(l));
+  }
 
   auto const processing_start_time = std::chrono::steady_clock::now();
 
