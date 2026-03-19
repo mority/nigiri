@@ -253,6 +253,8 @@ bool run(timetable const& tt,
 
       if (!already_met()) {
         state.meetpoints_.push_back(location_idx_t{i});
+        fmt::println("[k={}][{}][meetpoint: {}, {}]", k, kFwd ? "FWD" : "BWD",
+                     location_idx_t{i}, tt.get_default_name(location_idx_t{i}));
         if (results != nullptr) {
           if (auto j = guess_journey(tt, q, state, location_idx_t{i})) {
             results->add(std::move(*j));
