@@ -240,31 +240,29 @@ bool run(timetable const& tt,
   station_mark.for_each_set_bit([&](auto const i) {
     if (rev_reached.test(i)) {
       station_mark.set(i, false);
-      state.meetpoints_.push_back(location_idx_t{i});
-      if (results != nullptr) {
-        if (auto j = guess_journey(tt, q, state, location_idx_t{i})) {
-          results->add(std::move(*j));
+
+      auto const already_met = [&]() {
+        for (auto const earlier_meet : state.meetpoints_) {
+          if (matches(tt, location_match_mode::kEquivalent, location_idx_t{i},
+                      earlier_meet)) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      if (!already_met()) {
+        state.meetpoints_.push_back(location_idx_t{i});
+        if (results != nullptr) {
+          if (auto j = guess_journey(tt, q, state, location_idx_t{i})) {
+            results->add(std::move(*j));
+          }
         }
       }
     }
   });
 
   return station_mark.any();
-}
-
-void cleanup(timetable const& tt,
-             query const& q,
-             bidir_lb_raptor_state& state) {
-  utl::erase_duplicates(state.meetpoints_);
-  utl::erase_if(state.meetpoints_, [&](auto const l) {
-    return utl::find_if(q.start_,
-                        [&](auto const o) {
-                          return l == tt.locations_.get_root_idx(o.target());
-                        }) != end(q.start_) ||
-           utl::find_if(q.destination_, [&](auto const o) {
-             return l == tt.locations_.get_root_idx(o.target());
-           }) != end(q.destination_);
-  });
 }
 
 void bidir_lb_raptor(timetable const& tt,
@@ -289,7 +287,5 @@ void bidir_lb_raptor(timetable const& tt,
       run_bwd = run<direction::kBackward>(tt, q, state, k, results);
     }
   }
-
-  cleanup(tt, q, state);
 }
 }  // namespace nigiri::routing
