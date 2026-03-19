@@ -1,4 +1,4 @@
-#include "nigiri/routing/lb_raptor.h"
+#include "../../../include/nigiri/routing/lb_raptor/lb_raptor.h"
 
 #include "utl/get_or_create.h"
 #include "utl/timing.h"

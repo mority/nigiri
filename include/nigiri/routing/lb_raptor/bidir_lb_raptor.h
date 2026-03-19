@@ -3,8 +3,6 @@
 #include "nigiri/routing/limits.h"
 #include "nigiri/types.h"
 
-#include "../pareto_set.h"
-
 namespace nigiri {
 struct timetable;
 }  // namespace nigiri
@@ -33,9 +31,6 @@ struct bidir_lb_raptor_state {
   vector<location_idx_t> meetpoints_;
 };
 
-void bidir_lb_raptor(timetable const&,
-                     query const&,
-                     bidir_lb_raptor_state&,
-                     pareto_set<journey>* results = nullptr);
+void bidir_lb_raptor(timetable const&, query const&, bidir_lb_raptor_state&);
 
 }  // namespace nigiri::routing

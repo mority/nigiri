@@ -5,8 +5,8 @@
 #include "utl/sorted_diff.h"
 #include "utl/timing.h"
 
-#include "nigiri/routing/bidir_lb_raptor/bidir_lb_raptor.h"
 #include "nigiri/routing/get_earliest_transport.h"
+#include "nigiri/routing/lb_raptor/bidir_lb_raptor.h"
 #include "nigiri/rt/frun.h"
 
 #define trace_pong(...)

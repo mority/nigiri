@@ -1,10 +1,10 @@
 #include "gtest/gtest.h"
 
-#include "nigiri/routing/lb_raptor.h"
 #include "nigiri/rt/create_rt_timetable.h"
 #include "nigiri/rt/rt_timetable.h"
 #include "nigiri/timetable.h"
-#include "../../include/nigiri/routing/bidir_lb_raptor/bidir_lb_raptor.h"
+#include "../../include/nigiri/routing/lb_raptor/bidir_lb_raptor.h"
+#include "../../include/nigiri/routing/lb_raptor/lb_raptor.h"
 
 #include "../util.h"
 #include "utl/enumerate.h"

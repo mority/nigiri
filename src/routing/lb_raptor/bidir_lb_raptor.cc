@@ -1,14 +1,12 @@
-#include "nigiri/routing/bidir_lb_raptor/bidir_lb_raptor.h"
+#include "nigiri/routing/lb_raptor/bidir_lb_raptor.h"
 
 #include <vector>
 
-#include "utl/erase_duplicates.h"
-#include "utl/erase_if.h"
 #include "utl/get_or_create.h"
 #include "utl/pipes/remove_if.h"
 
 #include "nigiri/for_each_meta.h"
-#include "nigiri/routing/bidir_lb_raptor/guess_journey.h"
+#include "nigiri/routing/lb_raptor/meetpoint_to_pattern.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
@@ -22,35 +20,6 @@ struct meet_point {
   bool fwd_;
   std::uint8_t k_;
 };
-
-void bidir_lb_raptor_state::reset(unsigned const n_locations,
-                                  unsigned const n_lb_routes) {
-  auto const reset_round_times = [&](auto& round_times) {
-    for (auto& a : round_times) {
-      a.resize(n_locations);
-      utl::fill(a, kUnreachable);
-    }
-  };
-  reset_round_times(fwd_round_times_);
-  reset_round_times(bwd_round_times_);
-
-  tmp_.resize(n_locations);
-  utl::fill(tmp_, kUnreachable);
-
-  auto const reset_bitvec = [&](auto& v, auto const size) {
-    v.resize(size);
-    utl::fill(v.blocks_, 0U);
-  };
-
-  reset_bitvec(fwd_station_mark_, n_locations);
-  reset_bitvec(bwd_station_mark_, n_locations);
-  reset_bitvec(prev_station_mark_, n_locations);
-  reset_bitvec(fwd_reached_, n_locations);
-  reset_bitvec(bwd_reached_, n_locations);
-  reset_bitvec(lb_route_mark_, n_lb_routes);
-
-  meetpoints_.clear();
-}
 
 template <direction SearchDir>
 void init(timetable const& tt, query const& q, bidir_lb_raptor_state& state) {
@@ -111,8 +80,7 @@ template <direction SearchDir>
 bool run(timetable const& tt,
          query const& q,
          bidir_lb_raptor_state& state,
-         unsigned const k,
-         pareto_set<journey>* results) {
+         unsigned const k) {
   auto const& routes = tt.location_lb_routes_[q.prf_idx_];
   auto const& route_times = tt.lb_route_times_[q.prf_idx_];
   auto const& route_root_seq = tt.lb_route_root_seq_[q.prf_idx_];
@@ -255,11 +223,6 @@ bool run(timetable const& tt,
         state.meetpoints_.push_back(location_idx_t{i});
         fmt::println("[k={}][{}][meetpoint: {}, {}]", k, kFwd ? "FWD" : "BWD",
                      location_idx_t{i}, tt.get_default_name(location_idx_t{i}));
-        if (results != nullptr) {
-          if (auto j = guess_journey(tt, q, state, location_idx_t{i})) {
-            results->add(std::move(*j));
-          }
-        }
       }
     }
   });
@@ -269,8 +232,7 @@ bool run(timetable const& tt,
 
 void bidir_lb_raptor(timetable const& tt,
                      query const& q,
-                     bidir_lb_raptor_state& state,
-                     pareto_set<journey>* results) {
+                     bidir_lb_raptor_state& state) {
   state.reset(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
 
   // init (k = 0)
@@ -283,10 +245,10 @@ void bidir_lb_raptor(timetable const& tt,
   for (auto k = 1U; k != (std::min(q.max_transfers_, kMaxTransfers) + 2U) / 2U;
        ++k) {
     if (run_fwd) {
-      run_fwd = run<direction::kForward>(tt, q, state, k, results);
+      run_fwd = run<direction::kForward>(tt, q, state, k);
     }
     if (run_bwd) {
-      run_bwd = run<direction::kBackward>(tt, q, state, k, results);
+      run_bwd = run<direction::kBackward>(tt, q, state, k);
     }
   }
 }
