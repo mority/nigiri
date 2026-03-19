@@ -2,6 +2,8 @@
 
 namespace nigiri::routing {
 
+constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
+
 void bidir_lb_raptor_state::reset(unsigned const n_locations,
                                   unsigned const n_lb_routes) {
   auto const reset_round_times = [&](auto& round_times) {

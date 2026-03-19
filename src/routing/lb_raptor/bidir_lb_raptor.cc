@@ -15,12 +15,6 @@ namespace nigiri::routing {
 
 constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
 
-struct meet_point {
-  location_idx_t l_;
-  bool fwd_;
-  std::uint8_t k_;
-};
-
 template <direction SearchDir>
 void init(timetable const& tt, query const& q, bidir_lb_raptor_state& state) {
   static constexpr auto kFwd = SearchDir == direction::kForward;
@@ -62,18 +56,6 @@ void init(timetable const& tt, query const& q, bidir_lb_raptor_state& state) {
       reached.set(to_idx(meta), true);
     });
   }
-}
-
-std::string route_str(timetable const& tt,
-                      profile_idx_t const prf_idx,
-                      lb_route_idx_t const r) {
-  auto ss = std::stringstream{};
-  ss << "[" << r << ":";
-  for (auto const l : tt.lb_route_root_seq_[prf_idx][r]) {
-    ss << " " << tt.get_default_name(l);
-  }
-  ss << "]";
-  return ss.str();
 }
 
 template <direction SearchDir>
@@ -221,8 +203,13 @@ bool run(timetable const& tt,
 
       if (!already_met()) {
         state.meetpoints_.push_back(location_idx_t{i});
-        fmt::println("[k={}][{}][meetpoint: {}, {}]", k, kFwd ? "FWD" : "BWD",
-                     location_idx_t{i}, tt.get_default_name(location_idx_t{i}));
+        auto const pattern =
+            meetpoint_to_pattern(tt, q, state, location_idx_t{i});
+        fmt::print("Pattern:");
+        for (auto const l : pattern) {
+          fmt::print(" {}", tt.get_default_name(l));
+        }
+        fmt::print("\n");
       }
     }
   });

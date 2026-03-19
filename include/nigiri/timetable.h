@@ -265,6 +265,24 @@ struct timetable {
            route_bikes_allowed_[to_idx(r) * 2U + 1U];
   }
 
+  duration_t lb_get_layover(profile_idx_t const prf_idx,
+                            lb_route_idx_t const r,
+                            unsigned const stop_idx) const {
+    return lb_route_times_[prf_idx][r][stop_idx * 2U - 1U];
+  }
+
+  duration_t lb_get_arriving_segment(profile_idx_t const prf_idx,
+                                     lb_route_idx_t const r,
+                                     unsigned const stop_idx) const {
+    return lb_route_times_[prf_idx][r][(stop_idx - 1U) * 2U];
+  }
+
+  duration_t lb_get_departing_segment(profile_idx_t const prf_idx,
+                                      lb_route_idx_t const r,
+                                      unsigned const stop_idx) const {
+    return lb_route_times_[prf_idx][r][stop_idx * 2U];
+  }
+
   // Schedule range.
   interval<date::sys_days> date_range_;
 
