@@ -287,8 +287,8 @@ TEST(routing, bidir_lb_raptor) {
   print_round_times(direction::kBackward);
 
   fmt::print("meetpoints: ");
-  for (auto const l : state.meetpoints_) {
-    fmt::print(" {}", tt.get_default_name(l));
-  }
+  state.meet_point_.for_each_set_bit([&](auto const i) {
+    fmt::print(" {}", tt.get_default_name(location_idx_t{i}));
+  });
   fmt::print("\n");
 }

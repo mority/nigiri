@@ -14,7 +14,7 @@ void reconstruct(timetable const& tt,
                  bidir_lb_raptor_state const& state,
                  location_idx_t const l,
                  unsigned const k_start,
-                 std::vector<location_idx_t>& pattern) {
+                 vector<location_idx_t>& pattern) {
   static constexpr auto kFwd = SearchDir == direction::kForward;
 
   auto const round_times =
@@ -115,12 +115,11 @@ void reconstruct(timetable const& tt,
   }
 }
 
-std::vector<location_idx_t> meetpoint_to_pattern(
-    timetable const& tt,
-    query const& q,
-    bidir_lb_raptor_state const& state,
-    location_idx_t const meetpoint) {
-  auto pattern = std::vector<location_idx_t>{};
+vector<location_idx_t> meetpoint_to_pattern(timetable const& tt,
+                                            query const& q,
+                                            bidir_lb_raptor_state const& state,
+                                            location_idx_t const meetpoint) {
+  auto pattern = vector<location_idx_t>{};
 
   auto const get_init_round = [&](auto const& round_times) {
     return utl::find_if(round_times,

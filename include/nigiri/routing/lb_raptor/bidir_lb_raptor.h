@@ -9,6 +9,9 @@ struct timetable;
 namespace nigiri::routing {
 struct query;
 
-void bidir_lb_raptor(timetable const&, query const&, bidir_lb_raptor_state&);
+void bidir_lb_raptor(timetable const&,
+                     query const&,
+                     bidir_lb_raptor_state&,
+                     unsigned n_patterns = 50U);
 
 }  // namespace nigiri::routing

@@ -28,11 +28,10 @@ void bidir_lb_raptor_state::reset(unsigned const n_locations,
   reset_bitvec(prev_station_mark_, n_locations);
   reset_bitvec(fwd_reached_, n_locations);
   reset_bitvec(bwd_reached_, n_locations);
+  reset_bitvec(meet_point_, n_locations);
   reset_bitvec(is_start_, n_locations);
   reset_bitvec(is_dest_, n_locations);
   reset_bitvec(lb_route_mark_, n_lb_routes);
-
-  meetpoints_.clear();
 }
 
 }  // namespace nigiri::routing
