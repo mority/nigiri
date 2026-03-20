@@ -1,24 +1,20 @@
-#include "nigiri/routing/lb_raptor/meetpoint_to_pattern.h"
+#include "nigiri/routing/lb_raptor/bidir_lb_raptor.h"
 
 #include "nigiri/routing/journey.h"
-#include "nigiri/routing/lb_raptor/bidir_lb_raptor_state.h"
 #include "nigiri/timetable.h"
 
-namespace nigiri::routing {
+#include "utl/enumerate.h"
 
+namespace nigiri::routing {
 constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
 
 template <direction SearchDir>
-void reconstruct(timetable const& tt,
-                 query const& q,
-                 bidir_lb_raptor_state const& state,
-                 location_idx_t const l,
-                 unsigned const k_start,
-                 vector<location_idx_t>& pattern) {
+void bidir_lb_raptor::reconstruct(timetable const& tt,
+                                  query const& q,
+                                  location_idx_t const l,
+                                  unsigned const k_start) {
   static constexpr auto kFwd = SearchDir == direction::kForward;
-
-  auto const round_times =
-      kFwd ? state.fwd_round_times_ : state.bwd_round_times_;
+  auto const round_times = kFwd ? fwd_round_times_ : bwd_round_times_;
 
   auto const find_in_prev_round =
       [&](location_idx_t const x, unsigned const k,
@@ -65,7 +61,7 @@ void reconstruct(timetable const& tt,
             adjusted_transfer_time(q.transfer_time_settings_,
                                    tt.locations_.transfer_time_[cur].count()));
     if (prev) {
-      pattern.emplace_back(*prev);
+      current_pattern_.emplace_back(*prev);
       cur = *prev;
       continue;
     }
@@ -104,7 +100,7 @@ void reconstruct(timetable const& tt,
       }
     }();
     if (prev) {
-      pattern.emplace_back(*prev);
+      current_pattern_.emplace_back(*prev);
       cur = *prev;
       continue;
     }
@@ -115,30 +111,52 @@ void reconstruct(timetable const& tt,
   }
 }
 
-vector<location_idx_t> meetpoint_to_pattern(timetable const& tt,
-                                            query const& q,
-                                            bidir_lb_raptor_state const& state,
-                                            location_idx_t const meetpoint) {
-  auto pattern = vector<location_idx_t>{};
+template <direction SearchDir>
+void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
+                                             query const& q,
+                                             unsigned const k) {
+  static constexpr auto kFwd = SearchDir == direction::kForward;
 
-  auto const get_init_round = [&](auto const& round_times) {
-    return utl::find_if(round_times,
-                        [&](auto const& times) {
-                          return times[meetpoint] != kUnreachable;
-                        }) -
-           begin(round_times);
+  if constexpr (kFwd) {
+    if (k == 1 && meetpoints_.size() > 0) {
+      fmt::println("possible direct connection");
+    }
+    return;
+  }
+
+  auto const to_array = [&](auto const& v) {
+    auto a = std::array<location_idx_t, kMaxTransfers>{};
+    utl::fill(a, location_idx_t::invalid());
+    for (auto const [i, e] : utl::enumerate(v)) {
+      a[i] = e;
+    }
+    return a;
   };
 
-  reconstruct<direction::kForward>(
-      tt, q, state, meetpoint, get_init_round(state.fwd_round_times_), pattern);
+  for (auto const m : meetpoints_) {
+    fmt::print("meetpoint: {}, ", tt.get_default_name(m));
 
-  std::ranges::reverse(pattern);
-  pattern.emplace_back(meetpoint);
+    current_pattern_.clear();
+    reconstruct<direction::kForward>(tt, q, m, k);
+    std::ranges::reverse(current_pattern_);
+    current_pattern_.emplace_back(m);
+    reconstruct<direction::kBackward>(tt, q, m, kFwd ? k - 1 : k);
 
-  reconstruct<direction::kBackward>(
-      tt, q, state, meetpoint, get_init_round(state.bwd_round_times_), pattern);
-
-  return pattern;
+    if (patterns_.emplace(to_array(current_pattern_)).second) {
+      fmt::print("new pattern:");
+      for (auto const l : current_pattern_) {
+        fmt::print(" {}", tt.get_default_name(l));
+      }
+      fmt::print("\n");
+    } else {
+      fmt::println("pattern repetition");
+    }
+  }
 }
+
+template void bidir_lb_raptor::meetpoints_to_patterns<direction::kForward>(
+    timetable const&, query const&, unsigned);
+template void bidir_lb_raptor::meetpoints_to_patterns<direction::kBackward>(
+    timetable const&, query const&, unsigned);
 
 }  // namespace nigiri::routing

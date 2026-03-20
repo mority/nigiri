@@ -9,6 +9,7 @@
 #include "../util.h"
 #include "absl/strings/internal/str_format/extension.h"
 #include "utl/enumerate.h"
+#include "utl/pipes/for_each.h"
 
 using namespace date;
 using namespace nigiri;
@@ -260,13 +261,12 @@ TEST(routing, bidir_lb_raptor) {
                   {.valid_from_ = sys_days{2026_y / January / 28},
                    .duration_ = footpath::kMaxDuration,
                    .transport_mode_id_ = 5}}}}};
-  auto state = bidir_lb_raptor_state{};
-  bidir_lb_raptor(tt, q, state);
+  auto lbr = bidir_lb_raptor{};
+  lbr.execute(tt, q);
 
   auto const get_round_times = [&](location_idx_t const l, direction dir) {
-    auto const& round_times = dir == direction::kForward
-                                  ? state.fwd_round_times_
-                                  : state.bwd_round_times_;
+    auto const& round_times = dir == direction::kForward ? lbr.fwd_round_times_
+                                                         : lbr.bwd_round_times_;
     auto a = std::array<std::uint16_t, (kMaxTransfers + 2U) / 2U>{};
     for (auto const [round, times] : utl::enumerate(round_times)) {
       a[round] = times[l];
@@ -286,10 +286,4 @@ TEST(routing, bidir_lb_raptor) {
 
   print_round_times(direction::kForward);
   print_round_times(direction::kBackward);
-
-  fmt::print("meetpoints:");
-  for (auto const m : state.meetpoints_) {
-    fmt::print(" {}", tt.get_default_name(m));
-  }
-  fmt::print("\n");
 }
