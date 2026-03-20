@@ -6,6 +6,7 @@
 #include "utl/pipes/remove_if.h"
 
 #include "nigiri/for_each_meta.h"
+#include "nigiri/routing/lb_raptor/bidir_lb_raptor_state.h"
 #include "nigiri/routing/lb_raptor/meetpoint_to_pattern.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/timetable.h"
@@ -54,6 +55,11 @@ void init(timetable const& tt, query const& q, bidir_lb_raptor_state& state) {
           std::min(t, round_times[0][meta]);  // necessary to min again?
       station_mark.set(to_idx(meta), true);
       reached.set(to_idx(meta), true);
+      if constexpr (kFwd) {
+        state.is_start_.set(to_idx(meta), true);
+      } else {
+        state.is_dest_.set(to_idx(meta), true);
+      }
     });
   }
 }
@@ -72,6 +78,7 @@ bool run(timetable const& tt,
   auto& station_mark = kFwd ? state.fwd_station_mark_ : state.bwd_station_mark_;
   auto& reached = kFwd ? state.fwd_reached_ : state.bwd_reached_;
   auto& rev_reached = kFwd ? state.bwd_reached_ : state.fwd_reached_;
+  auto& is_terminal = kFwd ? state.is_dest_ : state.is_start_;
 
   for (auto const l :
        interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
@@ -191,7 +198,7 @@ bool run(timetable const& tt,
     if (rev_reached.test(i)) {
       station_mark.set(i, false);
 
-      auto const already_met = [&]() {
+      auto const already_met = [&] {
         for (auto const earlier_meet : state.meetpoints_) {
           if (matches(tt, location_match_mode::kEquivalent, location_idx_t{i},
                       earlier_meet)) {
@@ -203,6 +210,14 @@ bool run(timetable const& tt,
 
       if (!already_met()) {
         state.meetpoints_.push_back(location_idx_t{i});
+
+        if (is_terminal.test(i)) {
+          if (k == 1) {
+            fmt::println("Pattern: direct");
+          }
+          return;
+        }
+
         auto const pattern =
             meetpoint_to_pattern(tt, q, state, location_idx_t{i});
         fmt::print("Pattern:");

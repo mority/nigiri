@@ -20,6 +20,8 @@ struct bidir_lb_raptor_state {
   bitvec prev_station_mark_;
   bitvec fwd_reached_;
   bitvec bwd_reached_;
+  bitvec is_start_;
+  bitvec is_dest_;
   bitvec lb_route_mark_;
   std::map<location_idx_t, std::uint16_t> min_;
   vector<location_idx_t> meetpoints_;

@@ -1,7 +1,7 @@
 #include "nigiri/routing/lb_raptor/meetpoint_to_pattern.h"
 
 #include "nigiri/routing/journey.h"
-#include "nigiri/routing/lb_raptor/bidir_lb_raptor.h"
+#include "nigiri/routing/lb_raptor/bidir_lb_raptor_state.h"
 #include "nigiri/timetable.h"
 
 namespace nigiri::routing {
@@ -121,6 +121,7 @@ std::vector<location_idx_t> meetpoint_to_pattern(
     bidir_lb_raptor_state const& state,
     location_idx_t const meetpoint) {
   auto pattern = std::vector<location_idx_t>{};
+
   auto const get_init_round = [&](auto const& round_times) {
     return utl::find_if(round_times,
                         [&](auto const& times) {
