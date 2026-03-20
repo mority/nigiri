@@ -200,9 +200,11 @@ bool run(timetable const& tt,
   station_mark.for_each_set_bit([&](auto const i) {
     if (rev_reached.test(i)) {
       station_mark.set(i, false);
-      if (utl::find(state.meetpoints_, location_idx_t{i}) ==
-          end(state.meetpoints_)) {
-        state.meetpoints_.push_back(location_idx_t{i});
+      auto const l = location_idx_t{i};
+      if (utl::find_if(state.meetpoints_, [&](auto const m) {
+            return matches(tt, location_match_mode::kEquivalent, l, m);
+          }) == end(state.meetpoints_)) {
+        state.meetpoints_.push_back(l);
       }
     }
   });
