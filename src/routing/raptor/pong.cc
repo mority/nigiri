@@ -265,6 +265,10 @@ routing_result pong(timetable const& tt,
   bidir_lb_raptor(tt, q, bidir_state);
   UTL_STOP_TIMING(bidir);
   fmt::println("bidir took {}", UTL_TIMING_MS(bidir));
+  fmt::print("meetpoints:");
+  for (auto const m : bidir_state.meetpoints_) {
+    fmt::println("{}", tt.get_default_name(m));
+  }
 
   auto const processing_start_time = std::chrono::steady_clock::now();
 

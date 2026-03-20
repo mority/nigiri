@@ -12,6 +12,6 @@ struct query;
 void bidir_lb_raptor(timetable const&,
                      query const&,
                      bidir_lb_raptor_state&,
-                     unsigned n_patterns = 50U);
+                     unsigned n_meetpoints = 50U);
 
 }  // namespace nigiri::routing

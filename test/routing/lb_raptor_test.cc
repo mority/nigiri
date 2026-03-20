@@ -7,6 +7,7 @@
 #include "nigiri/timetable.h"
 
 #include "../util.h"
+#include "absl/strings/internal/str_format/extension.h"
 #include "utl/enumerate.h"
 
 using namespace date;
@@ -286,9 +287,9 @@ TEST(routing, bidir_lb_raptor) {
   print_round_times(direction::kForward);
   print_round_times(direction::kBackward);
 
-  fmt::print("meetpoints: ");
-  state.meet_point_.for_each_set_bit([&](auto const i) {
-    fmt::print(" {}", tt.get_default_name(location_idx_t{i}));
-  });
+  fmt::print("meetpoints:");
+  for (auto const m : state.meetpoints_) {
+    fmt::print(" {}", tt.get_default_name(m));
+  }
   fmt::print("\n");
 }

@@ -12,6 +12,8 @@
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
 
+#include "absl/strings/internal/str_format/constexpr_parser.h"
+#include "absl/strings/internal/str_format/extension.h"
 #include "utl/enumerate.h"
 
 namespace nigiri::routing {
@@ -80,7 +82,6 @@ bool run(timetable const& tt,
   auto& station_mark = kFwd ? state.fwd_station_mark_ : state.bwd_station_mark_;
   auto& reached = kFwd ? state.fwd_reached_ : state.bwd_reached_;
   auto& rev_reached = kFwd ? state.bwd_reached_ : state.fwd_reached_;
-  auto& is_terminal = kFwd ? state.is_dest_ : state.is_start_;
 
   for (auto const l :
        interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
@@ -199,22 +200,9 @@ bool run(timetable const& tt,
   station_mark.for_each_set_bit([&](auto const i) {
     if (rev_reached.test(i)) {
       station_mark.set(i, false);
-      auto const l = location_idx_t{i};
-
-      if (!state.meet_point_.test(i)) {
-        for_each_meta(tt, location_match_mode::kEquivalent, l,
-                      [&](auto const meta) {
-                        state.meet_point_.set(to_idx(meta), true);
-                      });
-
-        if (is_terminal.test(i)) {
-          if (k == 1) {
-            fmt::println("Pattern: direct");
-          }
-          return;
-        }
-
-        state.patterns_.emplace_back(meetpoint_to_pattern(tt, q, state, l));
+      if (utl::find(state.meetpoints_, location_idx_t{i}) ==
+          end(state.meetpoints_)) {
+        state.meetpoints_.push_back(location_idx_t{i});
       }
     }
   });
@@ -225,7 +213,7 @@ bool run(timetable const& tt,
 void bidir_lb_raptor(timetable const& tt,
                      query const& q,
                      bidir_lb_raptor_state& state,
-                     unsigned const n_patterns) {
+                     unsigned const n_meetpoints) {
   state.reset(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
 
   // init (k = 0)
@@ -241,7 +229,7 @@ void bidir_lb_raptor(timetable const& tt,
       run_fwd = run<direction::kForward>(tt, q, state, k);
     }
 
-    if (state.patterns_.size() > n_patterns) {
+    if (state.meetpoints_.size() > n_meetpoints) {
       break;
     }
 
@@ -249,21 +237,10 @@ void bidir_lb_raptor(timetable const& tt,
       run_bwd = run<direction::kBackward>(tt, q, state, k);
     }
 
-    if (state.patterns_.size() > n_patterns) {
+    if (state.meetpoints_.size() > n_meetpoints) {
       break;
     }
   }
-
-  fmt::println("\nPatterns:");
-  for (auto const& p : state.patterns_) {
-    for (auto const [i, l] : utl::enumerate(p)) {
-      fmt::print(" {}", tt.get_default_name(l));
-      if (i != p.size() - 1) {
-        fmt::print(" ->");
-      }
-    }
-    fmt::print("\n");
-  }
-  fmt::print("\n");
 }
+
 }  // namespace nigiri::routing
