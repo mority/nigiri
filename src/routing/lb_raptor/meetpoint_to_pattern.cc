@@ -4,6 +4,10 @@
 #include "nigiri/timetable.h"
 
 #include "utl/enumerate.h"
+#include "utl/to_vec.h"
+
+// #define trace(...)
+#define trace fmt::println
 
 namespace nigiri::routing {
 constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
@@ -14,11 +18,15 @@ void bidir_lb_raptor::reconstruct(timetable const& tt,
                                   location_idx_t const l,
                                   unsigned const k_start) {
   static constexpr auto kFwd = SearchDir == direction::kForward;
-  auto const round_times = kFwd ? fwd_round_times_ : bwd_round_times_;
+  auto const& round_times = kFwd ? fwd_round_times_ : bwd_round_times_;
+  auto const& is_terminal = kFwd ? is_start_ : is_dest_;
 
   auto const find_in_prev_round =
       [&](location_idx_t const x, unsigned const k,
           std::uint16_t const time) -> std::optional<location_idx_t> {
+    trace("[find_in_prev_round][{}] location={}, round={}, time={}",
+          kFwd ? "fwd" : "bwd", tt.get_default_name(x), k, time);
+
     for (auto const r : tt.location_lb_routes_[q.prf_idx_][x]) {
       auto const& seq = tt.lb_route_root_seq_[q.prf_idx_][r];
 
@@ -55,59 +63,80 @@ void bidir_lb_raptor::reconstruct(timetable const& tt,
 
   auto cur = l;
   for (auto k = k_start; k > 1U; --k) {
-    auto prev = find_in_prev_round(
-        cur, k,
-        round_times[k][cur] -
-            adjusted_transfer_time(q.transfer_time_settings_,
-                                   tt.locations_.transfer_time_[cur].count()));
-    if (prev) {
-      current_pattern_.emplace_back(*prev);
-      cur = *prev;
-      continue;
-    }
+    auto const time = round_times[k][cur];
 
-    [&] {
-      auto const expand_fps = [&](auto const x) {
+    auto const local_transfer =
+        [&](location_idx_t const x) -> std::optional<location_idx_t> {
+      return find_in_prev_round(
+          x, k,
+          time -
+              adjusted_transfer_time(q.transfer_time_settings_,
+                                     tt.locations_.transfer_time_[x].count()));
+    };
+
+    auto const footpath_transfer =
+        [&](location_idx_t const x) -> std::optional<location_idx_t> {
+      auto const expand_fps = [&](auto const y) {
+        auto found = std::optional<location_idx_t>{};
         for (auto const fp :
-             kFwd ? tt.locations_.footpaths_in_[q.prf_idx_][x]
-                  : tt.locations_.footpaths_out_[q.prf_idx_][x]) {
-          prev = find_in_prev_round(
+             kFwd ? tt.locations_.footpaths_in_[q.prf_idx_][y]
+                  : tt.locations_.footpaths_out_[q.prf_idx_][y]) {
+          found = find_in_prev_round(
               tt.locations_.get_root_idx(fp.target()), k,
-              round_times[k][cur] -
-                  adjusted_transfer_time(q.transfer_time_settings_,
-                                         fp.duration())
-                      .count());
-          if (prev) {
-            return;
+              time - adjusted_transfer_time(q.transfer_time_settings_,
+                                            fp.duration())
+                         .count());
+          if (found) {
+            break;
           }
         }
+        return found;
       };
-      expand_fps(cur);
-      if (prev) {
-        return;
+
+      auto found = expand_fps(x);
+      if (found) {
+        return found;
       }
-      for (auto const c : tt.locations_.children_[cur]) {
-        expand_fps(c);
-        if (prev) {
-          return;
+      for (auto const c : tt.locations_.children_[x]) {
+        found = expand_fps(c);
+        if (found) {
+          return found;
         }
         for (auto const cc : tt.locations_.children_[c]) {
-          expand_fps(cc);
-          if (prev) {
-            return;
+          found = expand_fps(cc);
+          if (found) {
+            return found;
           }
         }
       }
-    }();
-    if (prev) {
-      current_pattern_.emplace_back(*prev);
-      cur = *prev;
-      continue;
+
+      return std::nullopt;
+    };
+
+    auto prev = local_transfer(cur);
+    if (!prev) {
+      prev = footpath_transfer(cur);
+    }
+    if (!prev) {
+      trace(
+          "[reconstruct][{}] failed k={}, cur={}, could not find matching "
+          "entry in previous round,",
+          kFwd ? "fwd" : "bwd", k, cur, tt.get_default_name(cur));
+      return;
     }
 
-    fmt::println(
-        "reconstruction failed, could not find matching entry in previous "
-        "round");
+    if (is_terminal.test(to_idx(*prev))) {
+      trace(
+          "[reconstruct][{}] reached terminal {}, terminating "
+          "reconstruction",
+          kFwd ? "fwd" : "bwd", tt.get_default_name(*prev));
+      return;
+    }
+
+    trace("[reconstruct][{}] adding {} to pattern", kFwd ? "fwd" : "bwd",
+          tt.get_default_name(*prev));
+    current_pattern_.emplace_back(*prev);
+    cur = *prev;
   }
 }
 
@@ -118,8 +147,9 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
   static constexpr auto kFwd = SearchDir == direction::kForward;
 
   if constexpr (kFwd) {
-    if (k == 1 && meetpoints_.size() > 0) {
-      fmt::println("possible direct connection");
+    if (k == 1 && !meetpoints_.empty()) {
+      trace("[meetpoints_to_patterns][{}] possible direct connection",
+            kFwd ? "fwd" : "bwd");
     }
     return;
   }
@@ -134,7 +164,13 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
   };
 
   for (auto const m : meetpoints_) {
-    fmt::print("meetpoint: {}, ", tt.get_default_name(m));
+    trace("[meetpoints_to_patterns][{}] meetpoint: {}", kFwd ? "fwd" : "bwd",
+          tt.get_default_name(m));
+    if (is_start_.test(to_idx(m)) || is_dest_.test(to_idx(m))) {
+      trace("[meetpoints_to_patterns][{}] skipping terminal",
+            kFwd ? "fwd" : "bwd");
+      continue;
+    }
 
     current_pattern_.clear();
     reconstruct<direction::kForward>(tt, q, m, k);
@@ -143,13 +179,13 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
     reconstruct<direction::kBackward>(tt, q, m, kFwd ? k - 1 : k);
 
     if (patterns_.emplace(to_array(current_pattern_)).second) {
-      fmt::print("new pattern:");
-      for (auto const l : current_pattern_) {
-        fmt::print(" {}", tt.get_default_name(l));
-      }
-      fmt::print("\n");
+      trace("[meetpoints_to_patterns][{}] new pattern: {}",
+            kFwd ? "fwd" : "bwd",
+            utl::to_vec(current_pattern_,
+                        [&](auto const l) { return tt.get_default_name(l); }));
     } else {
-      fmt::println("pattern repetition");
+      trace("[meetpoints_to_patterns][{}] pattern repetition",
+            kFwd ? "fwd" : "bwd");
     }
   }
 }

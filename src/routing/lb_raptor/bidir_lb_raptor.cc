@@ -12,6 +12,9 @@
 
 #include "utl/enumerate.h"
 
+// #define trace(...)
+#define trace fmt::println
+
 namespace nigiri::routing {
 
 constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
