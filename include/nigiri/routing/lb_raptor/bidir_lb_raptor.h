@@ -1,6 +1,8 @@
 #pragma once
 
+#include "nigiri/routing/journey.h"
 #include "nigiri/routing/limits.h"
+#include "nigiri/routing/pareto_set.h"
 #include "nigiri/types.h"
 
 namespace nigiri {
@@ -10,8 +12,18 @@ struct timetable;
 namespace nigiri::routing {
 struct query;
 
+struct bidir_lb_raptor_stats {
+  void reset() {
+    pattern_reconstructions_ = 0UL;
+    pattern_repetitions_ = 0UL;
+  }
+
+  std::uint64_t pattern_reconstructions_;
+  std::uint64_t pattern_repetitions_;
+};
+
 struct bidir_lb_raptor {
-  void execute(timetable const&, query const&, unsigned n_meetpoints = 50U);
+  void execute(timetable const&, query const&, bool arrive_by);
 
 private:
   void reset(unsigned n_locations, unsigned n_lb_routes);
@@ -23,7 +35,10 @@ private:
   bool run(timetable const&, query const&, unsigned k);
 
   template <direction SearchDir>
-  void meetpoints_to_patterns(timetable const&, query const&, unsigned k);
+  void meetpoints_to_patterns(timetable const&,
+                              query const&,
+                              unsigned k,
+                              bool arrive_by);
 
   template <direction SearchDir>
   void reconstruct(timetable const&,
@@ -50,7 +65,9 @@ public:
   std::map<location_idx_t, std::uint16_t> min_;
   std::vector<location_idx_t> meetpoints_;
   std::vector<location_idx_t> current_pattern_;
-  std::set<std::array<location_idx_t, kMaxTransfers>> patterns_;
+  std::set<std::array<location_idx_t, kMaxTransfers + 2U>> patterns_;
+  pareto_set<journey> journeys_;
+  bidir_lb_raptor_stats stats_;
 };
 
 }  // namespace nigiri::routing

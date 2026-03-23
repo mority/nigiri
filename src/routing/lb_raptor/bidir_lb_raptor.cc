@@ -11,6 +11,7 @@
 #include "nigiri/types.h"
 
 #include "utl/enumerate.h"
+#include "utl/to_vec.h"
 
 // #define trace(...)
 #define trace fmt::println
@@ -51,6 +52,7 @@ void bidir_lb_raptor::reset(unsigned const n_locations,
   meetpoints_.reserve(1000);
 
   patterns_.clear();
+  stats_.reset();
 }
 
 template <direction SearchDir>
@@ -244,14 +246,14 @@ bool bidir_lb_raptor::run(timetable const& tt,
   return station_mark.any();
 }
 
+template <direction SearchDir>
 void bidir_lb_raptor::execute(timetable const& tt,
                               query const& q,
-                              unsigned const) {
+                              bool const arrive_by) {
   reset(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
 
   // init (k = 0)
   init<direction::kForward>(tt, q);
-  ;
   init<direction::kBackward>(tt, q);
 
   // run
@@ -261,13 +263,26 @@ void bidir_lb_raptor::execute(timetable const& tt,
        ++k) {
     if (run_fwd) {
       run_fwd = run<direction::kForward>(tt, q, k);
+      trace("[bidir_lb_raptor][fwd][k={}] meetpoints: {}", k,
+            utl::to_vec(meetpoints_,
+                        [&](auto const l) { return tt.get_default_name(l); }));
       meetpoints_to_patterns<direction::kForward>(tt, q, k);
+      meetpoints_.clear();
     }
     if (run_bwd) {
       run_bwd = run<direction::kBackward>(tt, q, k);
+      trace("[bidir_lb_raptor][bwd][k={}] meetpoints: {}", k,
+            utl::to_vec(meetpoints_,
+                        [&](auto const l) { return tt.get_default_name(l); }));
       meetpoints_to_patterns<direction::kBackward>(tt, q, k);
+      meetpoints_.clear();
     }
   }
+
+  trace(
+      "[bidir_lb_raptor] terminating, pattern_reconstructions: {}, "
+      "pattern_repetitions: {}",
+      stats_.pattern_reconstructions_, stats_.pattern_repetitions_);
 }
 
 }  // namespace nigiri::routing
