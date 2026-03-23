@@ -246,7 +246,6 @@ bool bidir_lb_raptor::run(timetable const& tt,
   return station_mark.any();
 }
 
-template <direction SearchDir>
 void bidir_lb_raptor::execute(timetable const& tt,
                               query const& q,
                               bool const arrive_by) {
@@ -266,7 +265,7 @@ void bidir_lb_raptor::execute(timetable const& tt,
       trace("[bidir_lb_raptor][fwd][k={}] meetpoints: {}", k,
             utl::to_vec(meetpoints_,
                         [&](auto const l) { return tt.get_default_name(l); }));
-      meetpoints_to_patterns<direction::kForward>(tt, q, k);
+      meetpoints_to_patterns<direction::kForward>(tt, q, k, arrive_by);
       meetpoints_.clear();
     }
     if (run_bwd) {
@@ -274,7 +273,7 @@ void bidir_lb_raptor::execute(timetable const& tt,
       trace("[bidir_lb_raptor][bwd][k={}] meetpoints: {}", k,
             utl::to_vec(meetpoints_,
                         [&](auto const l) { return tt.get_default_name(l); }));
-      meetpoints_to_patterns<direction::kBackward>(tt, q, k);
+      meetpoints_to_patterns<direction::kBackward>(tt, q, k, arrive_by);
       meetpoints_.clear();
     }
   }

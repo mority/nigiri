@@ -23,7 +23,7 @@ struct bidir_lb_raptor_stats {
 };
 
 struct bidir_lb_raptor {
-  void execute(timetable const&, query const&, bool arrive_by);
+  void execute(timetable const&, query const&, bool arrive_by = false);
 
 private:
   void reset(unsigned n_locations, unsigned n_lb_routes);

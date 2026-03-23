@@ -180,6 +180,9 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
       if (arrive_by) {
         journeys_.add(
             pattern_to_journey<direction::kBackward>(tt, q, current_pattern_));
+      } else {
+        journeys_.add(
+            pattern_to_journey<direction::kForward>(tt, q, current_pattern_));
       }
     } else {
       ++stats_.pattern_repetitions_;
@@ -192,8 +195,8 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
 }
 
 template void bidir_lb_raptor::meetpoints_to_patterns<direction::kForward>(
-    timetable const&, query const&, unsigned);
+    timetable const&, query const&, unsigned, bool);
 template void bidir_lb_raptor::meetpoints_to_patterns<direction::kBackward>(
-    timetable const&, query const&, unsigned);
+    timetable const&, query const&, unsigned, bool);
 
 }  // namespace nigiri::routing
