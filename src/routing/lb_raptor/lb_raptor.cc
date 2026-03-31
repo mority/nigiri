@@ -39,7 +39,6 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
   static constexpr auto kFwd = SearchDir == direction::kForward;
 
   auto const& routes = tt.location_lb_routes_[q.prf_idx_];
-  auto const& route_times = tt.lb_route_times_[q.prf_idx_];
   auto const& route_root_seq = tt.lb_route_root_seq_[q.prf_idx_];
 
   state.reset(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
@@ -107,7 +106,6 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     any_marked = false;
     state.lb_route_mark_.for_each_set_bit([&](auto const i) {
       auto const r = lb_route_idx_t{i};
-      auto const& segment_layovers = route_times[r];
       auto const& seq = route_root_seq[r];
 
       for (auto x = 1U; x != seq.size(); ++x) {
@@ -124,18 +122,15 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
              0 <= out && out < static_cast<std::int32_t>(seq.size());
              out += step) {
           auto const l_out = seq[out];
-          auto const segment = kFwd ? segment_layovers[out * 2]
-                                    : segment_layovers[(out - 1) * 2];
-
-          lb += segment.count();
+          lb += (kFwd ? tt.lb_get_departing_segment(q.prf_idx_, r, out)
+                      : tt.lb_get_arriving_segment(q.prf_idx_, r, out))
+                    .count();
           if (lb < std::min(state.round_times_[k][l_out], state.tmp_[l_out])) {
             state.tmp_[l_out] = lb;
             state.station_mark_.set(to_idx(l_out), true);
             any_marked = true;
-
             if (0 < out && out < static_cast<std::int32_t>(seq.size()) - 1) {
-              auto const layover = segment_layovers[out * 2 - 1].count();
-              lb += layover;
+              lb += tt.lb_get_layover(q.prf_idx_, r, out).count();
             } else {
               break;
             }
