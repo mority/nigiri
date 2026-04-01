@@ -6,7 +6,7 @@
 #include "utl/timing.h"
 
 #include "nigiri/routing/get_earliest_transport.h"
-#include "nigiri/routing/lb_raptor/bidir_lb_raptor.h"
+#include "nigiri/routing/lb_raptor/lb_raptor.h"
 #include "nigiri/rt/frun.h"
 
 #define trace_pong(...)
@@ -260,12 +260,6 @@ routing_result pong(timetable const& tt,
 
   q.sanitize(tt);
 
-  auto lbr = bidir_lb_raptor{};
-  UTL_START_TIMING(bidir);
-  lbr.execute(tt, q);
-  UTL_STOP_TIMING(bidir);
-  fmt::println("bidir took {}", UTL_TIMING_MS(bidir));
-
   auto const processing_start_time = std::chrono::steady_clock::now();
 
   auto const fastest_direct = get_fastest_direct(tt, q, SearchDir);
@@ -301,6 +295,13 @@ routing_result pong(timetable const& tt,
                                     : rtt->bwd_search_lb_graph_)),
            ping_lb);
   UTL_STOP_TIMING(ping_lb);
+
+  auto ping_lb_raptor_state = lb_raptor_state{};
+  auto const ping_lb_raptor_start = std::chrono::steady_clock::now();
+  ping_lb_raptor_state.reset(tt.n_locations(), tt.n_lb_routes(q.prf_idx_));
+  lb_raptor<SearchDir>(tt, q, ping_lb_raptor_state);
+  auto const ping_lb_raptor_time =
+      std::chrono::steady_clock::now() - ping_lb_raptor_start;
 
   auto ping_dist_to_dest = std::vector<std::uint16_t>{};
   auto ping_is_dest = bitvec{};
@@ -346,6 +347,13 @@ routing_result pong(timetable const& tt,
                                     : rtt->fwd_search_lb_graph_)),
            pong_lb);
   UTL_STOP_TIMING(pong_lb);
+
+  auto pong_lb_raptor_state = lb_raptor_state{};
+  auto const pong_lb_raptor_start = std::chrono::steady_clock::now();
+  pong_lb_raptor_state.reset(tt.n_locations(), tt.n_lb_routes(q.prf_idx_));
+  lb_raptor<flip(SearchDir)>(tt, q, ping_lb_raptor_state);
+  auto const pong_lb_raptor_time =
+      std::chrono::steady_clock::now() - pong_lb_raptor_start;
 
   auto pong_dist_to_dest = std::vector<std::uint16_t>{};
   auto pong_is_dest = bitvec{};
@@ -548,6 +556,20 @@ routing_result pong(timetable const& tt,
   result.search_stats_.execute_time_ =
       std::chrono::duration_cast<std::chrono::milliseconds>(
           (std::chrono::steady_clock::now() - processing_start_time));
+
+  if (!std::filesystem::exists("times.txt")) {
+    auto of = std::ofstream{"times.txt"};
+    of << "execute_time,ping_lb_raptor,pong_lb_raptor\n";
+  }
+  auto of = std::ofstream{"times.txt", std::ios::app};
+  of << std::format("{},{},{}\n",
+                    result.search_stats_.execute_time_ -
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            ping_lb_raptor_time + pong_lb_raptor_time),
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        ping_lb_raptor_time),
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        pong_lb_raptor_time));
 
   for (auto& j : s_state.results_) {
     auto const swap = [](location_idx_t const l) -> location_idx_t {

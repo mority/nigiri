@@ -38,9 +38,6 @@ template <direction SearchDir>
 void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
   static constexpr auto kFwd = SearchDir == direction::kForward;
 
-  auto const& routes = tt.location_lb_routes_[q.prf_idx_];
-  auto const& route_root_seq = tt.lb_route_root_seq_[q.prf_idx_];
-
   state.reset(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
 
   // init (k = 0)
@@ -90,7 +87,8 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
 
     auto any_marked = false;
     state.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-      for (auto const r : routes[location_idx_t{i}]) {
+      for (auto const r :
+           tt.location_lb_routes_[q.prf_idx_][location_idx_t{i}]) {
         any_marked = true;
         state.lb_route_mark_.set(to_idx(r), true);
       }
@@ -106,7 +104,7 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     any_marked = false;
     state.lb_route_mark_.for_each_set_bit([&](auto const i) {
       auto const r = lb_route_idx_t{i};
-      auto const& seq = route_root_seq[r];
+      auto const& seq = tt.lb_route_root_seq_[q.prf_idx_][r];
 
       for (auto x = 1U; x != seq.size(); ++x) {
         auto const in = kFwd ? x : seq.size() - x - 1U;
@@ -122,15 +120,15 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
              0 <= out && out < static_cast<std::int32_t>(seq.size());
              out += step) {
           auto const l_out = seq[out];
-          lb += (kFwd ? tt.lb_get_departing_segment(q.prf_idx_, r, out)
-                      : tt.lb_get_arriving_segment(q.prf_idx_, r, out))
+          lb += (kFwd ? tt.get_departing_segment_lb(q.prf_idx_, r, out)
+                      : tt.get_arriving_segment_lb(q.prf_idx_, r, out))
                     .count();
           if (lb < std::min(state.round_times_[k][l_out], state.tmp_[l_out])) {
             state.tmp_[l_out] = lb;
             state.station_mark_.set(to_idx(l_out), true);
             any_marked = true;
             if (0 < out && out < static_cast<std::int32_t>(seq.size()) - 1) {
-              lb += tt.lb_get_layover(q.prf_idx_, r, out).count();
+              lb += tt.get_layover_lb(q.prf_idx_, r, out).count();
             } else {
               break;
             }

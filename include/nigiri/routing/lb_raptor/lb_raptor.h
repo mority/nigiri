@@ -22,6 +22,9 @@ struct lb_raptor_state {
   bitvec lb_route_mark_;
 };
 
+// SearchDir refers to the direction of the main routing query
+// forward query: lb_raptor finds lower bounds backward from the destination
+// backward query: lb_raptor finds lower bounds forward from the destination
 template <direction SearchDir>
 void lb_raptor(timetable const&, query const&, lb_raptor_state&);
 

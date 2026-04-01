@@ -45,15 +45,15 @@ void bidir_lb_raptor::reconstruct(timetable const& tt,
              out += step) {
           auto const l_out = seq[out];
           auto const segment =
-              kFwd ? tt.lb_get_departing_segment(q.prf_idx_, r, out)
-                   : tt.lb_get_arriving_segment(q.prf_idx_, r, out);
+              kFwd ? tt.get_departing_segment_lb(q.prf_idx_, r, out)
+                   : tt.get_arriving_segment_lb(q.prf_idx_, r, out);
 
           t -= segment.count();
           if (t == round_times[k - 1U][l_out]) {
             return l_out;
           }
           if (0 < out && out < static_cast<std::int32_t>(seq.size()) - 1) {
-            t -= tt.lb_get_layover(q.prf_idx_, r, out).count();
+            t -= tt.get_layover_lb(q.prf_idx_, r, out).count();
           }
         }
       }
