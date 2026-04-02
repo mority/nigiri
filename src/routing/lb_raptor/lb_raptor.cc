@@ -74,15 +74,11 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
   }
 
   // run
-  auto early_termination = false;
-  for (auto k = 1U; k != std::min(q.max_transfers_, kMaxTransfers) + 2U; ++k) {
+  auto k = 1U;
+  for (; k != std::min(q.max_transfers_, kMaxTransfers) + 2U; ++k) {
     for (auto const l :
          interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
       state.round_times_[k][l] = state.round_times_[k - 1U][l];
-    }
-
-    if (early_termination) {
-      continue;
     }
 
     auto any_marked = false;
@@ -94,8 +90,7 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
       }
     });
     if (!any_marked) {
-      early_termination = true;
-      continue;
+      break;
     }
 
     std::swap(state.prev_station_mark_, state.station_mark_);
@@ -140,8 +135,7 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     });
 
     if (!any_marked) {
-      early_termination = true;
-      continue;
+      break;
     }
 
     utl::fill(state.lb_route_mark_.blocks_, 0U);
@@ -188,7 +182,18 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     });
 
     if (!any_marked) {
-      early_termination = true;
+      break;
+    }
+  }
+
+  fmt::println("lb_raptor terminates at k = {}", k);
+  ++k;
+
+  // fill remaining rounds in case of early termination
+  for (; k < std::min(q.max_transfers_, kMaxTransfers) + 2U; ++k) {
+    for (auto const l :
+         interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
+      state.round_times_[k][l] = state.round_times_[k - 1U][l];
     }
   }
 
