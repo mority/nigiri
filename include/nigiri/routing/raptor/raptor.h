@@ -1217,18 +1217,19 @@ private:
 
     if (et_offset) {
       auto const time_at_stop = tt_.to_unixtime(day_at_stop, mam_at_stop);
-      auto prev = std::tuple{et, et_offset};
+      auto prev_t = et;
+      auto prev_o = et_offset;
       for (auto day = et.day_; kFwd ? day >= day_at_stop : day <= day_at_stop;
            kFwd ? --day : ++day) {
         for (auto o = kFwd ? *et_offset - 1U : *et_offset + 1U;
              o < event_times.size(); kFwd ? --o : ++o) {
-          auto t = tt_.route_transport_ranges_[r][o];
+          auto t_idx = tt_.route_transport_ranges_[r][o];
           auto const ev = event_times[o];
           auto const ev_day_offset = ev.days();
           auto const start_day =
               static_cast<day_idx_t>(as_int(day) - ev_day_offset);
 
-          if (!is_transport_active(t, start_day)) {
+          if (!is_transport_active(t_idx, start_day)) {
             trace(
                 "┊ │k={}      => transport={}, name={}, dbg={}, day={}, "
                 "ev_day_offset={}, "
@@ -1244,9 +1245,15 @@ private:
                         tt_.to_unixtime(day, minutes_after_midnight_t{ev.mam()})
                   : tt_.to_unixtime(day, minutes_after_midnight_t{ev.mam()}) <=
                         time_at_stop) {
-            prev = {{t, start_day}, o};
+            prev_t = {t_idx, start_day};
+            prev_o = o;
           } else {
-            return prev;
+            trace(
+                "┊ │k={}      => ET FOUND: name={}, dbg={}, at day {} "
+                "(day_offset={}) - ev_mam={}, ev_time={}, ev={}\n",
+                k, tt_.transport_name(t), tt_.dbg(t), day, ev_day_offset,
+                ev_mam, ev, tt_.to_unixtime(day, duration_t{ev_mam}));
+            return {prev_t, prev_o};
           }
         }
 
