@@ -987,6 +987,7 @@ private:
     bool any_marked = false;
 
     auto et = std::array<transport, Vias + 1>{};
+    auto et_offset = std::array<std::optional<std::size_t>, Vias + 1>{};
     auto v_offset = std::array<std::size_t, Vias + 1>{};
 
     for (auto i = 0U; i != stop_seq.size(); ++i) {
@@ -1162,7 +1163,7 @@ private:
         if (prev_round_time != kInvalid &&
             is_better_or_eq(prev_round_time, et_time_at_stop)) {
           auto const [day, mam] = split(prev_round_time);
-          auto const new_et = get_earliest_transport(k, r, stop_idx, day, mam,
+          auto const [new_et, new_et_offset] = get_earliest_transport(k, r, stop_idx, day, mam,
                                                      stp.location_idx());
           current_best[v] = get_best(current_best[v], best_[l_idx][target_v],
                                      tmp_[l_idx][target_v]);
@@ -1174,6 +1175,7 @@ private:
                    et_time_at_stop))) {
             et[v] = new_et;
             v_offset[v] = 0;
+            et_offset[v] = new_et_offset;
             trace("┊ │k={} v={}    update et: time_at_stop={}\n", k, v,
                   to_unix(et_time_at_stop));
           } else if (new_et.is_valid()) {
@@ -1186,7 +1188,7 @@ private:
     return any_marked;
   }
 
-  transport get_earliest_transport(unsigned const k,
+  std::tuple<transport,std::optional<std::size_t>> get_earliest_transport(unsigned const k,
                                    route_idx_t const r,
                                    stop_idx_t const stop_idx,
                                    day_idx_t const day_at_stop,
@@ -1240,7 +1242,7 @@ private:
               tt_.to_unixtime(day, 0_minutes), mam_at_stop, ev_mam,
               tt_.to_unixtime(day, duration_t{ev_mam}),
               to_unix(time_at_dest_[k]));
-          return {transport_idx_t::invalid(), day_idx_t::invalid()};
+          return {{transport_idx_t::invalid(), day_idx_t::invalid()},std::nullopt};
         }
 
         auto const t = tt_.route_transport_ranges_[r][t_offset];
@@ -1273,7 +1275,7 @@ private:
             "(day_offset={}) - ev_mam={}, ev_time={}, ev={}\n",
             k, tt_.transport_name(t), tt_.dbg(t), day, ev_day_offset, ev_mam,
             ev, tt_.to_unixtime(day, duration_t{ev_mam}));
-        return {t, static_cast<day_idx_t>(as_int(day) - ev_day_offset)};
+        return {{t, static_cast<day_idx_t>(as_int(day) - ev_day_offset)},t_offset};
       }
     }
     return {};
