@@ -18,14 +18,10 @@ using namespace nigiri::loader::gtfs;
 using namespace std::chrono_literals;
 using nigiri::test::raptor_search;
 
-// validate_journey() is the actual user-facing feature the scheduled/
-// realtime dual-slot search exists to support: given a journey the
-// passenger planned (read from journeys_scheduled_, or saved from an
-// earlier search), is it still possible right now, and if not, where did
-// it break?
 namespace {
 
-// Two independent transfer pairs, same as scheduled_vs_realtime_test.cc:
+// Two independent transfer pairs, same as raptor_rt_modes_test.cc's naive
+// baseline fixture:
 //   A -[T1]-> B -[T2 / T2B]-> D   2 min (same-stop) transfer buffer at B
 //                                 => a delay on T1 breaks the connection.
 //   E -[T3]-> F -[T4]---------> G 10 min transfer buffer at F
@@ -169,7 +165,7 @@ TEST(routing, validate_journey_feasible_without_rt_update) {
   auto const result = validate_journey(tt, rtt, planned);
 
   EXPECT_TRUE(result.feasible_);
-  EXPECT_FALSE(result.broken_leg_.has_value());
+  EXPECT_FALSE(result.broken_leg_idx_.has_value());
   EXPECT_EQ(planned.dest_time_, result.arrival_time_);
 }
 
@@ -187,8 +183,8 @@ TEST(routing, validate_journey_broken_by_delay) {
   auto const result = validate_journey(tt, rtt, planned);
 
   EXPECT_FALSE(result.feasible_);
-  ASSERT_TRUE(result.broken_leg_.has_value());
-  EXPECT_EQ(2U, *result.broken_leg_);  // the T2 leg couldn't be boarded
+  ASSERT_TRUE(result.broken_leg_idx_.has_value());
+  EXPECT_EQ(2U, *result.broken_leg_idx_);  // the T2 leg couldn't be boarded
   EXPECT_NE(std::string::npos, result.reason_.find("missed connection"))
       << result.reason_;
   // How far the passenger actually gets: stuck at B, ready 40 min later
@@ -211,8 +207,8 @@ TEST(routing, validate_journey_broken_by_cancellation) {
   auto const result = validate_journey(tt, rtt, planned);
 
   EXPECT_FALSE(result.feasible_);
-  ASSERT_TRUE(result.broken_leg_.has_value());
-  EXPECT_EQ(2U, *result.broken_leg_);
+  ASSERT_TRUE(result.broken_leg_idx_.has_value());
+  EXPECT_EQ(2U, *result.broken_leg_idx_);
   EXPECT_NE(std::string::npos, result.reason_.find("cancelled"))
       << result.reason_;
 }
@@ -233,6 +229,6 @@ TEST(routing, validate_journey_feasible_with_harmless_delay) {
   auto const result = validate_journey(tt, rtt, planned);
 
   EXPECT_TRUE(result.feasible_);
-  EXPECT_FALSE(result.broken_leg_.has_value());
+  EXPECT_FALSE(result.broken_leg_idx_.has_value());
   EXPECT_EQ(planned.dest_time_, result.arrival_time_);
 }
