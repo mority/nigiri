@@ -3,7 +3,6 @@
 #include "nigiri/footpath.h"
 #include "nigiri/loader/gtfs/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
-#include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/raptor/pong.h"
 #include "nigiri/routing/raptor/raptor_state.h"
 #include "nigiri/routing/raptor_search.h"
@@ -251,13 +250,12 @@ void enable_td_footpath_override(timetable const& tt,
 
 }  // namespace
 
-TEST(rt_modes, align_without_rt_update_fwd) {
+TEST(rt_modes, separate_align_without_rt_update_fwd) {
   auto const tt = load_tt(same_stop_test_files());
   auto const rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
 
   auto const scheduled = raptor_search(tt, nullptr, "A", "D", kWholeDay);
   auto const realtime = raptor_search(tt, &rtt, "A", "D", kWholeDay);
-  auto const dual = raptor_search(tt, &rtt, "A", "D", kWholeDay);
 
   ASSERT_EQ(1U, scheduled.size()) << to_string(tt, scheduled);
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
@@ -755,7 +753,7 @@ TEST(rt_modes, combined_reroutes_td_footpath_fwd) {
   EXPECT_EQ(std::string::npos, rt_str.find("TB2C")) << rt_str;
 }
 
-TEST(routing, combined_reroutes_td_footpath_bwd) {
+TEST(rt_modes, combined_reroutes_td_footpath_bwd) {
   auto const tt = load_reroute_tt_with_foot_profile();
   auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
 
@@ -815,14 +813,14 @@ TEST(routing, combined_reroutes_td_footpath_bwd) {
   EXPECT_EQ(std::string::npos, rt_str.find("TB2C")) << rt_str;
 }
 
-TEST(routing, pong_combined_align_without_rt_update_fwd) {
+TEST(rt_modes, pong_combined_align_without_rt_update_fwd) {
   auto const tt = load_tt(same_stop_test_files());
   auto const rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
-  auto search_state = routing::search_state{};
-  auto raptor_state = routing::raptor_state{};
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
 
   auto const result = pong_search(
-      tt, &rtt, search_state, raptor_state,
+      tt, &rtt, s_state, r_state,
       query{.start_time_ = kWholeDay,
            .start_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
                       0_minutes, 0U}},
@@ -841,14 +839,14 @@ TEST(routing, pong_combined_align_without_rt_update_fwd) {
             to_string(tt, &rtt, *result.journeys_scheduled_));
 }
 
-TEST(routing, pong_combined_align_without_rt_update_bwd) {
+TEST(rt_modes, pong_combined_align_without_rt_update_bwd) {
   auto const tt = load_tt(same_stop_test_files());
   auto const rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
-  auto search_state = routing::search_state{};
-  auto raptor_state = routing::raptor_state{};
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
 
   auto const result = pong_search(
-      tt, &rtt, search_state, raptor_state,
+      tt, &rtt, s_state, r_state,
       query{.start_time_ = kWholeDay,
            .start_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
                       0_minutes, 0U}},
@@ -867,7 +865,7 @@ TEST(routing, pong_combined_align_without_rt_update_bwd) {
             to_string(tt, &rtt, *result.journeys_scheduled_));
 }
 
-TEST(routing, pong_combined_delay_breaks_transfer_fwd) {
+TEST(rt_modes, pong_combined_delay_breaks_transfer_fwd) {
   auto const tt = load_tt(same_stop_test_files());
   auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
 
@@ -875,10 +873,10 @@ TEST(routing, pong_combined_delay_breaks_transfer_fwd) {
   auto const stats = rt::gtfsrt_update_msg(tt, rtt, kSrc, "tag", msg);
   ASSERT_EQ(stats.total_entities_success_, 1U);
 
-  auto search_state = routing::search_state{};
-  auto raptor_state = routing::raptor_state{};
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
   auto const result = pong_search(
-      tt, &rtt, search_state, raptor_state,
+      tt, &rtt, s_state, r_state,
       query{.start_time_ = kWholeDay,
            .start_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
                       0_minutes, 0U}},
@@ -899,7 +897,7 @@ TEST(routing, pong_combined_delay_breaks_transfer_fwd) {
             result.journeys_->begin()->arrival_time());
 }
 
-TEST(routing, pong_combined_delay_breaks_transfer_bwd) {
+TEST(rt_modes, pong_combined_delay_breaks_transfer_bwd) {
   auto const tt = load_tt(same_stop_test_files());
   auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
 
@@ -907,10 +905,10 @@ TEST(routing, pong_combined_delay_breaks_transfer_bwd) {
   auto const stats = rt::gtfsrt_update_msg(tt, rtt, kSrc, "tag", msg);
   ASSERT_EQ(stats.total_entities_success_, 1U);
 
-  auto search_state = routing::search_state{};
-  auto raptor_state = routing::raptor_state{};
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
   auto const result = pong_search(
-      tt, &rtt, search_state, raptor_state,
+      tt, &rtt, s_state, r_state,
       query{.start_time_ = kWholeDay,
            .start_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
                       0_minutes, 0U}},
@@ -929,4 +927,316 @@ TEST(routing, pong_combined_delay_breaks_transfer_bwd) {
 
   EXPECT_EQ(result.journeys_scheduled_->begin()->arrival_time() + 80min,
             result.journeys_->begin()->arrival_time());
+}
+
+TEST(rt_modes, pong_combined_diverges_via_footpath_fwd) {
+  auto const tt = load_tt(footpath_test_files());
+  auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
+
+  auto const msg = make_delay_msg("T1", "20190503", "09:00:00", 2U, 10);
+  auto const stats = rt::gtfsrt_update_msg(tt, rtt, kSrc, "tag", msg);
+  ASSERT_EQ(stats.total_entities_success_, 1U);
+
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
+  auto const result = pong_search(
+      tt, &rtt, s_state, r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
+                      0_minutes, 0U}},
+           .destination_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
+                             0_minutes, 0U}},
+           .min_connection_count_ = 1U,
+           .with_scheduled_comparison_ = true},
+      direction::kForward);
+  auto const realtime = raptor_search(tt, &rtt, "A", "D", kWholeDay);
+  auto const sched = raptor_search(tt, nullptr, "A", "D", kWholeDay);
+
+  ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
+  ASSERT_EQ(1U, sched.size()) << to_string(tt, sched);
+  ASSERT_FALSE(result.journeys_->empty());
+  ASSERT_FALSE(result.journeys_scheduled_->empty());
+
+  EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *result.journeys_));
+  EXPECT_EQ(to_string(tt, sched), to_string(tt, *result.journeys_scheduled_));
+  EXPECT_NE(result.journeys_scheduled_->begin()->arrival_time(),
+           result.journeys_->begin()->arrival_time());
+}
+
+TEST(rt_modes, pong_combined_diverges_via_footpath_bwd) {
+  auto const tt = load_tt(footpath_test_files());
+  auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
+
+  auto const msg = make_delay_msg("T1", "20190503", "09:00:00", 2U, 10);
+  auto const stats = rt::gtfsrt_update_msg(tt, rtt, kSrc, "tag", msg);
+  ASSERT_EQ(stats.total_entities_success_, 1U);
+
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
+  auto const result = pong_search(
+      tt, &rtt, s_state, r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
+                      0_minutes, 0U}},
+           .destination_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
+                             0_minutes, 0U}},
+           .min_connection_count_ = 1U,
+           .with_scheduled_comparison_ = true},
+      direction::kBackward);
+  auto const realtime =
+      raptor_search(tt, &rtt, "D", "A", kWholeDay, direction::kBackward);
+  auto const sched =
+      raptor_search(tt, nullptr, "D", "A", kWholeDay, direction::kBackward);
+
+  ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
+  ASSERT_EQ(1U, sched.size()) << to_string(tt, sched);
+  ASSERT_FALSE(result.journeys_->empty());
+  ASSERT_FALSE(result.journeys_scheduled_->empty());
+
+  EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *result.journeys_));
+  EXPECT_EQ(to_string(tt, sched), to_string(tt, *result.journeys_scheduled_));
+  EXPECT_NE(result.journeys_scheduled_->begin()->arrival_time(),
+           result.journeys_->begin()->arrival_time());
+}
+
+TEST(rt_modes, pong_combined_reroutes_delay_fwd) {
+  auto const tt = load_tt(reroute_test_files());
+  auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
+
+  auto const msg = make_delay_msg("TAB1", "20190503", "09:00:00", 2U, 10);
+  auto const stats = rt::gtfsrt_update_msg(tt, rtt, kSrc, "tag", msg);
+  ASSERT_EQ(stats.total_entities_success_, 1U);
+
+  auto const a = tt.locations_.location_id_to_idx_.at({"A", kSrc});
+  auto const c = tt.locations_.location_id_to_idx_.at({"C", kSrc});
+
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
+  auto const result = pong_search(
+      tt, &rtt, s_state, r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{a, 0_minutes, 0U}},
+           .destination_ = {{c, 0_minutes, 0U}},
+           .min_connection_count_ = 1U,
+           .with_scheduled_comparison_ = true},
+      direction::kForward);
+
+  auto rt_s_state = search_state{};
+  auto rt_r_state = raptor_state{};
+  auto const realtime = raptor_search(
+      tt, &rtt, rt_s_state, rt_r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{a, 0_minutes, 0U}},
+           .destination_ = {{c, 0_minutes, 0U}}},
+      direction::kForward);
+
+  auto sched_s_state = search_state{};
+  auto sched_r_state = raptor_state{};
+  auto const sched = raptor_search(
+      tt, nullptr, sched_s_state, sched_r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{a, 0_minutes, 0U}},
+           .destination_ = {{c, 0_minutes, 0U}}},
+      direction::kForward);
+
+  ASSERT_EQ(1U, realtime.journeys_->size())
+      << to_string(tt, &rtt, *realtime.journeys_);
+  ASSERT_EQ(1U, sched.journeys_->size())
+      << to_string(tt, *sched.journeys_);
+  ASSERT_FALSE(result.journeys_->empty());
+  ASSERT_FALSE(result.journeys_scheduled_->empty());
+
+  EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
+            to_string(tt, &rtt, *result.journeys_));
+  EXPECT_EQ(to_string(tt, *sched.journeys_),
+            to_string(tt, *result.journeys_scheduled_));
+
+  auto const sched_str = to_string(tt, *result.journeys_scheduled_);
+  auto const rt_str = to_string(tt, &rtt, *result.journeys_);
+  EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
+  EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
+  EXPECT_NE(std::string::npos, rt_str.find("TDC")) << rt_str;
+  EXPECT_EQ(std::string::npos, rt_str.find("TB2C")) << rt_str;
+}
+
+TEST(rt_modes, pong_combined_reroutes_delay_bwd) {
+  auto const tt = load_tt(reroute_test_files());
+  auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
+
+  auto const msg = make_delay_msg("TAB1", "20190503", "09:00:00", 2U, 10);
+  auto const stats = rt::gtfsrt_update_msg(tt, rtt, kSrc, "tag", msg);
+  ASSERT_EQ(stats.total_entities_success_, 1U);
+
+  auto const a = tt.locations_.location_id_to_idx_.at({"A", kSrc});
+  auto const c = tt.locations_.location_id_to_idx_.at({"C", kSrc});
+
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
+  auto const result = pong_search(
+      tt, &rtt, s_state, r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{c, 0_minutes, 0U}},
+           .destination_ = {{a, 0_minutes, 0U}},
+           .min_connection_count_ = 1U,
+           .with_scheduled_comparison_ = true},
+      direction::kBackward);
+
+  auto rt_s_state = search_state{};
+  auto rt_r_state = raptor_state{};
+  auto const realtime = raptor_search(
+      tt, &rtt, rt_s_state, rt_r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{c, 0_minutes, 0U}},
+           .destination_ = {{a, 0_minutes, 0U}}},
+      direction::kBackward);
+
+  auto sched_s_state = search_state{};
+  auto sched_r_state = raptor_state{};
+  auto const sched = raptor_search(
+      tt, nullptr, sched_s_state, sched_r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{c, 0_minutes, 0U}},
+           .destination_ = {{a, 0_minutes, 0U}}},
+      direction::kBackward);
+
+  ASSERT_EQ(1U, realtime.journeys_->size())
+      << to_string(tt, &rtt, *realtime.journeys_);
+  ASSERT_EQ(1U, sched.journeys_->size())
+      << to_string(tt, *sched.journeys_);
+  ASSERT_FALSE(result.journeys_->empty());
+  ASSERT_FALSE(result.journeys_scheduled_->empty());
+
+  EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
+            to_string(tt, &rtt, *result.journeys_));
+  EXPECT_EQ(to_string(tt, *sched.journeys_),
+            to_string(tt, *result.journeys_scheduled_));
+
+  auto const sched_str = to_string(tt, *result.journeys_scheduled_);
+  auto const rt_str = to_string(tt, &rtt, *result.journeys_);
+  EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
+  EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
+  EXPECT_NE(std::string::npos, rt_str.find("TDC")) << rt_str;
+  EXPECT_EQ(std::string::npos, rt_str.find("TB2C")) << rt_str;
+}
+
+TEST(rt_modes, pong_combined_reroutes_td_footpath_fwd) {
+  auto const tt = load_reroute_tt_with_foot_profile();
+  auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
+
+  enable_td_footpath_override(tt, rtt, 20min);
+
+  auto const a = tt.locations_.location_id_to_idx_.at({"A", kSrc});
+  auto const c = tt.locations_.location_id_to_idx_.at({"C", kSrc});
+
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
+  auto const result = pong_search(
+      tt, &rtt, s_state, r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{a, 0_minutes, 0U}},
+           .destination_ = {{c, 0_minutes, 0U}},
+           .min_connection_count_ = 1U,
+           .prf_idx_ = kFootProfile,
+           .with_scheduled_comparison_ = true},
+      direction::kForward);
+
+  auto rt_s_state = search_state{};
+  auto rt_r_state = raptor_state{};
+  auto const realtime = raptor_search(
+      tt, &rtt, rt_s_state, rt_r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{a, 0_minutes, 0U}},
+           .destination_ = {{c, 0_minutes, 0U}},
+           .prf_idx_ = kFootProfile},
+      direction::kForward);
+
+  auto sched_s_state = search_state{};
+  auto sched_r_state = raptor_state{};
+  auto const sched = raptor_search(
+      tt, nullptr, sched_s_state, sched_r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{a, 0_minutes, 0U}},
+           .destination_ = {{c, 0_minutes, 0U}},
+           .prf_idx_ = kFootProfile},
+      direction::kForward);
+
+  ASSERT_EQ(1U, realtime.journeys_->size())
+      << to_string(tt, &rtt, *realtime.journeys_);
+  ASSERT_EQ(1U, sched.journeys_->size())
+      << to_string(tt, *sched.journeys_);
+  ASSERT_FALSE(result.journeys_->empty());
+  ASSERT_FALSE(result.journeys_scheduled_->empty());
+
+  EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
+            to_string(tt, &rtt, *result.journeys_));
+  EXPECT_EQ(to_string(tt, *sched.journeys_),
+            to_string(tt, *result.journeys_scheduled_));
+
+  auto const sched_str = to_string(tt, *result.journeys_scheduled_);
+  auto const rt_str = to_string(tt, &rtt, *result.journeys_);
+  EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
+  EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
+  EXPECT_NE(std::string::npos, rt_str.find("TDC")) << rt_str;
+  EXPECT_EQ(std::string::npos, rt_str.find("TB2C")) << rt_str;
+}
+
+TEST(rt_modes, pong_combined_reroutes_td_footpath_bwd) {
+  auto const tt = load_reroute_tt_with_foot_profile();
+  auto rtt = rt::create_rt_timetable(tt, date::sys_days{2019_y / May / 3});
+
+  enable_td_footpath_override(tt, rtt, 20min);
+
+  auto const a = tt.locations_.location_id_to_idx_.at({"A", kSrc});
+  auto const c = tt.locations_.location_id_to_idx_.at({"C", kSrc});
+
+  auto s_state = search_state{};
+  auto r_state = raptor_state{};
+  auto const result = pong_search(
+      tt, &rtt, s_state, r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{c, 0_minutes, 0U}},
+           .destination_ = {{a, 0_minutes, 0U}},
+           .min_connection_count_ = 1U,
+           .prf_idx_ = kFootProfile,
+           .with_scheduled_comparison_ = true},
+      direction::kBackward);
+
+  auto rt_s_state = search_state{};
+  auto rt_r_state = raptor_state{};
+  auto const realtime = raptor_search(
+      tt, &rtt, rt_s_state, rt_r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{c, 0_minutes, 0U}},
+           .destination_ = {{a, 0_minutes, 0U}},
+           .prf_idx_ = kFootProfile},
+      direction::kBackward);
+
+  auto sched_s_state = search_state{};
+  auto sched_r_state = raptor_state{};
+  auto const sched = raptor_search(
+      tt, nullptr, sched_s_state, sched_r_state,
+      query{.start_time_ = kWholeDay,
+           .start_ = {{c, 0_minutes, 0U}},
+           .destination_ = {{a, 0_minutes, 0U}},
+           .prf_idx_ = kFootProfile},
+      direction::kBackward);
+
+  ASSERT_EQ(1U, realtime.journeys_->size())
+      << to_string(tt, &rtt, *realtime.journeys_);
+  ASSERT_EQ(1U, sched.journeys_->size())
+      << to_string(tt, *sched.journeys_);
+  ASSERT_FALSE(result.journeys_->empty());
+  ASSERT_FALSE(result.journeys_scheduled_->empty());
+
+  EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
+            to_string(tt, &rtt, *result.journeys_));
+  EXPECT_EQ(to_string(tt, *sched.journeys_),
+            to_string(tt, *result.journeys_scheduled_));
+
+  auto const sched_str = to_string(tt, *result.journeys_scheduled_);
+  auto const rt_str = to_string(tt, &rtt, *result.journeys_);
+  EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
+  EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
+  EXPECT_NE(std::string::npos, rt_str.find("TDC")) << rt_str;
+  EXPECT_EQ(std::string::npos, rt_str.find("TB2C")) << rt_str;
 }
