@@ -23,8 +23,8 @@ day_idx_t make_base(timetable const& tt, unixtime_t start_time) {
                        .count()};
 }
 
-template <direction SearchDir, bool Rt>
-void run_raptor(raptor<SearchDir, Rt, kVias, search_mode::kOneToAll>&& algo,
+template <direction SearchDir, rt_mode Mode>
+void run_raptor(raptor<SearchDir, Mode, kVias, search_mode::kOneToAll>&& algo,
                 timetable const& tt,
                 unixtime_t const& start_time,
                 query const& q) {
@@ -49,7 +49,7 @@ void run_raptor(raptor<SearchDir, Rt, kVias, search_mode::kOneToAll>&& algo,
   algo.execute(start_time, q.max_transfers_, worst_time_at_dest, results);
 }
 
-template <direction SearchDir, bool Rt>
+template <direction SearchDir, rt_mode Mode>
 raptor_state one_to_all(timetable const& tt,
                         rt_timetable const* rtt,
                         query const& q) {
@@ -68,7 +68,7 @@ raptor_state one_to_all(timetable const& tt,
   auto const base = make_base(tt, start_time);
   auto const is_wheelchair = q.prf_idx_ == kWheelchairProfile;
 
-  auto r = raptor<SearchDir, Rt, kVias, search_mode::kOneToAll>{
+  auto r = raptor<SearchDir, Mode, kVias, search_mode::kOneToAll>{
       tt,
       rtt,
       state,
@@ -97,9 +97,9 @@ raptor_state one_to_all(timetable const& tt,
                         rt_timetable const* rtt,
                         query const& q) {
   if (rtt == nullptr) {
-    return one_to_all<SearchDir, false>(tt, rtt, q);
+    return one_to_all<SearchDir, rt_mode::off>(tt, rtt, q);
   } else {
-    return one_to_all<SearchDir, true>(tt, rtt, q);
+    return one_to_all<SearchDir, rt_mode::on>(tt, rtt, q);
   }
 }
 

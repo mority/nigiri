@@ -27,7 +27,7 @@ bool is_journey_start(timetable const& tt,
   });
 }
 
-template <direction SearchDir, via_offset_t Vias>
+template <direction SearchDir, via_offset_t Vias, bool Sched>
 std::optional<journey::leg> find_start_footpath(timetable const& tt,
                                                 query const& q,
                                                 journey const& j,
@@ -81,7 +81,8 @@ std::optional<journey::leg> find_start_footpath(timetable const& tt,
       kFwd ? tt.locations_.footpaths_in_[q.prf_idx_][leg_start_location]
            : tt.locations_.footpaths_out_[q.prf_idx_][leg_start_location];
   auto const j_start_time = unix_to_delta(base, j.start_time_);
-  auto const round_times = state.get_round_times<Vias>();
+  auto const round_times = Sched ? state.get_round_times_sched<Vias>()
+                                 : state.get_round_times<Vias>();
   auto const fp_target_time = round_times[0][to_idx(leg_start_location)][0];
 
   if (q.start_match_mode_ == location_match_mode::kIntermodal) {
@@ -159,7 +160,7 @@ std::optional<journey::leg> find_start_footpath(timetable const& tt,
   throw utl::fail("no valid journey start found");
 }
 
-template <direction SearchDir, via_offset_t Vias>
+template <direction SearchDir, via_offset_t Vias, bool Sched>
 void reconstruct_journey_with_vias(timetable const& tt,
                                    rt_timetable const* rtt,
                                    query const& q,
@@ -167,6 +168,8 @@ void reconstruct_journey_with_vias(timetable const& tt,
                                    journey& j,
                                    date::sys_days const base,
                                    day_idx_t const base_day_idx) {
+  assert((!Sched || rtt == nullptr) &&
+        "scheduled-slot reconstruction must not read realtime data");
   constexpr auto const kFwd = SearchDir == direction::kForward;
   auto const dir = [&]<typename T>(T const a) {
     return static_cast<T>((kFwd ? 1 : -1) * a);
@@ -180,7 +183,8 @@ void reconstruct_journey_with_vias(timetable const& tt,
     return is_ontrip ? is_better_or_eq(a, b) : a == b;
   };
 
-  auto const round_times = raptor_state.get_round_times<Vias>();
+  auto const round_times = Sched ? raptor_state.get_round_times_sched<Vias>()
+                                 : raptor_state.get_round_times<Vias>();
 
   auto v = static_cast<via_offset_t>(q.via_stops_.size());
 
@@ -811,7 +815,7 @@ void reconstruct_journey_with_vias(timetable const& tt,
   }
 
   auto init_fp =
-      find_start_footpath<SearchDir, Vias>(tt, q, j, raptor_state, base);
+      find_start_footpath<SearchDir, Vias, Sched>(tt, q, j, raptor_state, base);
   if (init_fp.has_value()) {
     j.add(std::move(*init_fp));
   }
@@ -876,7 +880,7 @@ void reconstruct_journey_with_vias(timetable const& tt,
 #endif
 }
 
-template <direction SearchDir>
+template <direction SearchDir, bool Sched>
 void reconstruct_journey(timetable const& tt,
                          rt_timetable const* rtt,
                          query const& q,
@@ -889,32 +893,52 @@ void reconstruct_journey(timetable const& tt,
 
   switch (q.via_stops_.size()) {
     case 0:
-      return reconstruct_journey_with_vias<SearchDir, 0>(
+      return reconstruct_journey_with_vias<SearchDir, 0, Sched>(
           tt, rtt, q, raptor_state, j, base, base_day_idx);
     case 1:
-      return reconstruct_journey_with_vias<SearchDir, 1>(
+      return reconstruct_journey_with_vias<SearchDir, 1, Sched>(
           tt, rtt, q, raptor_state, j, base, base_day_idx);
     case 2:
-      return reconstruct_journey_with_vias<SearchDir, 2>(
+      return reconstruct_journey_with_vias<SearchDir, 2, Sched>(
           tt, rtt, q, raptor_state, j, base, base_day_idx);
   }
   std::unreachable();
 }
 
-template void reconstruct_journey<direction::kForward>(timetable const&,
-                                                       rt_timetable const*,
-                                                       query const&,
-                                                       raptor_state const&,
-                                                       journey&,
-                                                       date::sys_days const,
-                                                       day_idx_t const);
+template void reconstruct_journey<direction::kForward, false>(
+    timetable const&,
+    rt_timetable const*,
+    query const&,
+    raptor_state const&,
+    journey&,
+    date::sys_days const,
+    day_idx_t const);
 
-template void reconstruct_journey<direction::kBackward>(timetable const&,
-                                                        rt_timetable const*,
-                                                        query const&,
-                                                        raptor_state const&,
-                                                        journey&,
-                                                        date::sys_days const,
-                                                        day_idx_t const);
+template void reconstruct_journey<direction::kBackward, false>(
+    timetable const&,
+    rt_timetable const*,
+    query const&,
+    raptor_state const&,
+    journey&,
+    date::sys_days const,
+    day_idx_t const);
+
+template void reconstruct_journey<direction::kForward, true>(
+    timetable const&,
+    rt_timetable const*,
+    query const&,
+    raptor_state const&,
+    journey&,
+    date::sys_days const,
+    day_idx_t const);
+
+template void reconstruct_journey<direction::kBackward, true>(
+    timetable const&,
+    rt_timetable const*,
+    query const&,
+    raptor_state const&,
+    journey&,
+    date::sys_days const,
+    day_idx_t const);
 
 }  // namespace nigiri::routing

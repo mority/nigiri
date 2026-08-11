@@ -81,6 +81,62 @@ struct raptor_state {
             n_locations_};
   }
 
+  // Scheduled-slot counterparts of get_tmp/get_best/get_round_times, used by
+  // rt_mode::both to track the static-timetable-only labels alongside the
+  // realtime ones stored in tmp_storage_/best_storage_/round_times_storage_.
+  // The dijkstra-derived, per-search lower bound (get_lb() in raptor<>, not
+  // stored here) is schedule-independent and stays shared; get_bounds()
+  // below is a different mechanism (pong's ping->pong bound passing, see
+  // raptor::fill_bounds), which is per-slot -- get_bounds_sched() is its
+  // scheduled-slot counterpart, used to give a static-only pong sub-search
+  // the same ping-bounds pruning a realtime pong sub-search gets.
+  template <via_offset_t Vias>
+  std::span<std::array<delta_t, Vias + 1>> get_tmp_sched() {
+    return {reinterpret_cast<std::array<delta_t, Vias + 1>*>(
+                tmp_storage_sched_.data()),
+            n_locations_};
+  }
+
+  template <via_offset_t Vias>
+  std::span<std::array<delta_t, Vias + 1> const> get_tmp_sched() const {
+    return {reinterpret_cast<std::array<delta_t, Vias + 1> const*>(
+                tmp_storage_sched_.data()),
+            n_locations_};
+  }
+
+  template <via_offset_t Vias>
+  std::span<std::array<delta_t, Vias + 1>> get_best_sched() {
+    return {reinterpret_cast<std::array<delta_t, Vias + 1>*>(
+                best_storage_sched_.data()),
+            n_locations_};
+  }
+
+  template <via_offset_t Vias>
+  std::span<std::array<delta_t, Vias + 1> const> get_best_sched() const {
+    return {reinterpret_cast<std::array<delta_t, Vias + 1> const*>(
+                best_storage_sched_.data()),
+            n_locations_};
+  }
+
+  template <via_offset_t Vias>
+  flat_matrix_view<std::array<delta_t, Vias + 1>> get_round_times_sched() {
+    return {{reinterpret_cast<std::array<delta_t, Vias + 1>*>(
+                 round_times_storage_sched_.data()),
+             n_locations_ * (kMaxTransfers + 2)},
+            kMaxTransfers + 2U,
+            n_locations_};
+  }
+
+  template <via_offset_t Vias>
+  flat_matrix_view<std::array<delta_t, Vias + 1> const> get_round_times_sched()
+      const {
+    return {{reinterpret_cast<std::array<delta_t, Vias + 1> const*>(
+                 round_times_storage_sched_.data()),
+             n_locations_ * (kMaxTransfers + 2)},
+            kMaxTransfers + 2U,
+            n_locations_};
+  }
+
   template <via_offset_t Vias>
   flat_matrix_view<std::array<delta_t, Vias + 1>> get_bounds() {
     return {{reinterpret_cast<std::array<delta_t, Vias + 1>*>(
@@ -99,6 +155,25 @@ struct raptor_state {
             n_locations_};
   }
 
+  template <via_offset_t Vias>
+  flat_matrix_view<std::array<delta_t, Vias + 1>> get_bounds_sched() {
+    return {{reinterpret_cast<std::array<delta_t, Vias + 1>*>(
+                 bounds_storage_sched_.data()),
+             n_locations_ * (kMaxTransfers + 2)},
+            kMaxTransfers + 2U,
+            n_locations_};
+  }
+
+  template <via_offset_t Vias>
+  flat_matrix_view<std::array<delta_t, Vias + 1> const> get_bounds_sched()
+      const {
+    return {{reinterpret_cast<std::array<delta_t, Vias + 1> const*>(
+                 bounds_storage_sched_.data()),
+             n_locations_ * (kMaxTransfers + 2)},
+            kMaxTransfers + 2U,
+            n_locations_};
+  }
+
   unsigned n_locations_{};
   std::vector<delta_t> tmp_storage_;
   std::vector<delta_t> best_storage_;
@@ -108,6 +183,15 @@ struct raptor_state {
   bitvec prev_station_mark_;
   bitvec route_mark_;
   bitvec rt_transport_mark_;
+
+  // Scheduled-slot state for rt_mode::both (see get_*_sched() above).
+  // Unused (but still allocated) by rt_mode::off/on.
+  std::vector<delta_t> tmp_storage_sched_;
+  std::vector<delta_t> best_storage_sched_;
+  std::vector<delta_t> round_times_storage_sched_;
+  std::vector<delta_t> bounds_storage_sched_;
+  bitvec station_mark_sched_;
+  bitvec prev_station_mark_sched_;
 };
 
 }  // namespace nigiri::routing

@@ -19,12 +19,27 @@
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/routing/raptor/debug.h"
+#include "nigiri/routing/raptor/rt_mode.h"
 #include "nigiri/routing/start_times.h"
 #include "nigiri/rt/rt_timetable.h"
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
 
 namespace nigiri::routing {
+
+// search<> is generic over Algo (raptor<>, gpu::gpu_raptor<>, tb::query_engine
+// -- only raptor<> has an RtMode/dual-slot notion at all. Detected via SFINAE
+// so the other Algo types don't need a dummy kRtMode member.
+template <typename Algo, typename = void>
+struct algo_is_dual_slot : std::false_type {};
+
+template <typename Algo>
+struct algo_is_dual_slot<Algo,
+                         std::enable_if_t<Algo::kRtMode == rt_mode::both>>
+    : std::true_type {};
+
+template <typename Algo>
+constexpr auto const kAlgoIsDualSlot = algo_is_dual_slot<Algo>::value;
 
 struct search_state {
   search_state() = default;
@@ -40,6 +55,8 @@ struct search_state {
   std::vector<std::uint16_t> dist_to_dest_;
   std::vector<start> starts_;
   pareto_set<journey> results_;
+  // Only populated for rt_mode::both (see routing_result::journeys_scheduled_).
+  pareto_set<journey> results_sched_;
 };
 
 struct search_stats {
@@ -73,6 +90,9 @@ struct routing_result {
   interval<unixtime_t> interval_;
   search_stats search_stats_;
   std::map<std::string, std::uint64_t> algo_stats_;
+  // Scheduled-slot journeys for rt_mode::both searches (see
+  // raptor::reconstruct_sched); nullptr/empty for off/on searches.
+  pareto_set<journey> const* journeys_scheduled_{nullptr};
 };
 
 template <direction SearchDir, typename Algo>
@@ -206,10 +226,11 @@ struct search {
     auto scope = opentelemetry::trace::Scope{span};
 
     state_.results_.clear();
+    state_.results_sched_.clear();
 
     if (start_dest_overlap()) {
       return {&state_.results_, search_interval_, stats_,
-              algo_.get_stats().to_map()};
+              algo_.get_stats().to_map(), &state_.results_sched_};
     }
 
     auto const itv_est = interval_estimator<SearchDir>{tt_, q_};
@@ -330,10 +351,31 @@ struct search {
         return std::tuple{a.start_time_, a.transfers_} <
                std::tuple{b.start_time_, b.transfers_};
       });
+
+      if constexpr (kAlgoIsDualSlot<Algo>) {
+        // Scheduled-slot results get the same start_time/travel_time
+        // filtering as the rt slot, but not enrich_with_slow_direct (a
+        // realtime-adjacent feature not part of this comparison).
+        utl::erase_if(state_.results_sched_, [&](journey const& j) {
+          return !search_interval_.contains(j.start_time_) ||
+                 j.travel_time() >= fastest_direct_ ||
+                 j.travel_time() > q_.max_travel_time_;
+        });
+
+        utl::sort(state_.results_sched_,
+                  [](journey const& a, journey const& b) {
+                    return std::tuple{a.start_time_, a.transfers_} <
+                           std::tuple{b.start_time_, b.transfers_};
+                  });
+      }
     }
 
     utl::erase_if(state_.results_,
                   [&](auto&& j) { return !j.is_reconstructed_; });
+    if constexpr (kAlgoIsDualSlot<Algo>) {
+      utl::erase_if(state_.results_sched_,
+                    [&](auto&& j) { return !j.is_reconstructed_; });
+    }
 
     stats_.execute_time_ =
         std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -341,7 +383,8 @@ struct search {
     return {.journeys_ = &state_.results_,
             .interval_ = search_interval_,
             .search_stats_ = stats_,
-            .algo_stats_ = algo_.get_stats().to_map()};
+            .algo_stats_ = algo_.get_stats().to_map(),
+            .journeys_scheduled_ = &state_.results_sched_};
   }
 
 private:
@@ -414,6 +457,11 @@ private:
     utl::erase_if(state_.results_, [&](journey const& j) {
       return !search_interval_.contains(j.start_time_);
     });
+    if constexpr (kAlgoIsDualSlot<Algo>) {
+      utl::erase_if(state_.results_sched_, [&](journey const& j) {
+        return !search_interval_.contains(j.start_time_);
+      });
+    }
   }
 
   void search_interval() {
@@ -450,8 +498,13 @@ private:
               start_time + (kFwd ? 1 : -1) *
                                (std::min(fastest_direct_, q_.max_travel_time_) +
                                 duration_t{1});
-          algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
-                        state_.results_);
+          if constexpr (kAlgoIsDualSlot<Algo>) {
+            algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
+                         state_.results_, &state_.results_sched_);
+          } else {
+            algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
+                         state_.results_);
+          }
           kFwd ? ++stats_.n_execute_fwd_ : ++stats_.n_execute_bwd_;
 
           for (auto& j : state_.results_) {
@@ -470,6 +523,22 @@ private:
                     "exception",
                     {{"exception.message",
                       fmt::format("reconstruct failed: {}", e.what())}});
+              }
+            }
+          }
+
+          if constexpr (kAlgoIsDualSlot<Algo>) {
+            for (auto& j : state_.results_sched_) {
+              if (!j.is_reconstructed_ && !j.error_ &&
+                  (is_ontrip() || search_interval_.contains(j.start_time_)) &&
+                  j.travel_time() < fastest_direct_) {
+                try {
+                  algo_.reconstruct_sched(q_, j);
+                } catch (std::exception const& e) {
+                  j.error_ = true;
+                  log(log_lvl::error, "search",
+                      "scheduled-slot reconstruct failed: {}", e.what());
+                }
               }
             }
           }

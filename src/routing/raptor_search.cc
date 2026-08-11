@@ -33,7 +33,18 @@ routing_result raptor_search_with_vias(
     using algo_t = std::conditional_t<
         std::is_same_v<AlgoState, gpu::gpu_raptor_state>,
         gpu::gpu_raptor<SearchDir, false>,
-        raptor<SearchDir, false, Vias, search_mode::kOneToOne>>;
+        raptor<SearchDir, rt_mode::off, Vias, search_mode::kOneToOne>>;
+    return search<SearchDir, algo_t>{tt,      rtt,          s_state,
+                                     r_state, std::move(q), timeout}
+        .execute();
+  } else if (q.with_scheduled_comparison_) {
+    // Only supported for the CPU raptor; GPU falls back to plain rt_mode::on
+    // (with_scheduled_comparison_ is silently ignored -- no error, just no
+    // journeys_scheduled_) since gpu_raptor has no dual-slot support.
+    using algo_t = std::conditional_t<
+        std::is_same_v<AlgoState, gpu::gpu_raptor_state>,
+        gpu::gpu_raptor<SearchDir, false>,
+        raptor<SearchDir, rt_mode::both, Vias, search_mode::kOneToOne>>;
     return search<SearchDir, algo_t>{tt,      rtt,          s_state,
                                      r_state, std::move(q), timeout}
         .execute();
@@ -41,7 +52,7 @@ routing_result raptor_search_with_vias(
     using algo_t = std::conditional_t<
         std::is_same_v<AlgoState, gpu::gpu_raptor_state>,
         gpu::gpu_raptor<SearchDir, false>,
-        raptor<SearchDir, true, Vias, search_mode::kOneToOne>>;
+        raptor<SearchDir, rt_mode::on, Vias, search_mode::kOneToOne>>;
     return search<SearchDir, algo_t>{tt,      rtt,          s_state,
                                      r_state, std::move(q), timeout}
         .execute();
