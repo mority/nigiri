@@ -732,24 +732,14 @@ private:
   }
 
   void update_transfers(unsigned const k) {
-    auto const process = [&](std::uint64_t const i) {
+    state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       for (auto v = 0U; v != Vias + 1; ++v) {
-        auto const tmp_time = tmp_[i][v];
-        if (tmp_time == kInvalid) {
-          continue;
-        }
-
+        // Schedule-independent (is_via_/via_stops_/transfer_time_settings_
+        // are shared), so computed once and reused by both slots below.
         auto const is_via = v != Vias && is_via_[v][i];
         auto const target_v = is_via ? v + 1 : v;
         auto const is_dest = target_v == Vias && is_dest_[i];
         auto const stay = is_via ? via_stops_[v].stay_ : 0_minutes;
-
-        trace(
-            "  loc={}, v={}, tmp={}, is_dest={}, is_via={}, target_v={}, "
-            "stay={}\n",
-            loc{tt_, location_idx_t{i}}, v, to_unix(tmp_time), is_dest, is_via,
-            target_v, stay);
-
         auto const transfer_time =
             (!is_intermodal_dest() && is_dest)
                 ? 0
@@ -757,136 +747,122 @@ private:
                       transfer_time_settings_,
                       tt_.locations_.transfer_time_[location_idx_t{i}]
                           .count()));
-        auto const fp_target_time =
-            clamp(tmp_time + transfer_time + dir(stay.count()));
 
-        if (bounds_last_k_ == 0U &&
-            is_better(fp_target_time, best_[i][target_v])) {
-          round_times_[k][i][target_v] =
-              get_best(fp_target_time, round_times_[k][i][target_v]);
-        }
+        auto const tmp_time = tmp_[i][v];
+        if (tmp_time != kInvalid) {
+          trace(
+              "  loc={}, v={}, tmp={}, is_dest={}, is_via={}, target_v={}, "
+              "stay={}\n",
+              loc{tt_, location_idx_t{i}}, v, to_unix(tmp_time), is_dest,
+              is_via, target_v, stay);
 
-        trace(
-            "    transfer_time={}, fp_target_time={}, best@target={}, "
-            "dest={}\n",
-            transfer_time, to_unix(fp_target_time), to_unix(best_[i][target_v]),
-            to_unix(time_at_dest_[k]));
-
-        if (is_better(fp_target_time, best_[i][target_v]) &&
-            is_better_loose(fp_target_time, time_at_dest_[k])) {
-          if (!lb_reachable(i) ||
-              !is_better_loose(fp_target_time + dir(get_lb(i)),
-                               time_at_dest_[k])) {
-            ++stats_.fp_update_prevented_by_lower_bound_;
-            continue;
-          }
-          if (!within_bounds(k, i, fp_target_time, target_v)) {
-            continue;
-          }
-
-          ++stats_.n_earliest_arrival_updated_by_footpath_;
-          round_times_[k][i][target_v] = fp_target_time;
-          best_[i][target_v] = fp_target_time;
-          state_.station_mark_.set(i, true);
-          if (is_dest) {
-            update_time_at_dest(k, fp_target_time);
-          }
-        }
-      }
-    };
-
-    if constexpr (RtMode == rt_mode::both) {
-      // Scheduled-slot mirror: same transfer-time computation (schedule-
-      // independent: is_via_/via_stops_/transfer_time_settings_ are shared),
-      // promoted through the sched storage set instead.
-      auto const process_sched = [&](std::uint64_t const i) {
-        for (auto v = 0U; v != Vias + 1; ++v) {
-          auto const tmp_time = tmp_sched_[i][v];
-          if (tmp_time == kInvalid) {
-            continue;
-          }
-
-          auto const is_via = v != Vias && is_via_[v][i];
-          auto const target_v = is_via ? v + 1 : v;
-          auto const is_dest = target_v == Vias && is_dest_[i];
-          auto const stay = is_via ? via_stops_[v].stay_ : 0_minutes;
-
-          auto const transfer_time =
-              (!is_intermodal_dest() && is_dest)
-                  ? 0
-                  : dir(adjusted_transfer_time(
-                        transfer_time_settings_,
-                        tt_.locations_.transfer_time_[location_idx_t{i}]
-                            .count()));
           auto const fp_target_time =
               clamp(tmp_time + transfer_time + dir(stay.count()));
 
           if (bounds_last_k_ == 0U &&
-              is_better(fp_target_time, best_sched_[i][target_v])) {
-            round_times_sched_[k][i][target_v] =
-                get_best(fp_target_time, round_times_sched_[k][i][target_v]);
+              is_better(fp_target_time, best_[i][target_v])) {
+            round_times_[k][i][target_v] =
+                get_best(fp_target_time, round_times_[k][i][target_v]);
           }
 
-          if (is_better(fp_target_time, best_sched_[i][target_v]) &&
-              is_better_loose(fp_target_time, time_at_dest_sched_[k])) {
+          trace(
+              "    transfer_time={}, fp_target_time={}, best@target={}, "
+              "dest={}\n",
+              transfer_time, to_unix(fp_target_time),
+              to_unix(best_[i][target_v]), to_unix(time_at_dest_[k]));
+
+          if (is_better(fp_target_time, best_[i][target_v]) &&
+              is_better_loose(fp_target_time, time_at_dest_[k])) {
             if (!lb_reachable(i) ||
                 !is_better_loose(fp_target_time + dir(get_lb(i)),
+                                 time_at_dest_[k])) {
+              ++stats_.fp_update_prevented_by_lower_bound_;
+            } else if (!within_bounds(k, i, fp_target_time, target_v)) {
+              // no-op: outside pong bounds
+            } else {
+              ++stats_.n_earliest_arrival_updated_by_footpath_;
+              round_times_[k][i][target_v] = fp_target_time;
+              best_[i][target_v] = fp_target_time;
+              state_.station_mark_.set(i, true);
+              if (is_dest) {
+                update_time_at_dest(k, fp_target_time);
+              }
+            }
+          }
+        }
+
+        if constexpr (RtMode == rt_mode::both) {
+          auto const tmp_time_sched = tmp_sched_[i][v];
+          if (tmp_time_sched == kInvalid) {
+            continue;
+          }
+
+          auto const fp_target_time_sched =
+              clamp(tmp_time_sched + transfer_time + dir(stay.count()));
+
+          if (bounds_last_k_ == 0U &&
+              is_better(fp_target_time_sched, best_sched_[i][target_v])) {
+            round_times_sched_[k][i][target_v] = get_best(
+                fp_target_time_sched, round_times_sched_[k][i][target_v]);
+          }
+
+          if (is_better(fp_target_time_sched, best_sched_[i][target_v]) &&
+              is_better_loose(fp_target_time_sched, time_at_dest_sched_[k])) {
+            if (!lb_reachable(i) ||
+                !is_better_loose(fp_target_time_sched + dir(get_lb(i)),
                                  time_at_dest_sched_[k])) {
               ++stats_.fp_update_prevented_by_lower_bound_;
               continue;
             }
-            if (!within_bounds(k, i, fp_target_time, target_v)) {
+            if (!within_bounds(k, i, fp_target_time_sched, target_v)) {
               continue;
             }
 
-            round_times_sched_[k][i][target_v] = fp_target_time;
-            best_sched_[i][target_v] = fp_target_time;
+            round_times_sched_[k][i][target_v] = fp_target_time_sched;
+            best_sched_[i][target_v] = fp_target_time_sched;
             state_.station_mark_.set(i, true);
             if (is_dest) {
-              update_time_at_dest_sched(k, fp_target_time);
+              update_time_at_dest_sched(k, fp_target_time_sched);
             }
           }
         }
-      };
-      // Single sweep: both slots key off the same (merged) prev_station_mark_.
-      state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-        process(i);
-        process_sched(i);
-      });
-    } else {
-      state_.prev_station_mark_.for_each_set_bit(process);
-    }
+      }
+    });
   }
 
   void update_footpaths(unsigned const k) {
-    auto const process = [&](std::uint64_t const i) {
+    state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       auto const l_idx = location_idx_t{i};
-      if constexpr (RtMode != rt_mode::off) {
-        if (prf_idx_ != 0U && (kFwd ? rtt_->has_td_footpaths_out_
-                                    : rtt_->has_td_footpaths_in_)[prf_idx_]
-                                  .test(l_idx)) {
-          return;
+
+      // td_footpaths are an rtt_-only concept: the rt slot skips this
+      // location entirely if it has any, but the sched slot -- which always
+      // uses the static footpath graph below -- must still process it.
+      auto const skip_rt = [&] {
+        if constexpr (RtMode != rt_mode::off) {
+          return prf_idx_ != 0U &&
+                 (kFwd ? rtt_->has_td_footpaths_out_
+                       : rtt_->has_td_footpaths_in_)[prf_idx_]
+                     .test(l_idx);
+        } else {
+          return false;
         }
-      }
+      }();
 
       auto const& fps = kFwd ? tt_.locations_.footpaths_out_[prf_idx_][l_idx]
                              : tt_.locations_.footpaths_in_[prf_idx_][l_idx];
 
       for (auto const& fp : fps) {
-        ++stats_.n_footpaths_visited_;
-
         auto const target = to_idx(fp.target());
 
-        for (auto v = 0U; v != Vias + 1; ++v) {
-          auto const tmp_time = tmp_[i][v];
-          if (tmp_time == kInvalid) {
-            continue;
-          }
+        if (!skip_rt) {
+          ++stats_.n_footpaths_visited_;
+        }
 
+        for (auto v = 0U; v != Vias + 1; ++v) {
+          // Schedule-independent, so computed once and reused by both slots.
           auto const start_is_via =
               v != Vias && is_via_[v][static_cast<bitvec::size_type>(i)];
           auto const start_v = start_is_via ? v + 1 : v;
-
           auto const target_is_via =
               start_v != Vias && is_via_[start_v][target];
           auto const target_v = target_is_via ? start_v + 1 : start_v;
@@ -898,115 +874,89 @@ private:
             stay += via_stops_[start_v].stay_;
           }
 
-          auto const fp_target_time = clamp(
-              tmp_time + dir(adjusted_transfer_time(transfer_time_settings_,
-                                                    fp.duration().count()) +
-                             stay.count()));
+          if (!skip_rt) {
+            auto const tmp_time = tmp_[i][v];
+            if (tmp_time != kInvalid) {
+              auto const fp_target_time = clamp(
+                  tmp_time + dir(adjusted_transfer_time(
+                                     transfer_time_settings_,
+                                     fp.duration().count()) +
+                                 stay.count()));
 
-          if (bounds_last_k_ == 0U &&
-              is_better(fp_target_time, best_[target][target_v])) {
-            round_times_[k][target][target_v] =
-                get_best(fp_target_time, round_times_[k][target][target_v]);
+              if (bounds_last_k_ == 0U &&
+                  is_better(fp_target_time, best_[target][target_v])) {
+                round_times_[k][target][target_v] = get_best(
+                    fp_target_time, round_times_[k][target][target_v]);
+              }
+
+              if (is_better(fp_target_time, best_[target][target_v]) &&
+                  is_better_loose(fp_target_time, time_at_dest_[k])) {
+                if (!lb_reachable(target) ||
+                    !is_better_loose(fp_target_time + dir(get_lb(target)),
+                                     time_at_dest_[k])) {
+                  ++stats_.fp_update_prevented_by_lower_bound_;
+                } else if (!within_bounds(k, target, fp_target_time,
+                                          target_v)) {
+                  // no-op: outside pong bounds
+                } else {
+                  ++stats_.n_earliest_arrival_updated_by_footpath_;
+                  round_times_[k][target][target_v] = fp_target_time;
+                  best_[target][target_v] = fp_target_time;
+                  state_.station_mark_.set(target, true);
+                  if (target_v == Vias && is_dest_[target]) {
+                    update_time_at_dest(k, fp_target_time);
+                  }
+                }
+              }
+            }
           }
 
-          if (is_better(fp_target_time, best_[target][target_v]) &&
-              is_better_loose(fp_target_time, time_at_dest_[k])) {
-            if (!lb_reachable(target) ||
-                !is_better_loose(fp_target_time + dir(get_lb(target)),
-                                 time_at_dest_[k])) {
-              ++stats_.fp_update_prevented_by_lower_bound_;
-              continue;
-            }
-            if (!within_bounds(k, target, fp_target_time, target_v)) {
+          if constexpr (RtMode == rt_mode::both) {
+            auto const tmp_time_sched = tmp_sched_[i][v];
+            if (tmp_time_sched == kInvalid) {
               continue;
             }
 
-            ++stats_.n_earliest_arrival_updated_by_footpath_;
-            round_times_[k][target][target_v] = fp_target_time;
-            best_[target][target_v] = fp_target_time;
-            state_.station_mark_.set(target, true);
-            if (target_v == Vias && is_dest_[target]) {
-              update_time_at_dest(k, fp_target_time);
-            }
-          }
-        }
-      }
-    };
-
-    if constexpr (RtMode == rt_mode::both) {
-      // Scheduled slot: always the static footpath graph, never the
-      // td_footpaths skip-check above (that's an rtt_-only concept the
-      // sched slot must never read).
-      auto const process_sched = [&](std::uint64_t const i) {
-        auto const l_idx = location_idx_t{i};
-        auto const& fps = kFwd ? tt_.locations_.footpaths_out_[prf_idx_][l_idx]
-                               : tt_.locations_.footpaths_in_[prf_idx_][l_idx];
-
-        for (auto const& fp : fps) {
-          auto const target = to_idx(fp.target());
-
-          for (auto v = 0U; v != Vias + 1; ++v) {
-            auto const tmp_time = tmp_sched_[i][v];
-            if (tmp_time == kInvalid) {
-              continue;
-            }
-
-            auto const start_is_via =
-                v != Vias && is_via_[v][static_cast<bitvec::size_type>(i)];
-            auto const start_v = start_is_via ? v + 1 : v;
-
-            auto const target_is_via =
-                start_v != Vias && is_via_[start_v][target];
-            auto const target_v = target_is_via ? start_v + 1 : start_v;
-            auto stay = 0_minutes;
-            if (start_is_via) {
-              stay += via_stops_[v].stay_;
-            }
-            if (target_is_via) {
-              stay += via_stops_[start_v].stay_;
-            }
-
-            auto const fp_target_time = clamp(
-                tmp_time + dir(adjusted_transfer_time(transfer_time_settings_,
-                                                      fp.duration().count()) +
-                               stay.count()));
+            auto const fp_target_time_sched = clamp(
+                tmp_time_sched +
+                dir(adjusted_transfer_time(transfer_time_settings_,
+                                           fp.duration().count()) +
+                    stay.count()));
 
             if (bounds_last_k_ == 0U &&
-                is_better(fp_target_time, best_sched_[target][target_v])) {
-              round_times_sched_[k][target][target_v] = get_best(
-                  fp_target_time, round_times_sched_[k][target][target_v]);
+                is_better(fp_target_time_sched,
+                          best_sched_[target][target_v])) {
+              round_times_sched_[k][target][target_v] =
+                  get_best(fp_target_time_sched,
+                          round_times_sched_[k][target][target_v]);
             }
 
-            if (is_better(fp_target_time, best_sched_[target][target_v]) &&
-                is_better_loose(fp_target_time, time_at_dest_sched_[k])) {
+            if (is_better(fp_target_time_sched,
+                          best_sched_[target][target_v]) &&
+                is_better_loose(fp_target_time_sched,
+                                time_at_dest_sched_[k])) {
               if (!lb_reachable(target) ||
-                  !is_better_loose(fp_target_time + dir(get_lb(target)),
+                  !is_better_loose(fp_target_time_sched + dir(get_lb(target)),
                                    time_at_dest_sched_[k])) {
                 ++stats_.fp_update_prevented_by_lower_bound_;
                 continue;
               }
-              if (!within_bounds(k, target, fp_target_time, target_v)) {
+              if (!within_bounds(k, target, fp_target_time_sched,
+                                 target_v)) {
                 continue;
               }
 
-              round_times_sched_[k][target][target_v] = fp_target_time;
-              best_sched_[target][target_v] = fp_target_time;
+              round_times_sched_[k][target][target_v] = fp_target_time_sched;
+              best_sched_[target][target_v] = fp_target_time_sched;
               state_.station_mark_.set(target, true);
               if (target_v == Vias && is_dest_[target]) {
-                update_time_at_dest_sched(k, fp_target_time);
+                update_time_at_dest_sched(k, fp_target_time_sched);
               }
             }
           }
         }
-      };
-      // Single sweep: both slots key off the same (merged) prev_station_mark_.
-      state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-        process(i);
-        process_sched(i);
-      });
-    } else {
-      state_.prev_station_mark_.for_each_set_bit(process);
-    }
+      }
+    });
   }
 
   void update_td_offsets(unsigned const k) {
@@ -1125,13 +1075,18 @@ private:
     // schedule-independent (static distances resp. q.td_dest_), so they're
     // shared between slots; only the tmp_/round_times_/best_/time_at_dest_
     // storage differs.
-    auto const process = [&](auto const i) {
+    state_.prev_station_mark_.for_each_set_bit([&](auto const i) {
       if (!end_reachable_.test(i)) {
         return;
       }
 
       auto const l = location_idx_t{i};
-      if (dist_to_end_[i] != std::numeric_limits<std::uint16_t>::max()) {
+      auto const has_static =
+          dist_to_end_[i] != std::numeric_limits<std::uint16_t>::max();
+      auto const td_it = td_dist_to_end_.find(l);
+      auto const has_td = td_it != end(td_dist_to_end_);
+
+      if (has_static) {
         // Case 1: l is last via -> add stay
         if constexpr (Vias != 0U) {
           constexpr auto v = Vias - 1U;
@@ -1145,52 +1100,7 @@ private:
               update_time_at_dest(k, end_time);
             }
           }
-        }
-
-        // Case 2: l is no via -> don't add stay
-        auto const tmp_time = tmp_[i][Vias];
-        if (tmp_time == kInvalid) {
-          return;
-        }
-
-        auto const end_time = clamp(tmp_time + dir(dist_to_end_[i]));
-        if (is_better(end_time, time_at_dest_[k])) {
-          round_times_[k][kIntermodalTarget][Vias] = end_time;
-          best_[kIntermodalTarget][Vias] = end_time;
-          update_time_at_dest(k, end_time);
-        }
-      }
-
-      if (auto const it = td_dist_to_end_.find(l); it != end(td_dist_to_end_)) {
-        auto const fp_start_time = tmp_[i][Vias];
-        if (fp_start_time == kInvalid) {
-          return;
-        }
-        auto const fp =
-            get_td_duration<SearchDir>(it->second, to_unix(fp_start_time));
-        if (fp.has_value()) {
-          auto const& [duration, _] = *fp;
-          auto const end_time = clamp(fp_start_time + dir(duration.count()));
-          if (is_better(end_time, time_at_dest_[k]) &&
-              is_better(end_time, best_[kIntermodalTarget][Vias])) {
-            round_times_[k][kIntermodalTarget][Vias] = end_time;
-            best_[kIntermodalTarget][Vias] = end_time;
-            update_time_at_dest(k, end_time);
-          }
-        }
-      }
-    };
-
-    if constexpr (RtMode == rt_mode::both) {
-      auto const process_sched = [&](auto const i) {
-        if (!end_reachable_.test(i)) {
-          return;
-        }
-
-        auto const l = location_idx_t{i};
-        if (dist_to_end_[i] != std::numeric_limits<std::uint16_t>::max()) {
-          if constexpr (Vias != 0U) {
-            constexpr auto v = Vias - 1U;
+          if constexpr (RtMode == rt_mode::both) {
             if (tmp_sched_[i][v] != kInvalid && is_via_[v][i]) {
               auto const end_time = clamp(tmp_sched_[i][v]  //
                                           + dir(via_stops_[v].stay_.count())  //
@@ -1202,31 +1112,52 @@ private:
               }
             }
           }
+        }
+      }
 
-          auto const tmp_time = tmp_sched_[i][Vias];
-          if (tmp_time == kInvalid) {
-            return;
+      // Case 2: l is no via -> don't add stay. Also the start time for the
+      // td-footpath case below, since both read the same tmp_[i][Vias].
+      auto const tmp_time = tmp_[i][Vias];
+      if (has_static && tmp_time != kInvalid) {
+        auto const end_time = clamp(tmp_time + dir(dist_to_end_[i]));
+        if (is_better(end_time, time_at_dest_[k])) {
+          round_times_[k][kIntermodalTarget][Vias] = end_time;
+          best_[kIntermodalTarget][Vias] = end_time;
+          update_time_at_dest(k, end_time);
+        }
+      }
+      if (has_td && tmp_time != kInvalid) {
+        auto const fp =
+            get_td_duration<SearchDir>(td_it->second, to_unix(tmp_time));
+        if (fp.has_value()) {
+          auto const& [duration, _] = *fp;
+          auto const end_time = clamp(tmp_time + dir(duration.count()));
+          if (is_better(end_time, time_at_dest_[k]) &&
+              is_better(end_time, best_[kIntermodalTarget][Vias])) {
+            round_times_[k][kIntermodalTarget][Vias] = end_time;
+            best_[kIntermodalTarget][Vias] = end_time;
+            update_time_at_dest(k, end_time);
           }
+        }
+      }
 
-          auto const end_time = clamp(tmp_time + dir(dist_to_end_[i]));
+      if constexpr (RtMode == rt_mode::both) {
+        auto const tmp_time_sched = tmp_sched_[i][Vias];
+        if (has_static && tmp_time_sched != kInvalid) {
+          auto const end_time = clamp(tmp_time_sched + dir(dist_to_end_[i]));
           if (is_better(end_time, time_at_dest_sched_[k])) {
             round_times_sched_[k][kIntermodalTarget][Vias] = end_time;
             best_sched_[kIntermodalTarget][Vias] = end_time;
             update_time_at_dest_sched(k, end_time);
           }
         }
-
-        if (auto const it = td_dist_to_end_.find(l);
-            it != end(td_dist_to_end_)) {
-          auto const fp_start_time = tmp_sched_[i][Vias];
-          if (fp_start_time == kInvalid) {
-            return;
-          }
-          auto const fp =
-              get_td_duration<SearchDir>(it->second, to_unix(fp_start_time));
+        if (has_td && tmp_time_sched != kInvalid) {
+          auto const fp = get_td_duration<SearchDir>(
+              td_it->second, to_unix(tmp_time_sched));
           if (fp.has_value()) {
             auto const& [duration, _] = *fp;
-            auto const end_time = clamp(fp_start_time + dir(duration.count()));
+            auto const end_time =
+                clamp(tmp_time_sched + dir(duration.count()));
             if (is_better(end_time, time_at_dest_sched_[k]) &&
                 is_better(end_time, best_sched_[kIntermodalTarget][Vias])) {
               round_times_sched_[k][kIntermodalTarget][Vias] = end_time;
@@ -1235,15 +1166,8 @@ private:
             }
           }
         }
-      };
-      // Single sweep: both slots key off the same (merged) prev_station_mark_.
-      state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
-        process(i);
-        process_sched(i);
-      });
-    } else {
-      state_.prev_station_mark_.for_each_set_bit(process);
-    }
+      }
+    });
   }
 
   template <bool WithSectionBikeFilter,
