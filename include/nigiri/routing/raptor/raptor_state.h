@@ -81,15 +81,6 @@ struct raptor_state {
             n_locations_};
   }
 
-  // Scheduled-slot counterparts of get_tmp/get_best/get_round_times, used by
-  // rt_mode::both to track the static-timetable-only labels alongside the
-  // realtime ones stored in tmp_storage_/best_storage_/round_times_storage_.
-  // The dijkstra-derived, per-search lower bound (get_lb() in raptor<>, not
-  // stored here) is schedule-independent and stays shared; get_bounds()
-  // below is a different mechanism (pong's ping->pong bound passing, see
-  // raptor::fill_bounds), which is per-slot -- get_bounds_sched() is its
-  // scheduled-slot counterpart, used to give a static-only pong sub-search
-  // the same ping-bounds pruning a realtime pong sub-search gets.
   template <via_offset_t Vias>
   std::span<std::array<delta_t, Vias + 1>> get_tmp_sched() {
     return {reinterpret_cast<std::array<delta_t, Vias + 1>*>(

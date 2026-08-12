@@ -258,14 +258,6 @@ struct raptor {
         }
       });
 
-      // station_mark_ is a single set shared by both slots in rt_mode::both:
-      // a location is marked if either the rt or the scheduled slot improved
-      // its arrival. Route/rt_transport marking is therefore union-driven
-      // for free. rt_transport_mark_ may end up including transports only
-      // reachable via a scheduled-only-touched station -- harmless, since
-      // update_rt_transport() never writes to the scheduled slot's storage,
-      // so the scheduled slot still never sees an rt-only (e.g. added)
-      // transport.
       auto any_marked = false;
       state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
         for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
