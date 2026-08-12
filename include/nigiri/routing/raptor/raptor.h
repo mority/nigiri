@@ -794,7 +794,6 @@ private:
         }
       }
     };
-    state_.prev_station_mark_.for_each_set_bit(process);
 
     if constexpr (RtMode == rt_mode::both) {
       // Scheduled-slot mirror: same transfer-time computation (schedule-
@@ -849,7 +848,13 @@ private:
           }
         }
       };
-      state_.prev_station_mark_.for_each_set_bit(process_sched);
+      // Single sweep: both slots key off the same (merged) prev_station_mark_.
+      state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+        process(i);
+        process_sched(i);
+      });
+    } else {
+      state_.prev_station_mark_.for_each_set_bit(process);
     }
   }
 
@@ -927,7 +932,6 @@ private:
         }
       }
     };
-    state_.prev_station_mark_.for_each_set_bit(process);
 
     if constexpr (RtMode == rt_mode::both) {
       // Scheduled slot: always the static footpath graph, never the
@@ -995,7 +999,13 @@ private:
           }
         }
       };
-      state_.prev_station_mark_.for_each_set_bit(process_sched);
+      // Single sweep: both slots key off the same (merged) prev_station_mark_.
+      state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+        process(i);
+        process_sched(i);
+      });
+    } else {
+      state_.prev_station_mark_.for_each_set_bit(process);
     }
   }
 
@@ -1170,7 +1180,6 @@ private:
         }
       }
     };
-    state_.prev_station_mark_.for_each_set_bit(process);
 
     if constexpr (RtMode == rt_mode::both) {
       auto const process_sched = [&](auto const i) {
@@ -1227,7 +1236,13 @@ private:
           }
         }
       };
-      state_.prev_station_mark_.for_each_set_bit(process_sched);
+      // Single sweep: both slots key off the same (merged) prev_station_mark_.
+      state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+        process(i);
+        process_sched(i);
+      });
+    } else {
+      state_.prev_station_mark_.for_each_set_bit(process);
     }
   }
 
