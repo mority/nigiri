@@ -532,7 +532,7 @@ private:
                   (is_ontrip() || search_interval_.contains(j.start_time_)) &&
                   j.travel_time() < fastest_direct_) {
                 try {
-                  algo_.reconstruct_sched(q_, j);
+                  algo_.reconstruct(q_, j, true);
                 } catch (std::exception const& e) {
                   j.error_ = true;
                   log(log_lvl::error, "search",

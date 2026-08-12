@@ -463,27 +463,17 @@ struct raptor {
     }
   }
 
-  void reconstruct(query const& q, journey& j) {
+  void reconstruct(query const& q, journey& j, bool const for_sched = false) {
     if constexpr (SearchMode == search_mode::kOneToAll) {
       return;
     }
     trace("reconstruct({} - {}, {} transfers", j.departure_time(),
           j.arrival_time(), j.transfers_);
-    reconstruct_journey<SearchDir>(tt_, rtt_, q, state_, j, base(), base_);
-  }
-
-  // Only valid for RtMode == rt_mode::both. Reconstructs from
-  // round_times_sched_ and always passes rtt == nullptr, so trip selection
-  // never reads realtime data -- the scheduled slot sees exactly the static
-  // timetable, cancellations included, matching the semantics confirmed for
-  // this feature (scheduled means static; cancellations only ever reach the
-  // rt slot via an RT update).
-  void reconstruct_sched(query const& q, journey& j) {
-    if constexpr (SearchMode == search_mode::kOneToAll) {
-      return;
+    if (for_sched) {
+      reconstruct_journey<SearchDir,true>(tt_, nullptr, q, state_, j, base(), base_);
+    } else {
+      reconstruct_journey<SearchDir,false>(tt_, rtt_, q, state_, j, base(), base_);
     }
-    reconstruct_journey<SearchDir, true>(tt_, nullptr, q, state_, j, base(),
-                                         base_);
   }
 
 private:
