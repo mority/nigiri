@@ -197,8 +197,6 @@ struct raptor {
     if constexpr (RtMode == rt_mode::both) {
       utl::fill(best_sched_, kInvalidArray);
       utl::fill(tmp_sched_, kInvalidArray);
-      utl::fill(state_.prev_station_mark_sched_.blocks_, 0U);
-      utl::fill(state_.station_mark_sched_.blocks_, 0U);
     }
   }
 
@@ -220,7 +218,7 @@ struct raptor {
           get_best(unix_to_delta(base(), t), best_sched_[to_idx(l)][v]);
       round_times_sched_[0U][to_idx(l)][v] = get_best(
           unix_to_delta(base(), t), round_times_sched_[0U][to_idx(l)][v]);
-      state_.station_mark_sched_.set(to_idx(l), true);
+      state_.station_mark_.set(to_idx(l), true);
     }
   }
 
@@ -260,6 +258,14 @@ struct raptor {
         }
       });
 
+      // station_mark_ is a single set shared by both slots in rt_mode::both:
+      // a location is marked if either the rt or the scheduled slot improved
+      // its arrival. Route/rt_transport marking is therefore union-driven
+      // for free. rt_transport_mark_ may end up including transports only
+      // reachable via a scheduled-only-touched station -- harmless, since
+      // update_rt_transport() never writes to the scheduled slot's storage,
+      // so the scheduled slot still never sees an rt-only (e.g. added)
+      // transport.
       auto any_marked = false;
       state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
         for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
@@ -274,19 +280,6 @@ struct raptor {
           }
         }
       });
-      if constexpr (RtMode == rt_mode::both) {
-        // Route marking is union-driven: a route is scanned if either slot
-        // reached one of its stops. rt_transport_mark_ stays rt-slot-only --
-        // rt_transports are realtime-only entities the scheduled slot must
-        // never see.
-        state_.station_mark_sched_.for_each_set_bit([&](std::uint64_t const i) {
-          for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
-            any_marked = true;
-            state_.route_mark_.set(to_idx(r), true);
-          }
-        });
-      }
-
       if (!any_marked) {
         trace_print_state_after_round();
         break;
@@ -294,10 +287,6 @@ struct raptor {
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
       utl::fill(state_.station_mark_.blocks_, 0U);
-      if constexpr (RtMode == rt_mode::both) {
-        std::swap(state_.prev_station_mark_sched_, state_.station_mark_sched_);
-        utl::fill(state_.station_mark_sched_.blocks_, 0U);
-      }
 
       bool const clasz_filter = allowed_claszes_ != all_clasz_allowed();
       uint8_t const filters =
@@ -428,10 +417,6 @@ struct raptor {
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
       utl::fill(state_.station_mark_.blocks_, 0U);
-      if constexpr (RtMode == rt_mode::both) {
-        std::swap(state_.prev_station_mark_sched_, state_.station_mark_sched_);
-        utl::fill(state_.station_mark_sched_.blocks_, 0U);
-      }
 
       update_transfers(k);
       update_intermodal_footpaths(k);
@@ -875,14 +860,14 @@ private:
 
             round_times_sched_[k][i][target_v] = fp_target_time;
             best_sched_[i][target_v] = fp_target_time;
-            state_.station_mark_sched_.set(i, true);
+            state_.station_mark_.set(i, true);
             if (is_dest) {
               update_time_at_dest_sched(k, fp_target_time);
             }
           }
         }
       };
-      state_.prev_station_mark_sched_.for_each_set_bit(process_sched);
+      state_.prev_station_mark_.for_each_set_bit(process_sched);
     }
   }
 
@@ -1020,7 +1005,7 @@ private:
 
               round_times_sched_[k][target][target_v] = fp_target_time;
               best_sched_[target][target_v] = fp_target_time;
-              state_.station_mark_sched_.set(target, true);
+              state_.station_mark_.set(target, true);
               if (target_v == Vias && is_dest_[target]) {
                 update_time_at_dest_sched(k, fp_target_time);
               }
@@ -1028,7 +1013,7 @@ private:
           }
         }
       };
-      state_.prev_station_mark_sched_.for_each_set_bit(process_sched);
+      state_.prev_station_mark_.for_each_set_bit(process_sched);
     }
   }
 
@@ -1260,7 +1245,7 @@ private:
           }
         }
       };
-      state_.prev_station_mark_sched_.for_each_set_bit(process_sched);
+      state_.prev_station_mark_.for_each_set_bit(process_sched);
     }
   }
 
@@ -1510,7 +1495,7 @@ private:
                   within_bounds(k, l_idx, by_transport_sched, cs)) {
                 tmp_sched_[l_idx][cs] =
                     get_best(by_transport_sched, tmp_sched_[l_idx][cs]);
-                state_.station_mark_sched_.set(l_idx, true);
+                state_.station_mark_.set(l_idx, true);
                 if (is_better(by_transport_sched, current_best_sched[cs])) {
                   current_best_sched[cs] = by_transport_sched;
                 }
@@ -1521,16 +1506,8 @@ private:
         }
       }
 
-      auto const can_board_here = [&] {
-        if constexpr (RtMode == rt_mode::both) {
-          return state_.prev_station_mark_[l_idx] ||
-                 state_.prev_station_mark_sched_[l_idx];
-        } else {
-          return state_.prev_station_mark_[l_idx];
-        }
-      }();
       if (is_last || !stp.can_start<SearchDir>(is_wheelchair_) ||
-          !can_board_here) {
+          !state_.prev_station_mark_[l_idx]) {
         continue;
       }
 

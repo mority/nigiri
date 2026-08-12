@@ -190,8 +190,6 @@ struct raptor_state {
   std::vector<delta_t> best_storage_sched_;
   std::vector<delta_t> round_times_storage_sched_;
   std::vector<delta_t> bounds_storage_sched_;
-  bitvec station_mark_sched_;
-  bitvec prev_station_mark_sched_;
 };
 
 }  // namespace nigiri::routing

@@ -31,8 +31,6 @@ raptor_state& raptor_state::resize(unsigned const n_locations,
                                     (kMaxTransfers + 2));
   bounds_storage_sched_.resize(n_locations * (kMaxVias + 1) *
                                (kMaxTransfers + 2));
-  station_mark_sched_.resize(n_locations);
-  prev_station_mark_sched_.resize(n_locations);
   return *this;
 }
 
