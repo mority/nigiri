@@ -652,14 +652,14 @@ routing_result pong_both(timetable const& tt,
   // --------
   auto starts = std::vector<start>{};
   auto result = routing_result{
-      .journeys_ = &s_state.results_,
+    .journeys_ = &s_state.results_,
+    .journeys_sched_ = &s_state.results_sched_,
       .interval_ = search_interval,
       .search_stats_ =
           {.lb_time_ = static_cast<std::uint64_t>(
                std::chrono::duration_cast<std::chrono::milliseconds>(lb_time)
                    .count())},
-      .algo_stats_ = {},
-      .journeys_sched_ = &s_state.results_sched_};
+      .algo_stats_ = {}};
   auto start_time =
       kFwd ? search_interval.from_ : search_interval.to_ - duration_t{1};
   auto const end_time =
@@ -754,8 +754,8 @@ routing_result pong_both(timetable const& tt,
       // its bounds_storage_ has to be copied from there explicitly. Sizes
       // always match (both resized off the same n_locations/kMaxTransfers),
       // so this never reallocates pong_off's already-bound bounds_ view.
-      ping.fill_bounds_sched(ping_results_sched.begin()->transfers_ +
-                             std::size_t{1U});
+      ping.fill_bounds(ping_results_sched.begin()->transfers_ +
+                             std::size_t{1U}, true);
       std::ranges::copy(r_state.bounds_storage_sched_,
                         r_state_sched.bounds_storage_.begin());
     }

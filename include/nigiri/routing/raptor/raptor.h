@@ -119,17 +119,17 @@ struct raptor {
 
   algo_stats_t get_stats() const { return stats_; }
 
-  void fill_bounds(std::size_t const n_rows) {
+  void fill_bounds(std::size_t const n_rows, bool const for_sched = false) {
     auto& s = state_;
     auto const n = static_cast<std::size_t>(s.n_locations_);
 
-    auto const td_stops = rtt_ != nullptr && prf_idx_ != 0U
+    auto const td_stops = !for_sched && rtt_ != nullptr && prf_idx_ != 0U
                               ? &(kFwd ? rtt_->has_td_footpaths_out_
                                        : rtt_->has_td_footpaths_in_)[prf_idx_]
                               : nullptr;
 
-    auto const src = std::as_const(s).template get_round_times<Vias>();
-    auto dst = s.template get_bounds<Vias>();
+    auto const src = !for_sched ? std::as_const(s).template get_round_times<Vias>() : std::as_const(s).template get_round_times_sched<Vias>();
+    auto dst = !for_sched ? s.template get_bounds<Vias>() : s.template get_bounds_sched<Vias>();
 
     // Copy k=0 verbatim (rest is folded from here).
     for (auto x = std::size_t{0U}; x != n; ++x) {
@@ -171,50 +171,6 @@ struct raptor {
           }
         }
       });
-    }
-  }
-
-  // Scheduled-slot counterpart of fill_bounds(), used by rt_mode::both's
-  // ping to give a separately-run static-only pong sub-search the same
-  // kind of ping->pong bound passing the realtime pong sub-search gets
-  // (see pong_both in pong.cc, which owns the target raptor_state -- this
-  // only fills state_'s own bounds_storage_sched_, which the caller then
-  // has to copy into that other state). No td_stops handling: the
-  // scheduled slot never reads rtt_, so there's no td_footpaths case to
-  // disable pruning for.
-  void fill_bounds_sched(std::size_t const n_rows) {
-    auto& s = state_;
-    auto const n = static_cast<std::size_t>(s.n_locations_);
-
-    auto const src = std::as_const(s).template get_round_times_sched<Vias>();
-    auto dst = s.template get_bounds_sched<Vias>();
-
-    // Copy k=0 verbatim (rest is folded from here).
-    for (auto x = std::size_t{0U}; x != n; ++x) {
-      dst[0U][x] = src[0U][x];
-    }
-
-    // Fill gaps from lower rounds to higher rounds.
-    for (auto k = std::size_t{1U}; k < n_rows; ++k) {
-      for (auto x = std::size_t{0U}; x != n; ++x) {
-        for (auto v = std::size_t{0U}; v != Vias + 1U; ++v) {
-          dst[k][x][v] = kFwd ? std::min(src[k][x][v], dst[k - 1U][x][v])
-                              : std::max(src[k][x][v], dst[k - 1U][x][v]);
-        }
-      }
-    }
-
-    if constexpr (Vias != 0U) {
-      // Fill gaps from higher vias to lower vias.
-      for (auto k = std::size_t{0U}; k != n_rows; ++k) {
-        for (auto x = std::size_t{0U}; x != n; ++x) {
-          auto& slots = dst[k][x];
-          for (auto v = std::size_t{Vias}; v != 0U; --v) {
-            slots[v - 1U] = kFwd ? std::min(slots[v - 1U], slots[v])
-                                 : std::max(slots[v - 1U], slots[v]);
-          }
-        }
-      }
     }
   }
 

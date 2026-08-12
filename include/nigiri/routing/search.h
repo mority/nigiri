@@ -227,8 +227,8 @@ struct search {
     state_.results_sched_.clear();
 
     if (start_dest_overlap()) {
-      return {&state_.results_, search_interval_, stats_,
-              algo_.get_stats().to_map(), &state_.results_sched_};
+      return {&state_.results_, &state_.results_sched_, search_interval_, stats_,
+              algo_.get_stats().to_map()};
     }
 
     auto const itv_est = interval_estimator<SearchDir>{tt_, q_};
@@ -379,10 +379,11 @@ struct search {
         std::chrono::duration_cast<std::chrono::milliseconds>(
             (std::chrono::steady_clock::now() - processing_start_time));
     return {.journeys_ = &state_.results_,
+            .journeys_sched_ = &state_.results_sched_,
             .interval_ = search_interval_,
             .search_stats_ = stats_,
-            .algo_stats_ = algo_.get_stats().to_map(),
-            .journeys_sched_ = &state_.results_sched_};
+            .algo_stats_ = algo_.get_stats().to_map()
+            };
   }
 
 private:

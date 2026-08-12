@@ -391,7 +391,7 @@ TEST(rt_modes, combined_align_without_rt_update_fwd) {
                       0_minutes, 0U}},
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
                              0_minutes, 0U}},
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
   auto const realtime = raptor_search(tt, &rtt, "A", "D", kWholeDay);
 
@@ -419,7 +419,7 @@ TEST(rt_modes, combined_align_without_rt_update_bwd) {
                       0_minutes, 0U}},
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
                              0_minutes, 0U}},
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
   auto const realtime =
       raptor_search(tt, &rtt, "D", "A", kWholeDay, direction::kBackward);
@@ -452,7 +452,7 @@ TEST(rt_modes, combined_diverges_when_delay_breaks_transfer_fwd) {
                       0_minutes, 0U}},
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
                              0_minutes, 0U}},
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
   auto const realtime = raptor_search(tt, &rtt, "A", "D", kWholeDay);
   auto const sched = raptor_search(tt, nullptr, "A", "D", kWholeDay);
@@ -486,7 +486,7 @@ TEST(rt_modes, combined_diverges_when_delay_breaks_transfer_bwd) {
                       0_minutes, 0U}},
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
                              0_minutes, 0U}},
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
   auto const realtime =
       raptor_search(tt, &rtt, "D", "A", kWholeDay, direction::kBackward);
@@ -522,7 +522,7 @@ TEST(rt_modes, combined_diverges_via_footpath_fwd) {
                       0_minutes, 0U}},
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
                              0_minutes, 0U}},
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
   auto const realtime = raptor_search(tt, &rtt, "A", "D", kWholeDay);
   auto const sched = raptor_search(tt, nullptr, "A", "D", kWholeDay);
@@ -556,7 +556,7 @@ TEST(rt_modes, combined_diverges_via_footpath_bwd) {
                       0_minutes, 0U}},
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
                              0_minutes, 0U}},
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
   auto const realtime =
       raptor_search(tt, &rtt, "D", "A", kWholeDay, direction::kBackward);
@@ -593,7 +593,7 @@ TEST(rt_modes, combined_reroutes_delay_fwd) {
       query{.start_time_ = kWholeDay,
            .start_ = {{a, 0_minutes, 0U}},
            .destination_ = {{c, 0_minutes, 0U}},
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
 
   auto rt_s_state = search_state{};
@@ -652,7 +652,7 @@ TEST(rt_modes, combined_reroutes_delay_bwd) {
       query{.start_time_ = kWholeDay,
            .start_ = {{c, 0_minutes, 0U}},
            .destination_ = {{a, 0_minutes, 0U}},
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
 
   auto rt_s_state = search_state{};
@@ -710,7 +710,7 @@ TEST(rt_modes, combined_reroutes_td_footpath_fwd) {
            .start_ = {{a, 0_minutes, 0U}},
            .destination_ = {{c, 0_minutes, 0U}},
            .prf_idx_ = kFootProfile,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
 
   auto rt_s_state = search_state{};
@@ -770,7 +770,7 @@ TEST(rt_modes, combined_reroutes_td_footpath_bwd) {
            .start_ = {{c, 0_minutes, 0U}},
            .destination_ = {{a, 0_minutes, 0U}},
            .prf_idx_ = kFootProfile,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
 
   auto rt_s_state = search_state{};
@@ -827,7 +827,7 @@ TEST(rt_modes, pong_combined_align_without_rt_update_fwd) {
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
                              0_minutes, 0U}},
            .min_connection_count_ = 1U,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
 
   ASSERT_NE(nullptr, result.journeys_);
@@ -853,7 +853,7 @@ TEST(rt_modes, pong_combined_align_without_rt_update_bwd) {
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
                              0_minutes, 0U}},
            .min_connection_count_ = 1U,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
 
   ASSERT_NE(nullptr, result.journeys_);
@@ -883,7 +883,7 @@ TEST(rt_modes, pong_combined_delay_breaks_transfer_fwd) {
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
                              0_minutes, 0U}},
            .min_connection_count_ = 1U,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
 
   ASSERT_NE(nullptr, result.journeys_sched_);
@@ -915,7 +915,7 @@ TEST(rt_modes, pong_combined_delay_breaks_transfer_bwd) {
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
                              0_minutes, 0U}},
            .min_connection_count_ = 1U,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
 
   ASSERT_NE(nullptr, result.journeys_sched_);
@@ -947,7 +947,7 @@ TEST(rt_modes, pong_combined_diverges_via_footpath_fwd) {
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"D", kSrc}),
                              0_minutes, 0U}},
            .min_connection_count_ = 1U,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
   auto const realtime = raptor_search(tt, &rtt, "A", "D", kWholeDay);
   auto const sched = raptor_search(tt, nullptr, "A", "D", kWholeDay);
@@ -981,7 +981,7 @@ TEST(rt_modes, pong_combined_diverges_via_footpath_bwd) {
            .destination_ = {{tt.locations_.location_id_to_idx_.at({"A", kSrc}),
                              0_minutes, 0U}},
            .min_connection_count_ = 1U,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
   auto const realtime =
       raptor_search(tt, &rtt, "D", "A", kWholeDay, direction::kBackward);
@@ -1018,7 +1018,7 @@ TEST(rt_modes, pong_combined_reroutes_delay_fwd) {
            .start_ = {{a, 0_minutes, 0U}},
            .destination_ = {{c, 0_minutes, 0U}},
            .min_connection_count_ = 1U,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
 
   auto rt_s_state = search_state{};
@@ -1078,7 +1078,7 @@ TEST(rt_modes, pong_combined_reroutes_delay_bwd) {
            .start_ = {{c, 0_minutes, 0U}},
            .destination_ = {{a, 0_minutes, 0U}},
            .min_connection_count_ = 1U,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
 
   auto rt_s_state = search_state{};
@@ -1137,7 +1137,7 @@ TEST(rt_modes, pong_combined_reroutes_td_footpath_fwd) {
            .destination_ = {{c, 0_minutes, 0U}},
            .min_connection_count_ = 1U,
            .prf_idx_ = kFootProfile,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kForward);
 
   auto rt_s_state = search_state{};
@@ -1198,7 +1198,7 @@ TEST(rt_modes, pong_combined_reroutes_td_footpath_bwd) {
            .destination_ = {{a, 0_minutes, 0U}},
            .min_connection_count_ = 1U,
            .prf_idx_ = kFootProfile,
-           .with_scheduled_comparison_ = true},
+           .rt_mode_both_ = true},
       direction::kBackward);
 
   auto rt_s_state = search_state{};
