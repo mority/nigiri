@@ -396,14 +396,14 @@ TEST(rt_modes, combined_align_without_rt_update_fwd) {
   auto const realtime = raptor_search(tt, &rtt, "A", "D", kWholeDay);
 
   ASSERT_NE(nullptr, combined.journeys_);
-  ASSERT_NE(nullptr, combined.journeys_scheduled_);
+  ASSERT_NE(nullptr, combined.journeys_sched_);
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
   ASSERT_FALSE(combined.journeys_->empty());
-  ASSERT_FALSE(combined.journeys_scheduled_->empty());
+  ASSERT_FALSE(combined.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, &rtt, *combined.journeys_),
-            to_string(tt, &rtt, *combined.journeys_scheduled_));
+            to_string(tt, &rtt, *combined.journeys_sched_));
 }
 
 TEST(rt_modes, combined_align_without_rt_update_bwd) {
@@ -425,14 +425,14 @@ TEST(rt_modes, combined_align_without_rt_update_bwd) {
       raptor_search(tt, &rtt, "D", "A", kWholeDay, direction::kBackward);
 
   ASSERT_NE(nullptr, combined.journeys_);
-  ASSERT_NE(nullptr, combined.journeys_scheduled_);
+  ASSERT_NE(nullptr, combined.journeys_sched_);
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
   ASSERT_FALSE(combined.journeys_->empty());
-  ASSERT_FALSE(combined.journeys_scheduled_->empty());
+  ASSERT_FALSE(combined.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, &rtt, *combined.journeys_),
-            to_string(tt, &rtt, *combined.journeys_scheduled_));
+            to_string(tt, &rtt, *combined.journeys_sched_));
 }
 
 TEST(rt_modes, combined_diverges_when_delay_breaks_transfer_fwd) {
@@ -460,12 +460,12 @@ TEST(rt_modes, combined_diverges_when_delay_breaks_transfer_fwd) {
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
   ASSERT_EQ(1U, sched.size()) << to_string(tt, sched);
   ASSERT_FALSE(combined.journeys_->empty());
-  ASSERT_FALSE(combined.journeys_scheduled_->empty());
+  ASSERT_FALSE(combined.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, sched),
-            to_string(tt, *combined.journeys_scheduled_));
-  EXPECT_EQ(combined.journeys_scheduled_->begin()->arrival_time() + 80min,
+            to_string(tt, *combined.journeys_sched_));
+  EXPECT_EQ(combined.journeys_sched_->begin()->arrival_time() + 80min,
             combined.journeys_->begin()->arrival_time());
 }
 
@@ -496,12 +496,12 @@ TEST(rt_modes, combined_diverges_when_delay_breaks_transfer_bwd) {
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
   ASSERT_EQ(1U, sched.size()) << to_string(tt, sched);
   ASSERT_FALSE(combined.journeys_->empty());
-  ASSERT_FALSE(combined.journeys_scheduled_->empty());
+  ASSERT_FALSE(combined.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, sched),
-            to_string(tt, *combined.journeys_scheduled_));
-  EXPECT_EQ(combined.journeys_scheduled_->begin()->arrival_time() + 80min,
+            to_string(tt, *combined.journeys_sched_));
+  EXPECT_EQ(combined.journeys_sched_->begin()->arrival_time() + 80min,
             combined.journeys_->begin()->arrival_time());
 }
 
@@ -530,12 +530,12 @@ TEST(rt_modes, combined_diverges_via_footpath_fwd) {
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
   ASSERT_EQ(1U, sched.size()) << to_string(tt, sched);
   ASSERT_EQ(1U, combined.journeys_->size());
-  ASSERT_EQ(1U, combined.journeys_scheduled_->size());
+  ASSERT_EQ(1U, combined.journeys_sched_->size());
 
   EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, sched),
-            to_string(tt, *combined.journeys_scheduled_));
-  EXPECT_NE(combined.journeys_scheduled_->begin()->arrival_time(),
+            to_string(tt, *combined.journeys_sched_));
+  EXPECT_NE(combined.journeys_sched_->begin()->arrival_time(),
            combined.journeys_->begin()->arrival_time());
 }
 
@@ -566,12 +566,12 @@ TEST(rt_modes, combined_diverges_via_footpath_bwd) {
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
   ASSERT_EQ(1U, sched.size()) << to_string(tt, sched);
   ASSERT_EQ(1U, combined.journeys_->size());
-  ASSERT_EQ(1U, combined.journeys_scheduled_->size());
+  ASSERT_EQ(1U, combined.journeys_sched_->size());
 
   EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, sched),
-            to_string(tt, *combined.journeys_scheduled_));
-  EXPECT_NE(combined.journeys_scheduled_->begin()->arrival_time(),
+            to_string(tt, *combined.journeys_sched_));
+  EXPECT_NE(combined.journeys_sched_->begin()->arrival_time(),
            combined.journeys_->begin()->arrival_time());
 }
 
@@ -619,14 +619,14 @@ TEST(rt_modes, combined_reroutes_delay_fwd) {
   ASSERT_EQ(1U, sched.journeys_->size())
       << to_string(tt, *sched.journeys_);
   ASSERT_FALSE(combined.journeys_->empty());
-  ASSERT_FALSE(combined.journeys_scheduled_->empty());
+  ASSERT_FALSE(combined.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
             to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, *sched.journeys_),
-            to_string(tt, *combined.journeys_scheduled_));
+            to_string(tt, *combined.journeys_sched_));
 
-  auto const sched_str = to_string(tt, *combined.journeys_scheduled_);
+  auto const sched_str = to_string(tt, *combined.journeys_sched_);
   auto const rt_str = to_string(tt, &rtt, *combined.journeys_);
   EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
   EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
@@ -678,14 +678,14 @@ TEST(rt_modes, combined_reroutes_delay_bwd) {
   ASSERT_EQ(1U, sched.journeys_->size())
       << to_string(tt, *sched.journeys_);
   ASSERT_FALSE(combined.journeys_->empty());
-  ASSERT_FALSE(combined.journeys_scheduled_->empty());
+  ASSERT_FALSE(combined.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
             to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, *sched.journeys_),
-            to_string(tt, *combined.journeys_scheduled_));
+            to_string(tt, *combined.journeys_sched_));
 
-  auto const sched_str = to_string(tt, *combined.journeys_scheduled_);
+  auto const sched_str = to_string(tt, *combined.journeys_sched_);
   auto const rt_str = to_string(tt, &rtt, *combined.journeys_);
   EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
   EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
@@ -738,14 +738,14 @@ TEST(rt_modes, combined_reroutes_td_footpath_fwd) {
   ASSERT_EQ(1U, sched.journeys_->size())
       << to_string(tt, *sched.journeys_);
   ASSERT_FALSE(combined.journeys_->empty());
-  ASSERT_FALSE(combined.journeys_scheduled_->empty());
+  ASSERT_FALSE(combined.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
             to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, *sched.journeys_),
-            to_string(tt, *combined.journeys_scheduled_));
+            to_string(tt, *combined.journeys_sched_));
 
-  auto const sched_str = to_string(tt, *combined.journeys_scheduled_);
+  auto const sched_str = to_string(tt, *combined.journeys_sched_);
   auto const rt_str = to_string(tt, &rtt, *combined.journeys_);
   EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
   EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
@@ -798,14 +798,14 @@ TEST(rt_modes, combined_reroutes_td_footpath_bwd) {
   ASSERT_EQ(1U, sched.journeys_->size())
       << to_string(tt, *sched.journeys_);
   ASSERT_FALSE(combined.journeys_->empty());
-  ASSERT_FALSE(combined.journeys_scheduled_->empty());
+  ASSERT_FALSE(combined.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
             to_string(tt, &rtt, *combined.journeys_));
   EXPECT_EQ(to_string(tt, *sched.journeys_),
-            to_string(tt, *combined.journeys_scheduled_));
+            to_string(tt, *combined.journeys_sched_));
 
-  auto const sched_str = to_string(tt, *combined.journeys_scheduled_);
+  auto const sched_str = to_string(tt, *combined.journeys_sched_);
   auto const rt_str = to_string(tt, &rtt, *combined.journeys_);
   EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
   EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
@@ -831,12 +831,12 @@ TEST(rt_modes, pong_combined_align_without_rt_update_fwd) {
       direction::kForward);
 
   ASSERT_NE(nullptr, result.journeys_);
-  ASSERT_NE(nullptr, result.journeys_scheduled_);
+  ASSERT_NE(nullptr, result.journeys_sched_);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *result.journeys_),
-            to_string(tt, &rtt, *result.journeys_scheduled_));
+            to_string(tt, &rtt, *result.journeys_sched_));
 }
 
 TEST(rt_modes, pong_combined_align_without_rt_update_bwd) {
@@ -857,12 +857,12 @@ TEST(rt_modes, pong_combined_align_without_rt_update_bwd) {
       direction::kBackward);
 
   ASSERT_NE(nullptr, result.journeys_);
-  ASSERT_NE(nullptr, result.journeys_scheduled_);
+  ASSERT_NE(nullptr, result.journeys_sched_);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *result.journeys_),
-            to_string(tt, &rtt, *result.journeys_scheduled_));
+            to_string(tt, &rtt, *result.journeys_sched_));
 }
 
 TEST(rt_modes, pong_combined_delay_breaks_transfer_fwd) {
@@ -886,14 +886,14 @@ TEST(rt_modes, pong_combined_delay_breaks_transfer_fwd) {
            .with_scheduled_comparison_ = true},
       direction::kForward);
 
-  ASSERT_NE(nullptr, result.journeys_scheduled_);
+  ASSERT_NE(nullptr, result.journeys_sched_);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
-  EXPECT_EQ(1U, result.journeys_scheduled_->begin()->transfers_);
+  EXPECT_EQ(1U, result.journeys_sched_->begin()->transfers_);
   EXPECT_EQ(1U, result.journeys_->begin()->transfers_);
 
-  EXPECT_EQ(result.journeys_scheduled_->begin()->arrival_time() + 80min,
+  EXPECT_EQ(result.journeys_sched_->begin()->arrival_time() + 80min,
             result.journeys_->begin()->arrival_time());
 }
 
@@ -918,14 +918,14 @@ TEST(rt_modes, pong_combined_delay_breaks_transfer_bwd) {
            .with_scheduled_comparison_ = true},
       direction::kBackward);
 
-  ASSERT_NE(nullptr, result.journeys_scheduled_);
+  ASSERT_NE(nullptr, result.journeys_sched_);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
-  EXPECT_EQ(1U, result.journeys_scheduled_->begin()->transfers_);
+  EXPECT_EQ(1U, result.journeys_sched_->begin()->transfers_);
   EXPECT_EQ(1U, result.journeys_->begin()->transfers_);
 
-  EXPECT_EQ(result.journeys_scheduled_->begin()->arrival_time() + 80min,
+  EXPECT_EQ(result.journeys_sched_->begin()->arrival_time() + 80min,
             result.journeys_->begin()->arrival_time());
 }
 
@@ -955,11 +955,11 @@ TEST(rt_modes, pong_combined_diverges_via_footpath_fwd) {
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
   ASSERT_EQ(1U, sched.size()) << to_string(tt, sched);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *result.journeys_));
-  EXPECT_EQ(to_string(tt, sched), to_string(tt, *result.journeys_scheduled_));
-  EXPECT_NE(result.journeys_scheduled_->begin()->arrival_time(),
+  EXPECT_EQ(to_string(tt, sched), to_string(tt, *result.journeys_sched_));
+  EXPECT_NE(result.journeys_sched_->begin()->arrival_time(),
            result.journeys_->begin()->arrival_time());
 }
 
@@ -991,11 +991,11 @@ TEST(rt_modes, pong_combined_diverges_via_footpath_bwd) {
   ASSERT_EQ(1U, realtime.size()) << to_string(tt, &rtt, realtime);
   ASSERT_EQ(1U, sched.size()) << to_string(tt, sched);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, realtime), to_string(tt, &rtt, *result.journeys_));
-  EXPECT_EQ(to_string(tt, sched), to_string(tt, *result.journeys_scheduled_));
-  EXPECT_NE(result.journeys_scheduled_->begin()->arrival_time(),
+  EXPECT_EQ(to_string(tt, sched), to_string(tt, *result.journeys_sched_));
+  EXPECT_NE(result.journeys_sched_->begin()->arrival_time(),
            result.journeys_->begin()->arrival_time());
 }
 
@@ -1044,14 +1044,14 @@ TEST(rt_modes, pong_combined_reroutes_delay_fwd) {
   ASSERT_EQ(1U, sched.journeys_->size())
       << to_string(tt, *sched.journeys_);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
             to_string(tt, &rtt, *result.journeys_));
   EXPECT_EQ(to_string(tt, *sched.journeys_),
-            to_string(tt, *result.journeys_scheduled_));
+            to_string(tt, *result.journeys_sched_));
 
-  auto const sched_str = to_string(tt, *result.journeys_scheduled_);
+  auto const sched_str = to_string(tt, *result.journeys_sched_);
   auto const rt_str = to_string(tt, &rtt, *result.journeys_);
   EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
   EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
@@ -1104,14 +1104,14 @@ TEST(rt_modes, pong_combined_reroutes_delay_bwd) {
   ASSERT_EQ(1U, sched.journeys_->size())
       << to_string(tt, *sched.journeys_);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
             to_string(tt, &rtt, *result.journeys_));
   EXPECT_EQ(to_string(tt, *sched.journeys_),
-            to_string(tt, *result.journeys_scheduled_));
+            to_string(tt, *result.journeys_sched_));
 
-  auto const sched_str = to_string(tt, *result.journeys_scheduled_);
+  auto const sched_str = to_string(tt, *result.journeys_sched_);
   auto const rt_str = to_string(tt, &rtt, *result.journeys_);
   EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
   EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
@@ -1165,14 +1165,14 @@ TEST(rt_modes, pong_combined_reroutes_td_footpath_fwd) {
   ASSERT_EQ(1U, sched.journeys_->size())
       << to_string(tt, *sched.journeys_);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
             to_string(tt, &rtt, *result.journeys_));
   EXPECT_EQ(to_string(tt, *sched.journeys_),
-            to_string(tt, *result.journeys_scheduled_));
+            to_string(tt, *result.journeys_sched_));
 
-  auto const sched_str = to_string(tt, *result.journeys_scheduled_);
+  auto const sched_str = to_string(tt, *result.journeys_sched_);
   auto const rt_str = to_string(tt, &rtt, *result.journeys_);
   EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
   EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;
@@ -1226,14 +1226,14 @@ TEST(rt_modes, pong_combined_reroutes_td_footpath_bwd) {
   ASSERT_EQ(1U, sched.journeys_->size())
       << to_string(tt, *sched.journeys_);
   ASSERT_FALSE(result.journeys_->empty());
-  ASSERT_FALSE(result.journeys_scheduled_->empty());
+  ASSERT_FALSE(result.journeys_sched_->empty());
 
   EXPECT_EQ(to_string(tt, &rtt, *realtime.journeys_),
             to_string(tt, &rtt, *result.journeys_));
   EXPECT_EQ(to_string(tt, *sched.journeys_),
-            to_string(tt, *result.journeys_scheduled_));
+            to_string(tt, *result.journeys_sched_));
 
-  auto const sched_str = to_string(tt, *result.journeys_scheduled_);
+  auto const sched_str = to_string(tt, *result.journeys_sched_);
   auto const rt_str = to_string(tt, &rtt, *result.journeys_);
   EXPECT_NE(std::string::npos, sched_str.find("TB2C")) << sched_str;
   EXPECT_EQ(std::string::npos, sched_str.find("TDC")) << sched_str;

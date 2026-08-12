@@ -659,7 +659,7 @@ routing_result pong_both(timetable const& tt,
                std::chrono::duration_cast<std::chrono::milliseconds>(lb_time)
                    .count())},
       .algo_stats_ = {},
-      .journeys_scheduled_ = &s_state.results_sched_};
+      .journeys_sched_ = &s_state.results_sched_};
   auto start_time =
       kFwd ? search_interval.from_ : search_interval.to_ - duration_t{1};
   auto const end_time =

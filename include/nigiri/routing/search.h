@@ -31,15 +31,15 @@ namespace nigiri::routing {
 // -- only raptor<> has an RtMode/dual-slot notion at all. Detected via SFINAE
 // so the other Algo types don't need a dummy kRtMode member.
 template <typename Algo, typename = void>
-struct algo_is_dual_slot : std::false_type {};
+struct has_rt_mode_both : std::false_type {};
 
 template <typename Algo>
-struct algo_is_dual_slot<Algo,
+struct has_rt_mode_both<Algo,
                          std::enable_if_t<Algo::kRtMode == rt_mode::both>>
     : std::true_type {};
 
 template <typename Algo>
-constexpr auto const kAlgoIsDualSlot = algo_is_dual_slot<Algo>::value;
+constexpr auto const kHasRtModeBoth = has_rt_mode_both<Algo>::value;
 
 struct search_state {
   search_state() = default;
@@ -87,12 +87,10 @@ struct search_stats {
 
 struct routing_result {
   pareto_set<journey> const* journeys_{nullptr};
+  pareto_set<journey> const* journeys_sched_{nullptr};
   interval<unixtime_t> interval_;
   search_stats search_stats_;
   std::map<std::string, std::uint64_t> algo_stats_;
-  // Scheduled-slot journeys for rt_mode::both searches (see
-  // raptor::reconstruct_sched); nullptr/empty for off/on searches.
-  pareto_set<journey> const* journeys_scheduled_{nullptr};
 };
 
 template <direction SearchDir, typename Algo>
@@ -352,7 +350,7 @@ struct search {
                std::tuple{b.start_time_, b.transfers_};
       });
 
-      if constexpr (kAlgoIsDualSlot<Algo>) {
+      if constexpr (kHasRtModeBoth<Algo>) {
         // Scheduled-slot results get the same start_time/travel_time
         // filtering as the rt slot, but not enrich_with_slow_direct (a
         // realtime-adjacent feature not part of this comparison).
@@ -372,7 +370,7 @@ struct search {
 
     utl::erase_if(state_.results_,
                   [&](auto&& j) { return !j.is_reconstructed_; });
-    if constexpr (kAlgoIsDualSlot<Algo>) {
+    if constexpr (kHasRtModeBoth<Algo>) {
       utl::erase_if(state_.results_sched_,
                     [&](auto&& j) { return !j.is_reconstructed_; });
     }
@@ -384,7 +382,7 @@ struct search {
             .interval_ = search_interval_,
             .search_stats_ = stats_,
             .algo_stats_ = algo_.get_stats().to_map(),
-            .journeys_scheduled_ = &state_.results_sched_};
+            .journeys_sched_ = &state_.results_sched_};
   }
 
 private:
@@ -457,7 +455,7 @@ private:
     utl::erase_if(state_.results_, [&](journey const& j) {
       return !search_interval_.contains(j.start_time_);
     });
-    if constexpr (kAlgoIsDualSlot<Algo>) {
+    if constexpr (kHasRtModeBoth<Algo>) {
       utl::erase_if(state_.results_sched_, [&](journey const& j) {
         return !search_interval_.contains(j.start_time_);
       });
@@ -498,7 +496,7 @@ private:
               start_time + (kFwd ? 1 : -1) *
                                (std::min(fastest_direct_, q_.max_travel_time_) +
                                 duration_t{1});
-          if constexpr (kAlgoIsDualSlot<Algo>) {
+          if constexpr (kHasRtModeBoth<Algo>) {
             algo_.execute(start_time, q_.max_transfers_, worst_time_at_dest,
                          state_.results_, &state_.results_sched_);
           } else {
@@ -527,7 +525,7 @@ private:
             }
           }
 
-          if constexpr (kAlgoIsDualSlot<Algo>) {
+          if constexpr (kHasRtModeBoth<Algo>) {
             for (auto& j : state_.results_sched_) {
               if (!j.is_reconstructed_ && !j.error_ &&
                   (is_ontrip() || search_interval_.contains(j.start_time_)) &&
