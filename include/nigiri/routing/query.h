@@ -98,11 +98,7 @@ struct query {
   double fastest_direct_factor_{1.0};
   bool slow_direct_{false};
   double fastest_slow_direct_factor_{2.0};
-  // Only meaningful together with a non-null rt_timetable: also computes,
-  // in the same search, what the best journeys would have been using only
-  // the static timetable (ignoring all realtime updates). See
-  // routing_result::journeys_scheduled_.
-  bool with_scheduled_comparison_{false};
+  bool rt_mode_both_{false};
 };
 
 }  // namespace nigiri::routing

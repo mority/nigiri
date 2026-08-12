@@ -984,8 +984,8 @@ routing_result pong_search_with_dir(
   // with_scheduled_comparison_ is silently ignored there.
   constexpr auto const kGpu = std::is_same_v<AlgoState, gpu::gpu_raptor_state>;
   auto const with_sched =
-      !kGpu && rtt != nullptr && q.with_scheduled_comparison_;
-  q.with_scheduled_comparison_ = false;
+      !kGpu && rtt != nullptr && q.rt_mode_both_;
+  q.rt_mode_both_ = false;
 
   if constexpr (!kGpu) {
     if (with_sched) {

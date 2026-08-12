@@ -37,7 +37,7 @@ routing_result raptor_search_with_vias(
     return search<SearchDir, algo_t>{tt,      rtt,          s_state,
                                      r_state, std::move(q), timeout}
         .execute();
-  } else if (q.with_scheduled_comparison_) {
+  } else if (q.rt_mode_both_) {
     // Only supported for the CPU raptor; GPU falls back to plain rt_mode::on
     // (with_scheduled_comparison_ is silently ignored -- no error, just no
     // journeys_scheduled_) since gpu_raptor has no dual-slot support.
