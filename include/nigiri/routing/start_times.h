@@ -37,7 +37,11 @@ void get_starts(
     std::vector<start>&,
     bool add_ontrip,
     profile_idx_t,
-    transfer_time_settings const&);
+    transfer_time_settings const&,
+    // rt_mode::both: enumerate the union of the scheduled and the real-time
+    // start times, so the scheduled slot can also depart at the scheduled time
+    // of a run that has real-time data.
+    bool with_sched = false);
 
 void collect_destinations(timetable const&,
                           std::vector<offset> const& destinations,

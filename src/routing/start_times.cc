@@ -46,7 +46,8 @@ void add_start_times_at_stop(direction const search_dir,
                              interval<unixtime_t> const& iv_at_start,
                              interval<unixtime_t> const& iv_at_stop,
                              location_offset_t const offset,
-                             std::vector<start>& starts) {
+                             std::vector<start>& starts,
+                             bool const with_sched) {
   auto const is_better_or_eq = [&](auto a, auto b) {
     return search_dir == direction::kForward ? a <= b : a >= b;
   };
@@ -60,9 +61,18 @@ void add_start_times_at_stop(direction const search_dir,
 
   auto const& transport_range = tt.route_transport_ranges_[route_idx];
   for (auto t = transport_range.from_; t != transport_range.to_; ++t) {
+    // `rtt->transport_traffic_days_` starts as a copy of the static traffic
+    // days and only ever has bits *cleared*: a day is removed when the run got
+    // a real-time update (it is then enumerated as an `rt_transport` below, at
+    // its updated time) or when it was cancelled.  So for rt_mode::both, where
+    // the scheduled slot must also be able to depart at the *scheduled* time of
+    // a run that happens to have real-time data, using the static traffic days
+    // here and keeping the real-time starts below yields exactly the union of
+    // the scheduled and the real-time start times.
     auto const& traffic_days =
-        rtt == nullptr ? tt.bitfields_[tt.transport_traffic_days_[t]]
-                       : rtt->traffic_days(rtt->transport_traffic_days_[t]);
+        (rtt == nullptr || with_sched)
+            ? tt.bitfields_[tt.transport_traffic_days_[t]]
+            : rtt->traffic_days(rtt->transport_traffic_days_[t]);
     auto const stop_time =
         tt.event_mam(t, stop_idx,
                      (search_dir == direction::kForward ? event_type::kDep
@@ -129,7 +139,8 @@ void add_starts_in_interval(direction const search_dir,
                             duration_t const max_start_offset,
                             profile_idx_t const p,
                             std::vector<start>& starts,
-                            bool const add_ontrip) {
+                            bool const add_ontrip,
+                            bool const with_sched) {
   trace_start(
       "    add_starts_in_interval(interval={}, stop={}): {} "
       "routes\n",
@@ -169,7 +180,7 @@ void add_starts_in_interval(direction const search_dir,
           search_dir == direction::kForward
               ? interval{iv.from_, iv.to_ + max_start_offset}
               : interval{iv.from_ - max_start_offset, iv.to_},
-          location_offset, starts);
+          location_offset, starts, with_sched);
     }
   }
 
@@ -252,7 +263,8 @@ void get_starts(
     std::vector<start>& starts,
     bool const add_ontrip,
     profile_idx_t const prf_idx,
-    transfer_time_settings const& tts) {
+    transfer_time_settings const& tts,
+    bool const with_sched) {
   auto shortest_start = hash_map<location_idx_t, duration_t>{};
   auto const update = [&](location_idx_t const l, duration_t const offset) {
     auto const d =
@@ -286,7 +298,7 @@ void get_starts(
                                  add_starts_in_interval(
                                      search_dir, tt, rtt, interval, l, o,
                                      max_start_offset, prf_idx, starts,
-                                     add_ontrip);
+                                     add_ontrip, with_sched);
                                },
                                [&](unixtime_t const t) {
                                  starts.emplace_back(
@@ -304,7 +316,7 @@ void get_starts(
               add_starts_in_interval(search_dir, tt, rtt, interval, stop,
                                      location_offset_t{std::span{offsets}},
                                      max_start_offset, prf_idx, starts,
-                                     add_ontrip);
+                                     add_ontrip, with_sched);
             },
             [&](unixtime_t const t) {
               auto const d = get_duration(search_dir, t, offsets, false);
