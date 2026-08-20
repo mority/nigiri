@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <string_view>
@@ -666,15 +667,27 @@ routing_result pong_both(timetable const& tt,
       kFwd ? search_interval.to_ : search_interval.from_ - duration_t{1};
   auto const is_better = [](auto a, auto b) { return kFwd ? a < b : a > b; };
   // is_validated's cutoff is the sweep cursor for whichever slot's own
-  // ping/pong candidates it's checking -- reusing the rt-driven start_time
-  // for the sched slot is wrong: rt and sched candidates can have
-  // completely different dest_time_s once they diverge, so the rt cursor's
-  // final position can (and does, see the _bwd test) sit on the wrong side
-  // of a still-valid scheduled candidate. Only the loop's own continuation
-  // condition stays rt-driven (see the while condition below).
+  // ping/pong candidates it's checking -- reusing one slot's cursor for the
+  // other is wrong: rt and sched candidates can have completely different
+  // dest_time_s once they diverge, so one cursor's final position can (and
+  // does, see the _bwd test) sit on the wrong side of a still-valid candidate
+  // of the other slot.
+  //
+  // `start_time` is the sweep cursor only: it trails the *less advanced* of
+  // the two slots so that neither is skipped (see NEXT below), which makes it
+  // too conservative as a validation cutoff for either slot on its own. Hence
+  // one cursor per slot, each advanced to the furthest position that slot is
+  // known to be fully covered up to.
+  auto rt_cursor = start_time;
   auto sched_cursor = start_time;
+  // Takes whichever of the two is further along the sweep direction.
+  auto const advance = [&](unixtime_t& cursor, unixtime_t const to) {
+    if (is_better(cursor, to)) {
+      cursor = to;
+    }
+  };
   auto const is_validated = [&](journey const& j) {
-    return is_better(j.dest_time_, start_time);
+    return is_better(j.dest_time_, rt_cursor);
   };
   auto const is_validated_sched = [&](journey const& j) {
     return is_better(j.dest_time_, sched_cursor);
@@ -693,9 +706,9 @@ routing_result pong_both(timetable const& tt,
     }
     return false;
   };
-  // Driven off the realtime slot only, matching search.h's dual-slot
-  // interval extension: the scheduled side just gets whatever ping/pong
-  // pairs happen to fall out of the rt-driven sweep.
+  // Continuation is driven off the realtime result count (matching search.h's
+  // dual-slot interval extension); the sweep *step* however trails both slots,
+  // see NEXT below.
   while ((is_better(start_time, end_time) ||
           get_result_count(true) + get_result_count(false) <
               2 * q.min_connection_count_) &&
@@ -807,30 +820,55 @@ routing_result pong_both(timetable const& tt,
     }
     q.flip_dir();
 
-    // Sched cursor advances independently of the rt-driven loop
-    // continuation below, off ping_results_sched's own refined start
-    // times -- same shape as the rt "NEXT" logic, just for is_validated_sched.
-    if (!ping_results_sched.empty()) {
-      auto const sched_first_it = utl::min_element(
-          ping_results_sched, [&](journey const& a, journey const& b) {
+    // NEXT
+    //
+    // A slot's ping/pong round covers every departure from `start_time` up to
+    // the *earliest* of its refined latest-departures: below that bound each
+    // transfer count already has its optimal journey, beyond it some transfer
+    // count may not. So that bound + 1 is where the slot's sweep has to
+    // continue.
+    //
+    // The loop must not skip a start time either slot still needs, so it steps
+    // by the *less advanced* of the two bounds. Driving the sweep off the
+    // realtime slot alone (what this used to do) silently drops every
+    // scheduled journey departing between the two.
+    auto const next_cursor =
+        [&](pareto_set<journey> const& ps) -> std::optional<unixtime_t> {
+      if (ps.empty()) {
+        return std::nullopt;
+      }
+      auto const it =
+          utl::min_element(ps, [&](journey const& a, journey const& b) {
             return is_better(a.start_time_, b.start_time_);
           });
-      sched_cursor = sched_first_it->start_time_ + duration_t{kFwd ? 1 : -1};
-    }
+      return it->start_time_ + duration_t{kFwd ? 1 : -1};
+    };
 
-    // NEXT (driven off the realtime ping results only)
-    if (ping_results.empty()) {
+    auto const rt_next = next_cursor(ping_results);
+    auto const sched_next = next_cursor(ping_results_sched);
+
+    if (!rt_next.has_value() && !sched_next.has_value()) {
       break;
     }
-    auto const first_it =
-        utl::min_element(ping_results, [&](journey const& a, journey const& b) {
-          return is_better(a.start_time_, b.start_time_);
-        });
-    auto const next = first_it->start_time_ + duration_t{kFwd ? 1 : -1};
+    auto const next = !rt_next.has_value()      ? *sched_next
+                      : !sched_next.has_value() ? *rt_next
+                      : is_better(*rt_next, *sched_next) ? *rt_next
+                                                         : *sched_next;
 
     if (!is_better(start_time, next)) {
       throw utl::fail("no pong progress: start_time={}, next={}", start_time,
                       next);
+    }
+
+    // Everything below `next` is covered for both slots; a slot whose own
+    // round reached further is covered up to its own bound on top of that.
+    advance(rt_cursor, next);
+    advance(sched_cursor, next);
+    if (rt_next.has_value()) {
+      advance(rt_cursor, *rt_next);
+    }
+    if (sched_next.has_value()) {
+      advance(sched_cursor, *sched_next);
     }
 
     start_time = next;
