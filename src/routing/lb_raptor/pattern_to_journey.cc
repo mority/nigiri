@@ -5,7 +5,7 @@
 #include "utl/overloaded.h"
 
 #include "nigiri/for_each_meta.h"
-#include "nigiri/routing/get_alternative.h"
+#include "nigiri/routing/lb_raptor/get_alternative.h"
 #include "nigiri/routing/query.h"
 #include "nigiri/special_stations.h"
 #include "nigiri/td_footpath.h"

@@ -1,4 +1,4 @@
-#include "nigiri/routing/get_alternative.h"
+#include "nigiri/routing/lb_raptor/get_alternative.h"
 
 #include <algorithm>
 
