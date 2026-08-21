@@ -26,9 +26,7 @@ std::optional<journey> realize(timetable const& tt,
                                rt_timetable const* rtt,
                                query const& q,
                                std::vector<location_idx_t> const& pattern,
-                               unixtime_t const start_time,
-                               bitvec& is_src,
-                               bitvec& is_dst) {
+                               unixtime_t const start_time) {
   constexpr auto const kFwd = SearchDir == direction::kForward;
 
   if (pattern.size() < 2U) {
@@ -105,8 +103,8 @@ std::optional<journey> realize(timetable const& tt,
     // The first and last hop touch the journey's terminals: no transfer time
     // there, and the whole station complex counts as the terminal. In between,
     // `cur` is a stop the passenger just got off at.
-    auto const alt = get_earliest_alternative<SearchDir>(
-        tt, rtt, q, cur, next, cur_time, deadline, is_src, is_dst,
+    auto const alt = get_alternative<SearchDir>(
+        tt, rtt, q, cur, next, cur_time, deadline,
         alternative_options{.from_is_terminal_ = i == 1U,
                             .to_is_terminal_ = is_last});
     if (!alt.has_value()) {
@@ -232,9 +230,7 @@ std::optional<journey> pattern_to_journey(
     timetable const& tt,
     rt_timetable const* rtt,
     query const& q,
-    std::vector<location_idx_t> const& pattern,
-    bitvec& is_src,
-    bitvec& is_dst) {
+    std::vector<location_idx_t> const& pattern) {
   constexpr auto const kFwd = SearchDir == direction::kForward;
   auto const start_time = std::visit(
       utl::overloaded{[](unixtime_t const t) { return t; },
@@ -243,7 +239,7 @@ std::optional<journey> pattern_to_journey(
                         return kFwd ? i.from_ : i.to_ - duration_t{1};
                       }},
       q.start_time_);
-  return realize<SearchDir>(tt, rtt, q, pattern, start_time, is_src, is_dst);
+  return realize<SearchDir>(tt, rtt, q, pattern, start_time);
 }
 
 template <direction SearchDir>
@@ -252,8 +248,6 @@ void pattern_to_journeys(timetable const& tt,
                          query const& q,
                          std::vector<location_idx_t> const& pattern,
                          interval<unixtime_t> const search_interval,
-                         bitvec& is_src,
-                         bitvec& is_dst,
                          std::vector<journey>& out) {
   constexpr auto const kFwd = SearchDir == direction::kForward;
 
@@ -262,7 +256,7 @@ void pattern_to_journeys(timetable const& tt,
   // is fixed so no search is repeated, only the realization.
   auto t = kFwd ? search_interval.from_ : search_interval.to_ - duration_t{1};
   while (search_interval.contains(t)) {
-    auto j = realize<SearchDir>(tt, rtt, q, pattern, t, is_src, is_dst);
+    auto j = realize<SearchDir>(tt, rtt, q, pattern, t);
     if (!j.has_value()) {
       // Nothing departs after `t` any more (or the pattern is unusable).
       break;
@@ -284,16 +278,12 @@ template std::optional<journey> pattern_to_journey<direction::kForward>(
     timetable const&,
     rt_timetable const*,
     query const&,
-    std::vector<location_idx_t> const&,
-    bitvec&,
-    bitvec&);
+    std::vector<location_idx_t> const&);
 template std::optional<journey> pattern_to_journey<direction::kBackward>(
     timetable const&,
     rt_timetable const*,
     query const&,
-    std::vector<location_idx_t> const&,
-    bitvec&,
-    bitvec&);
+    std::vector<location_idx_t> const&);
 
 template void pattern_to_journeys<direction::kForward>(
     timetable const&,
@@ -301,8 +291,6 @@ template void pattern_to_journeys<direction::kForward>(
     query const&,
     std::vector<location_idx_t> const&,
     interval<unixtime_t>,
-    bitvec&,
-    bitvec&,
     std::vector<journey>&);
 template void pattern_to_journeys<direction::kBackward>(
     timetable const&,
@@ -310,8 +298,6 @@ template void pattern_to_journeys<direction::kBackward>(
     query const&,
     std::vector<location_idx_t> const&,
     interval<unixtime_t>,
-    bitvec&,
-    bitvec&,
     std::vector<journey>&);
 
 }  // namespace nigiri::routing

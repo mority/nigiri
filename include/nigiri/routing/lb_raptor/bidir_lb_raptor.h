@@ -79,8 +79,6 @@ public:
   bitvec is_start_;
   bitvec is_dest_;
   bitvec lb_route_mark_;
-  bitvec is_src_;
-  bitvec is_dst_;
   // Lower bound on what a journey through a meetpoint can achieve. Both parts
   // follow from the round tables alone, so meetpoints can be ranked *before*
   // anything is reconstructed: the forward search needs `fwd_k` transports to

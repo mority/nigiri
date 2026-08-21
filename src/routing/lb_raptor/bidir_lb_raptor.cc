@@ -47,8 +47,6 @@ void bidir_lb_raptor::reset(unsigned const n_locations,
   reset_bitvec(is_start_, n_locations);
   reset_bitvec(is_dest_, n_locations);
   reset_bitvec(lb_route_mark_, n_lb_routes);
-  reset_bitvec(is_src_, n_locations);
-  reset_bitvec(is_dst_, n_locations);
 
   journeys_.clear();
 

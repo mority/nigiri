@@ -57,8 +57,8 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
     for (auto const r :
          interval{representative + 1U, route_idx_t{tt.n_routes()}}) {
       if (route_lb_route[r] != kUnset ||
-          (prf_idx == kCarProfile && !tt.has_car_transport(r)) ||
-          (prf_idx == kBikeProfile && !tt.has_bike_transport(r))) {
+          (prf_idx == kCarProfile && !tt.is_flag_set(kCarsAllowed, r)) ||
+          (prf_idx == kBikeProfile && !tt.is_flag_set(kBikesAllowed, r))) {
         continue;
       }
       if (equal_root_stops(r)) {
@@ -74,8 +74,8 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
   for (auto const representative :
        interval{route_idx_t{0U}, route_idx_t{tt.n_routes()}}) {
     if (route_lb_route[representative] != kUnset ||
-        (prf_idx == kCarProfile && !tt.has_car_transport(representative)) ||
-        (prf_idx == kBikeProfile && !tt.has_bike_transport(representative))) {
+        (prf_idx == kCarProfile && !tt.is_flag_set(kCarsAllowed, representative)) ||
+        (prf_idx == kBikeProfile && !tt.is_flag_set(kBikesAllowed, representative))) {
       continue;
     }
 

@@ -283,16 +283,16 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
         iv != nullptr) {
       if (arrive_by) {
         pattern_to_journeys<direction::kBackward>(
-            tt, rtt, q, current_pattern_, *iv, is_src_, is_dst_, journeys_);
+            tt, rtt, q, current_pattern_, *iv, journeys_);
       } else {
         pattern_to_journeys<direction::kForward>(
-            tt, rtt, q, current_pattern_, *iv, is_src_, is_dst_, journeys_);
+            tt, rtt, q, current_pattern_, *iv, journeys_);
       }
     } else {
       auto j = arrive_by ? pattern_to_journey<direction::kBackward>(
-                               tt, rtt, q, current_pattern_, is_src_, is_dst_)
+                               tt, rtt, q, current_pattern_)
                          : pattern_to_journey<direction::kForward>(
-                               tt, rtt, q, current_pattern_, is_src_, is_dst_);
+                               tt, rtt, q, current_pattern_);
       if (j.has_value()) {
         journeys_.emplace_back(std::move(*j));
       }

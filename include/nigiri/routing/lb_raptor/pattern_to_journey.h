@@ -28,22 +28,19 @@ struct query;
 //
 // Since the pattern only says *that* the stations are connected by some route
 // (not at which times), the actual transports are determined greedily: hop by
-// hop, `get_earliest_alternative` picks the earliest (kForward) / latest
+// hop, `get_alternative` picks the earliest (kForward) / latest
 // (kBackward) transport connecting two consecutive pattern stations. The
 // resulting journey is therefore not necessarily Pareto-optimal.
 //
 // Returns `std::nullopt` if the pattern cannot be realized (no transport for
 // one of the hops, no matching start/destination offset, or the journey
 // exceeds `q.max_travel_time_`).
-//
-// `is_src`/`is_dst` are scratch buffers for `get_earliest_alternative`.
+
 template <direction SearchDir>
 std::optional<journey> pattern_to_journey(timetable const&,
                                           rt_timetable const*,
                                           query const&,
-                                          std::vector<location_idx_t> const&,
-                                          bitvec& is_src,
-                                          bitvec& is_dst);
+                                          std::vector<location_idx_t> const&);
 
 // Range version, analogous to range RAPTOR in `search.h`: appends every
 // journey on `pattern` that departs (kForward) resp. arrives (kBackward)
@@ -64,8 +61,6 @@ void pattern_to_journeys(timetable const&,
                          query const&,
                          std::vector<location_idx_t> const&,
                          interval<unixtime_t> search_interval,
-                         bitvec& is_src,
-                         bitvec& is_dst,
                          std::vector<journey>& out);
 
 }  // namespace nigiri::routing
