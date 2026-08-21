@@ -13,7 +13,8 @@ namespace nigiri::routing {
 
 raptor_state& raptor_state::resize(unsigned const n_locations,
                                    unsigned const n_routes,
-                                   unsigned const n_rt_transports) {
+                                   unsigned const n_rt_transports,
+                                   unsigned const n_rt_routes) {
   n_locations_ = n_locations;
   tmp_storage_.resize(n_locations * (kMaxVias + 1));
   best_storage_.resize(n_locations * (kMaxVias + 1));
@@ -24,6 +25,7 @@ raptor_state& raptor_state::resize(unsigned const n_locations,
   prev_station_mark_.resize(n_locations);
   route_mark_.resize(n_routes);
   rt_transport_mark_.resize(n_rt_transports);
+  rt_route_mark_.resize(n_rt_routes);
   return *this;
 }
 

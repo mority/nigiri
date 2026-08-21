@@ -29,7 +29,8 @@ struct raptor_state {
 
   raptor_state& resize(unsigned n_locations,
                        unsigned n_routes,
-                       unsigned n_rt_transports);
+                       unsigned n_rt_transports,
+                       unsigned n_rt_routes);
 
   template <via_offset_t Vias>
   void print(timetable const& tt, date::sys_days, delta_t invalid);
@@ -108,6 +109,9 @@ struct raptor_state {
   bitvec prev_station_mark_;
   bitvec route_mark_;
   bitvec rt_transport_mark_;
+  // rt transports grouped into rt routes are marked here instead, and scanned
+  // once per group -- see rt_timetable::regroup_rt_transport().
+  bitvec rt_route_mark_;
 };
 
 }  // namespace nigiri::routing
