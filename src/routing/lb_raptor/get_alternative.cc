@@ -36,11 +36,17 @@ std::optional<std::array<journey::leg, 3U>> get_alternative(
       kFwd ? opt.from_is_terminal_ : opt.to_is_terminal_;
   auto const alighting_terminal =
       kFwd ? opt.to_is_terminal_ : opt.from_is_terminal_;
+  // `kEquivalent` expands to root + children + equivalences, i.e. exactly the
+  // station complex. Do *not* copy the outer query's match mode here: for an
+  // intermodal query it means "use the offset targets", which makes
+  // `collect_locations` skip both meta expansion and footpaths - and since a
+  // parent station carries no routes of its own (they sit on its platforms),
+  // nothing would be boardable at all.
   if (boarding_terminal) {
-    direct_query.start_match_mode_ = q.start_match_mode_;
+    direct_query.start_match_mode_ = location_match_mode::kEquivalent;
   }
   if (alighting_terminal) {
-    direct_query.dest_match_mode_ = q.dest_match_mode_;
+    direct_query.dest_match_mode_ = location_match_mode::kEquivalent;
   }
 
   auto cursor =

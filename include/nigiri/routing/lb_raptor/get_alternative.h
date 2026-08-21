@@ -17,7 +17,8 @@ struct query;
 
 // Marks `from` / `to` as a journey terminal. At a terminal the passenger starts
 // or ends their journey, so the whole station complex counts as that terminal:
-// it is expanded with the query's match mode instead of being matched exactly.
+// it is expanded with `kEquivalent` (root + children + equivalences) instead of
+// being matched exactly.
 // Off by default.
 struct alternative_options {
   // `from` is where the journey begins (kForward) / ends (kBackward)
