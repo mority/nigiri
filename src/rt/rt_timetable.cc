@@ -1,5 +1,7 @@
 #include "nigiri/rt/rt_timetable.h"
 
+#include <algorithm>
+
 #include "utl/enumerate.h"
 #include "utl/overloaded.h"
 #include "utl/timer.h"
@@ -8,6 +10,96 @@
 #include "nigiri/loader/gtfs/route.h"
 
 namespace nigiri {
+
+bool rt_timetable::matches_schedule(
+    timetable const& tt, rt_transport_idx_t const rt_t) const {
+  if (rt_transport_is_cancelled_.test(to_idx(rt_t))) {
+    return false;
+  }
+
+  // additional trips have no static counterpart to fall back to
+  auto const t = resolve_static(rt_t);
+  if (!t.is_valid()) {
+    return false;
+  }
+
+  auto const r = tt.transport_route_[t.t_idx_];
+  auto const static_seq = tt.route_location_seq_[r];
+  auto const rt_seq = rt_transport_location_seq_[rt_t];
+  if (static_seq.size() != rt_seq.size() ||
+      !std::equal(begin(static_seq), end(static_seq), begin(rt_seq))) {
+    return false;
+  }
+
+  // Everything the static scan reads has to agree, not just the times: it
+  // filters on the *route's* flags and claszes, which add_rt_transport() copies
+  // from the static route, so this also catches an update path that starts
+  // changing them.
+  auto const& rt_clasz = rt_transport_section_clasz_[rt_t];
+  auto const& static_clasz = tt.route_section_clasz_[r];
+  if (rt_clasz.size() != static_clasz.size() ||
+      !std::equal(begin(rt_clasz), end(rt_clasz), begin(static_clasz))) {
+    return false;
+  }
+  for (auto f = 0U; f != kNumRouteFlags; ++f) {
+    if (rt_transport_flags_[f].test(to_idx(rt_t) * 2U) !=
+            tt.route_flags_[f].test(r.v_ * 2U) ||
+        rt_transport_flags_[f].test(to_idx(rt_t) * 2U + 1U) !=
+            tt.route_flags_[f].test(r.v_ * 2U + 1U)) {
+      return false;
+    }
+    auto const& rt_sections = rt_flags_per_section_[f][rt_t];
+    auto const& static_sections = tt.route_flags_per_section_[f][r];
+    if (rt_sections.size() != static_sections.size() ||
+        !std::equal(begin(rt_sections), end(rt_sections),
+                    begin(static_sections))) {
+      return false;
+    }
+  }
+
+  // rt event times are minutes from base_day_, static ones minutes from their
+  // own day's midnight
+  auto const n_stops = static_cast<stop_idx_t>(static_seq.size());
+  auto const day_offset = (static_cast<int>(to_idx(t.day_)) -
+                           static_cast<int>(to_idx(base_day_idx_))) *
+                          1440;
+  auto const same = [&](stop_idx_t const stop_idx, event_type const ev) {
+    return static_cast<int>(event_time(rt_t, stop_idx, ev)) ==
+           day_offset + tt.event_mam(r, t.t_idx_, stop_idx, ev).count();
+  };
+  for (auto stop_idx = stop_idx_t{0U}; stop_idx != n_stops; ++stop_idx) {
+    if (stop_idx != 0U && !same(stop_idx, event_type::kArr)) {
+      return false;
+    }
+    if (stop_idx != n_stops - 1U && !same(stop_idx, event_type::kDep)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void rt_timetable::finalize_rt_transport(timetable const& tt,
+                                         rt_transport_idx_t const rt_t) {
+  auto const unchanged = matches_schedule(tt, rt_t);
+  set_unchanged(rt_t, unchanged);
+
+  auto const t = resolve_static(rt_t);
+  if (!t.is_valid()) {
+    return;
+  }
+
+  // The day is on the static scan exactly while the transport is unchanged.
+  // Guarded by the static traffic days so that this can only ever *restore*
+  // traffic the schedule already has, never invent it.
+  auto const on_static_scan =
+      unchanged && tt.is_transport_active(t.t_idx_, t.day_);
+  auto const bf_idx = transport_traffic_days_[t.t_idx_];
+  utl::verify((to_idx(bf_idx) & kRtBitfieldFlag) != 0U,
+              "finalize_rt_transport: {} has no rt bitfield", t.t_idx_);
+  bitfields_[bitfield_idx_t{to_idx(bf_idx) & ~kRtBitfieldFlag}].set(
+      to_idx(t.day_), on_static_scan);
+}
 
 rt_transport_idx_t rt_timetable::add_rt_transport(
     source_idx_t const src,
@@ -327,6 +419,7 @@ void rt_timetable::update_lbs(timetable const& tt) {
 void rt_timetable::cancel_run(rt::run const& r) {
   if (r.is_rt()) {
     rt_transport_is_cancelled_.set(to_idx(r.rt_), true);
+    set_unchanged(r.rt_, false);
   }
   if (r.is_scheduled()) {
     auto const bf = traffic_days(transport_traffic_days_[r.t_.t_idx_]);

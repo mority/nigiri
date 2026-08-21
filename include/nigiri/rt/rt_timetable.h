@@ -177,6 +177,46 @@ struct rt_timetable {
                         [&](rt_add_trip_id_idx_t) { return debug{"RT"}; }});
   }
 
+  // Call after applying an update to `rt_t`, once its times are final.
+  //
+  // A real-time update that turns out to change nothing -- a feed covering a
+  // trip and reporting it exactly on time, which is what most of a real feed
+  // is -- still materialises an rt_transport, and add_rt_transport() still
+  // clears the trip's static traffic day. That moves the trip off the static
+  // scan onto the per-transport real-time scan, which is far more expensive:
+  // the static scan walks a whole route's stop sequence once for all of its
+  // transports, the real-time scan walks one stop sequence per transport.
+  //
+  // For a transport whose times and stops are identical to the schedule, the
+  // scheduled and the real-time answer are the same by definition, so the
+  // static scan serves both. This restores the traffic day and flags the
+  // transport; the routing then leaves flagged transports off
+  // rt_transport_mark_ and rides them statically.
+  //
+  // The rt_transport itself stays, so trip lookup, alerts, tracks and
+  // real-time annotation are unaffected -- frun resolves rt_ from the static
+  // transport. Idempotent and authoritative in both directions: a transport
+  // that was unchanged and is now delayed gets its flag and its traffic day
+  // cleared again.
+  void finalize_rt_transport(timetable const&, rt_transport_idx_t);
+
+  // True if `rt_t` is identical to its static counterpart *for routing* and is
+  // therefore ridden on the static scan. Track-only changes still count as
+  // unchanged: they do not affect routing, and frun still surfaces them.
+  bool is_unchanged(rt_transport_idx_t const rt_t) const noexcept {
+    return to_idx(rt_t) < rt_transport_is_unchanged_.size() &&
+           rt_transport_is_unchanged_.test(to_idx(rt_t));
+  }
+
+  void set_unchanged(rt_transport_idx_t const rt_t, bool const x) {
+    if (to_idx(rt_t) >= rt_transport_is_unchanged_.size()) {
+      rt_transport_is_unchanged_.resize(to_idx(rt_t) + 1U);
+    }
+    rt_transport_is_unchanged_.set(to_idx(rt_t), x);
+  }
+
+  bool matches_schedule(timetable const&, rt_transport_idx_t) const;
+
   transport resolve_static(rt_transport_idx_t const rt_t) const noexcept {
     auto const t = rt_transport_static_transport_[rt_t];
     return holds_alternative<transport>(t) ? t.as<transport>() : transport{};
@@ -277,6 +317,10 @@ struct rt_timetable {
 
   // RT transport -> canceled flag
   bitvec rt_transport_is_cancelled_;
+
+  // Set for rt transports that are identical to their static counterpart, see
+  // restore_unchanged_transports(). Empty until that has run.
+  bitvec rt_transport_is_unchanged_;
 
   // RT transport * 2 -> flags (bikes, cars, wheelchairs, reservtion) along the
   // transport RT transport * 2 + 1 -> flags along parts of the transport

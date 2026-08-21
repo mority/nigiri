@@ -178,6 +178,25 @@ struct raptor {
 
   void set_bounds(unsigned const last_round) { bounds_last_k_ = last_round; }
 
+  // Records an improvement at location l for one slot. station_mark_ is the
+  // union both slots' route scans work from; station_mark_rt_ additionally
+  // tracks the rt slot on its own, because rt transports are an rtt_-only
+  // concept the scheduled slot can never ride (see raptor_state.h).
+  template <bool ForSched>
+  void mark_station(std::size_t const l) {
+    state_.station_mark_.set(l, true);
+    if constexpr (RtMode == rt_mode::both && !ForSched) {
+      state_.station_mark_rt_.set(l, true);
+    }
+  }
+
+  void clear_station_marks() {
+    utl::fill(state_.station_mark_.blocks_, 0U);
+    if constexpr (RtMode == rt_mode::both) {
+      utl::fill(state_.station_mark_rt_.blocks_, 0U);
+    }
+  }
+
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
     round_times_.reset(kInvalidArray);
@@ -191,7 +210,7 @@ struct raptor {
     utl::fill(best_, kInvalidArray);
     utl::fill(tmp_, kInvalidArray);
     utl::fill(state_.prev_station_mark_.blocks_, 0U);
-    utl::fill(state_.station_mark_.blocks_, 0U);
+    clear_station_marks();
     utl::fill(state_.route_mark_.blocks_, 0U);
     if constexpr (RtMode != rt_mode::off) {
       utl::fill(state_.rt_transport_mark_.blocks_, 0U);
@@ -214,13 +233,13 @@ struct raptor {
         get_best(unix_to_delta(base(), t), best_[to_idx(l)][v]);
     round_times_[0U][to_idx(l)][v] =
         get_best(unix_to_delta(base(), t), round_times_[0U][to_idx(l)][v]);
-    state_.station_mark_.set(to_idx(l), true);
+    mark_station<false>(to_idx(l));
     if constexpr (RtMode == rt_mode::both) {
       best_sched_[to_idx(l)][v] =
           get_best(unix_to_delta(base(), t), best_sched_[to_idx(l)][v]);
       round_times_sched_[0U][to_idx(l)][v] = get_best(
           unix_to_delta(base(), t), round_times_sched_[0U][to_idx(l)][v]);
-      state_.station_mark_.set(to_idx(l), true);
+      mark_station<true>(to_idx(l));
     }
   }
 
@@ -266,21 +285,49 @@ struct raptor {
           any_marked = true;
           state_.route_mark_.set(to_idx(r), true);
         }
-        if constexpr (RtMode != rt_mode::off) {
+        if constexpr (RtMode == rt_mode::on) {
           for (auto const& rt_t :
                rtt_->location_rt_transports_[location_idx_t{i}]) {
+            if (rtt_->is_unchanged(rt_t)) {
+              continue;  // identical to schedule, ridden on the static scan
+            }
             any_marked = true;
             state_.rt_transport_mark_.set(to_idx(rt_t), true);
           }
         }
       });
+      // Both slots ride the static routes above, so those are marked from the
+      // union. An rt transport, though, can only ever be boarded by the rt
+      // slot, so marking one because the *scheduled* slot reached one of its
+      // stops only makes the rt slot re-walk that transport's whole stop
+      // sequence for nothing: update_rt_transport() boards off
+      // round_times_[k-1], which this round is set exactly where the rt slot
+      // improved -- i.e. exactly where station_mark_rt_ is set.
+      //
+      // Labels carried over from an earlier start time of a range search are
+      // the one case where round_times_[k-1] is set without a mark, and they
+      // need no re-expansion: next_start_time() already clears every mark
+      // while keeping round_times_, so the search as a whole relies on that
+      // same invariant. Splitting the mark per slot only applies it per slot.
+      if constexpr (RtMode == rt_mode::both) {
+        state_.station_mark_rt_.for_each_set_bit([&](std::uint64_t const i) {
+          for (auto const& rt_t :
+               rtt_->location_rt_transports_[location_idx_t{i}]) {
+            if (rtt_->is_unchanged(rt_t)) {
+              continue;  // identical to schedule, ridden on the static scan
+            }
+            any_marked = true;
+            state_.rt_transport_mark_.set(to_idx(rt_t), true);
+          }
+        });
+      }
       if (!any_marked) {
         trace_print_state_after_round();
         break;
       }
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
-      utl::fill(state_.station_mark_.blocks_, 0U);
+      clear_station_marks();
 
       bool const clasz_filter = allowed_claszes_ != all_clasz_allowed();
       uint8_t const filters =
@@ -410,7 +457,7 @@ struct raptor {
       utl::fill(state_.rt_transport_mark_.blocks_, 0U);
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
-      utl::fill(state_.station_mark_.blocks_, 0U);
+      clear_station_marks();
 
       update_transfers(k);
       update_intermodal_footpaths(k);
@@ -735,8 +782,9 @@ private:
 
   // Slot accessors: ForSched selects between the rt-slot storage (tmp_,
   // best_, round_times_, time_at_dest_) and its scheduled-slot counterpart
-  // (only meaningful for RtMode == rt_mode::both). station_mark_ is shared
-  // by both slots and has no counterpart, see raptor_state.h.
+  // (only meaningful for RtMode == rt_mode::both). station_mark_ stays shared
+  // -- it is the union both slots' route scans work from -- and is written
+  // through mark_station<ForSched>(), see raptor_state.h.
   template <bool ForSched>
   auto& get_tmp() {
     if constexpr (ForSched) {
@@ -821,7 +869,7 @@ private:
     }
     round_times[k][target][target_v] = target_time;
     best[target][target_v] = target_time;
-    state_.station_mark_.set(target, true);
+    mark_station<ForSched>(target);
     if (is_dest_target) {
       update_time_at_dest<ForSched>(k, target_time);
     }
@@ -1047,7 +1095,7 @@ private:
             ++stats_.n_earliest_arrival_updated_by_footpath_;
             round_times_[k][target][target_v] = fp_target_time;
             best_[target][target_v] = fp_target_time;
-            state_.station_mark_.set(target, true);
+            mark_station<false>(target);
             if (is_dest_[target]) {
               update_time_at_dest(k, fp_target_time);
             }
@@ -1232,7 +1280,7 @@ private:
 
               ++stats_.n_earliest_arrival_updated_by_route_;
               tmp_[l_idx][v] = get_best(by_transport, tmp_[l_idx][v]);
-              state_.station_mark_.set(l_idx, true);
+              mark_station<false>(l_idx);
               if (is_better(by_transport, current_best)) {
                 current_best = by_transport;
               }
@@ -1323,7 +1371,7 @@ private:
               ++stats_.n_earliest_arrival_updated_by_route_;
             }
             tmp[l_idx][cs] = get_best(by_transport, tmp[l_idx][cs]);
-            state_.station_mark_.set(l_idx, true);
+            mark_station<ForSched>(l_idx);
             if (is_better(by_transport, current_best[cs])) {
               current_best[cs] = by_transport;
             }

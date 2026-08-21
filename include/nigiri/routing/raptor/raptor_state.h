@@ -176,6 +176,13 @@ struct raptor_state {
   bitvec route_mark_;
   bitvec rt_transport_mark_;
 
+  // rt_mode::both only: the rt slot's improvements alone, where station_mark_
+  // is the union of both slots'. Routes are scanned for the union -- both
+  // slots ride them -- but rt transports exist only in the rt timetable, so
+  // they are marked from this set. Empty (and unused) for rt_mode::off/on,
+  // where the two sets coincide.
+  bitvec station_mark_rt_;
+
   // Scheduled-slot state for rt_mode::both (see get_*_sched() above).
   // Unused (but still allocated) by rt_mode::off/on.
   std::vector<delta_t> tmp_storage_sched_;

@@ -27,6 +27,7 @@ raptor_state& raptor_state::resize(unsigned const n_locations,
   rt_transport_mark_.resize(n_rt_transports);
 
   if (with_sched) {
+    station_mark_rt_.resize(n_locations);
     tmp_storage_sched_.resize(n_locations * (kMaxVias + 1));
     best_storage_sched_.resize(n_locations * (kMaxVias + 1));
     round_times_storage_sched_.resize(n_locations * (kMaxVias + 1) *
