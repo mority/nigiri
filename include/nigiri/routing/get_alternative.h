@@ -15,27 +15,10 @@ namespace nigiri::routing {
 
 struct query;
 
-// Single-transit connection between `from` and `to`: one transport plus
-// (possibly empty) walks at both ends. Both functions below delegate to
-// `get_direct_journeys`, which enumerates exactly those connections.
-
-// pong: replaces an interior transfer of an existing journey, so `from_arr` is
-// the arrival of the previous transport and the returned walk starts there.
-// Returns nothing if the connection would arrive later than `to_dep`.
-std::optional<std::array<journey::leg, 3U>> get_earliest_alternative(
-    timetable const&,
-    rt_timetable const*,
-    query const&,
-    location_idx_t from,
-    location_idx_t to,
-    unixtime_t from_arr,
-    unixtime_t to_dep);
-
 // Marks `from` / `to` as a journey terminal. At a terminal the passenger starts
 // or ends their journey, so the whole station complex counts as that terminal:
 // it is expanded with the query's match mode instead of being matched exactly.
-// Off by default, which is what `pong` needs - it only ever asks about a hop
-// *inside* a journey.
+// Off by default.
 struct alternative_options {
   // `from` is where the journey begins (kForward) / ends (kBackward)
   bool from_is_terminal_{false};
@@ -43,7 +26,13 @@ struct alternative_options {
   bool to_is_terminal_{false};
 };
 
-// Pattern search: `from`/`to` are consecutive stations of a transfer pattern.
+// Single-transit connection between `from` and `to`: one transport plus
+// (possibly empty) walks at both ends, enumerated by `get_direct_journeys`.
+// `from`/`to` are consecutive stations of a transfer pattern.
+//
+// This is the pattern-search counterpart to pong's `get_earliest_alternative`
+// (see raptor/pong.h): same underlying generator, but direction-generic and
+// with the terminal handling below.
 //
 // kForward:  `from_time` is the arrival at `from`, `to_time` an upper bound for
 //            the arrival at `to`; the earliest connection is returned.
@@ -51,10 +40,11 @@ struct alternative_options {
 //            for the departure at `to`; the latest connection is returned.
 //
 // The returned legs are in *search* order - index 0 is always adjacent to
-// `from` - while each leg itself is oriented in travel direction. Unlike
-// `get_earliest_alternative` the boarding walk stays anchored at the transport
-// (i.e. the passenger leaves as late as possible), which is what the pattern
-// search needs to step to the next distinct departure.
+// `from` - while each leg itself is oriented in travel direction. The boarding
+// walk stays anchored at the transport (i.e. the passenger leaves as late as
+// possible), which is what the pattern search needs to step to the next
+// distinct departure. (pong's variant shifts it back to the arrival of the
+// preceding transport, because there it replaces an interior transfer.)
 template <direction SearchDir>
 std::optional<std::array<journey::leg, 3U>> get_alternative(
     timetable const&,

@@ -14,7 +14,6 @@
 
 #include "nigiri/location_match_mode.h"
 #include "nigiri/routing/direct.h"
-#include "nigiri/routing/get_earliest_alternative.h"
 #include "nigiri/routing/get_earliest_transport.h"
 #include "nigiri/routing/gpu/raptor.h"
 #include "nigiri/routing/leg_alternatives.h"
@@ -33,6 +32,32 @@ auto to_tuple(journey const& j) {
   return std::tuple{j.departure_time(), j.arrival_time(), j.transfers_};
 }
 
+std::optional<std::array<journey::leg, 3U>> get_earliest_alternative(
+    timetable const& tt,
+    rt_timetable const* rtt,
+    query const& q,
+    location_idx_t const from,
+    location_idx_t const to,
+    unixtime_t const from_arr,
+    unixtime_t const to_dep) {
+  auto const direct_query = make_alternative_query(tt, rtt, q, from, to);
+  auto cursor =
+      get_direct_journeys<direction::kForward>(tt, rtt, direct_query, from_arr);
+  if (!cursor) {
+    return std::nullopt;
+  }
+  auto legs = cursor();
+  if (legs.back().arr_time_ > to_dep) {
+    return std::nullopt;
+  }
+  // the generator anchors the boarding walk at the transit departure
+  // (latest start) -> shift to the interior transfer convention:
+  // the walk starts at the previous leg's arrival
+  auto const walk_duration = legs[0].arr_time_ - legs[0].dep_time_;
+  legs[0].dep_time_ = from_arr;
+  legs[0].arr_time_ = from_arr + walk_duration;
+  return std::array{std::move(legs[0]), std::move(legs[1]), std::move(legs[2])};
+}
 
 template <direction SearchDir, bool Rt, via_offset_t Vias, typename AlgoState>
 routing_result pong(timetable const& tt,
