@@ -47,6 +47,10 @@ void bidir_lb_raptor::reset(unsigned const n_locations,
   reset_bitvec(is_start_, n_locations);
   reset_bitvec(is_dest_, n_locations);
   reset_bitvec(lb_route_mark_, n_lb_routes);
+  reset_bitvec(is_src_, n_locations);
+  reset_bitvec(is_dst_, n_locations);
+
+  journeys_.clear();
 
   meetpoints_.clear();
   meetpoints_.reserve(1000);
@@ -56,11 +60,19 @@ void bidir_lb_raptor::reset(unsigned const n_locations,
 }
 
 template <direction SearchDir>
-void bidir_lb_raptor::init(timetable const& tt, query const& q) {
+void bidir_lb_raptor::init(timetable const& tt,
+                           query const& q,
+                           bool const arrive_by) {
   static constexpr auto kFwd = SearchDir == direction::kForward;
-  auto const& offsets = kFwd ? q.start_ : q.destination_;
-  auto const& td_offsets = kFwd ? q.td_start_ : q.td_dest_;
-  auto const match_mode = kFwd ? q.start_match_mode_ : q.dest_match_mode_;
+
+  // The lb routes are traversed in travel direction by run<kForward>, so the
+  // forward search always has to start at the *travel* origin. For arrive_by
+  // queries (which are flipped, see query::flip_dir) that is `q.destination_`.
+  auto const use_start = (kFwd != arrive_by);
+  auto const& offsets = use_start ? q.start_ : q.destination_;
+  auto const& td_offsets = use_start ? q.td_start_ : q.td_dest_;
+  auto const match_mode =
+      use_start ? q.start_match_mode_ : q.dest_match_mode_;
   auto& round_times = kFwd ? fwd_round_times_ : bwd_round_times_;
   auto& station_mark = kFwd ? fwd_station_mark_ : bwd_station_mark_;
   auto& reached = kFwd ? fwd_reached_ : bwd_reached_;
@@ -166,13 +178,15 @@ bool bidir_lb_raptor::run(timetable const& tt,
           station_mark.set(to_idx(l_out), true);
           reached.set(to_idx(l_out), true);
           any_marked = true;
+        }
 
-          if (0 < out && out < static_cast<std::int32_t>(seq.size()) - 1) {
-            auto const layover = segment_layovers[out * 2 - 1].count();
-            lb += layover;
-          } else {
-            break;
-          }
+        // Keep scanning even when this stop was not improved: `lb` grows
+        // monotonically along the route, but the bounds it is compared against
+        // do not, so a stop further along may still be improvable. Aborting
+        // here loses whole branches of the network - e.g. a route reaching
+        // Ostkreuz past a stop that some other route already covers better.
+        if (0 < out && out < static_cast<std::int32_t>(seq.size()) - 1) {
+          lb += segment_layovers[out * 2 - 1].count();
         } else {
           break;
         }
@@ -195,9 +209,18 @@ bool bidir_lb_raptor::run(timetable const& tt,
         tmp_[l] +
         adjusted_transfer_time(q.transfer_time_settings_,
                                tt.locations_.transfer_time_[l].count());
-    round_times[k][l] = time_after_transfer;
-    station_mark.set(i, true);
-    reached.set(i, true);
+
+    // `tmp_[l]` was relaxed against the *pre*-transfer bound, so adding the
+    // transfer time can make it worse than the label carried over from the
+    // previous round. Writing it unconditionally would (a) break monotonicity
+    // of `round_times` and (b) leave a label that `reconstruct` cannot invert,
+    // because it is neither `tmp_[l] + transfer` of this round nor the value
+    // of round k-1. Only keep it if it actually improves.
+    if (time_after_transfer < round_times[k][l]) {
+      round_times[k][l] = time_after_transfer;
+      station_mark.set(i, true);
+      reached.set(i, true);
+    }
   });
 
   prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
@@ -247,41 +270,49 @@ bool bidir_lb_raptor::run(timetable const& tt,
 }
 
 void bidir_lb_raptor::execute(timetable const& tt,
+                              rt_timetable const* rtt,
                               query const& q,
                               bool const arrive_by) {
   reset(tt.n_locations(), tt.lb_route_times_[q.prf_idx_].size());
 
   // init (k = 0)
-  init<direction::kForward>(tt, q);
-  init<direction::kBackward>(tt, q);
+  init<direction::kForward>(tt, q, arrive_by);
+  init<direction::kBackward>(tt, q, arrive_by);
 
   // run
-  auto run_fwd = true;
-  auto run_bwd = true;
-  for (auto k = 1U; k != (std::min(q.max_transfers_, kMaxTransfers) + 2U) / 2U;
-       ++k) {
-    if (run_fwd) {
-      run_fwd = run<direction::kForward>(tt, q, k);
-      trace("[bidir_lb_raptor][fwd][k={}] meetpoints: {}", k,
-            utl::to_vec(meetpoints_,
-                        [&](auto const l) { return tt.get_default_name(l); }));
-      meetpoints_to_patterns<direction::kForward>(tt, q, k, arrive_by);
-      meetpoints_.clear();
-    }
-    if (run_bwd) {
-      run_bwd = run<direction::kBackward>(tt, q, k);
-      trace("[bidir_lb_raptor][bwd][k={}] meetpoints: {}", k,
-            utl::to_vec(meetpoints_,
-                        [&](auto const l) { return tt.get_default_name(l); }));
-      meetpoints_to_patterns<direction::kBackward>(tt, q, k, arrive_by);
-      meetpoints_.clear();
-    }
+  //
+  // Both directions are advanced every round, even after one of them has run
+  // out of stations to relax: `run()` carries `round_times[k-1]` over into
+  // `round_times[k]` before it gives up, and the direction that is still going
+  // keeps producing meetpoints whose patterns are reconstructed in *both*
+  // tables. If the exhausted direction stopped being called, its higher rounds
+  // would keep the kUnreachable values from `reset()` and every one of those
+  // reconstructions would fail.
+  auto any = true;
+  for (auto k = 1U;
+       any && k != (std::min(q.max_transfers_, kMaxTransfers) + 2U) / 2U; ++k) {
+    auto const fwd = run<direction::kForward>(tt, q, k);
+    trace("[bidir_lb_raptor][fwd][k={}] meetpoints: {}", k,
+          utl::to_vec(meetpoints_,
+                      [&](auto const l) { return tt.get_default_name(l); }));
+    meetpoints_to_patterns<direction::kForward>(tt, rtt, q, k, arrive_by);
+    meetpoints_.clear();
+
+    auto const bwd = run<direction::kBackward>(tt, q, k);
+    trace("[bidir_lb_raptor][bwd][k={}] meetpoints: {}", k,
+          utl::to_vec(meetpoints_,
+                      [&](auto const l) { return tt.get_default_name(l); }));
+    meetpoints_to_patterns<direction::kBackward>(tt, rtt, q, k, arrive_by);
+    meetpoints_.clear();
+
+    any = fwd || bwd;
   }
 
   trace(
       "[bidir_lb_raptor] terminating, pattern_reconstructions: {}, "
-      "pattern_repetitions: {}",
-      stats_.pattern_reconstructions_, stats_.pattern_repetitions_);
+      "truncated: {}, repetitions: {}, unrealizable: {}",
+      stats_.pattern_reconstructions_, stats_.truncated_patterns_,
+      stats_.pattern_repetitions_, stats_.unrealizable_patterns_);
 }
 
 }  // namespace nigiri::routing

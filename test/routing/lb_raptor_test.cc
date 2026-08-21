@@ -1,3 +1,5 @@
+#include <sstream>
+
 #include "gtest/gtest.h"
 
 #include "nigiri/routing/lb_raptor/bidir_lb_raptor.h"
@@ -262,7 +264,7 @@ TEST(routing, bidir_lb_raptor) {
                    .duration_ = footpath::kMaxDuration,
                    .transport_mode_id_ = 5}}}}};
   auto lbr = bidir_lb_raptor{};
-  lbr.execute(tt, q);
+  lbr.execute(tt, &rtt, q);
 
   auto const get_round_times = [&](location_idx_t const l, direction dir) {
     auto const& round_times = dir == direction::kForward ? lbr.fwd_round_times_
@@ -286,4 +288,43 @@ TEST(routing, bidir_lb_raptor) {
 
   print_round_times(direction::kForward);
   print_round_times(direction::kBackward);
+
+  auto const print_journeys = [&](std::string_view const title) {
+    auto ss = std::stringstream{};
+    for (auto const& j : lbr.journeys_) {
+      j.print(ss, tt, &rtt);
+      ss << "\n";
+    }
+    fmt::println("{}:\n{}", title, ss.str());
+  };
+  print_journeys("journeys");
+
+  // arrive_by: the query is flipped, i.e. q.start_ is the journey destination
+  // and q.start_time_ is the arrival time there.
+  auto const q_arrive_by = query{
+      .start_time_ = unixtime_t{sys_days{February / 27 / 2026}} + 18_hours,
+      .start_ = {{tt.locations_.location_id_to_idx_.at({"T", source_idx_t{0U}}),
+                  13_minutes, 0U}},
+      .destination_ = {{tt.locations_.location_id_to_idx_.at(
+                            {"P", source_idx_t{0U}}),
+                        3_minutes, 0U}}};
+  lbr.execute(tt, &rtt, q_arrive_by, true);
+  print_journeys("arrive_by journeys");
+
+  // range: every departure between 00:00 and 12:00
+  auto const q_range = query{
+      .start_time_ = interval<unixtime_t>{
+          unixtime_t{sys_days{February / 27 / 2026}},
+          unixtime_t{sys_days{February / 27 / 2026}} + 12_hours},
+      .start_ = {{tt.locations_.location_id_to_idx_.at({"P", source_idx_t{0U}}),
+                  3_minutes, 0U}},
+      .destination_ = {{tt.locations_.location_id_to_idx_.at(
+                            {"T", source_idx_t{0U}}),
+                        13_minutes, 0U}}};
+  lbr.execute(tt, &rtt, q_range);
+  fmt::println("range journeys: {}", lbr.journeys_.size());
+  for (auto const& j : lbr.journeys_) {
+    fmt::println("  start={} dep={} arr={} transfers={}", j.start_time_,
+                 j.departure_time(), j.arrival_time(), j.transfers_);
+  }
 }
