@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "utl/get_or_create.h"
+#include "utl/overloaded.h"
 #include "utl/pipes/remove_if.h"
 
 #include "nigiri/for_each_meta.h"
@@ -13,8 +14,8 @@
 #include "utl/enumerate.h"
 #include "utl/to_vec.h"
 
-// #define trace(...)
-#define trace fmt::println
+#define trace_lb(...)
+// #define trace_lb fmt::println
 
 namespace nigiri::routing {
 
@@ -290,14 +291,14 @@ void bidir_lb_raptor::execute(timetable const& tt,
   for (auto k = 1U;
        any && k != (std::min(q.max_transfers_, kMaxTransfers) + 2U) / 2U; ++k) {
     auto const fwd = run<direction::kForward>(tt, q, k);
-    trace("[bidir_lb_raptor][fwd][k={}] meetpoints: {}", k,
+    trace_lb("[bidir_lb_raptor][fwd][k={}] meetpoints: {}", k,
           utl::to_vec(meetpoints_,
                       [&](auto const l) { return tt.get_default_name(l); }));
     meetpoints_to_patterns<direction::kForward>(tt, rtt, q, k, arrive_by);
     meetpoints_.clear();
 
     auto const bwd = run<direction::kBackward>(tt, q, k);
-    trace("[bidir_lb_raptor][bwd][k={}] meetpoints: {}", k,
+    trace_lb("[bidir_lb_raptor][bwd][k={}] meetpoints: {}", k,
           utl::to_vec(meetpoints_,
                       [&](auto const l) { return tt.get_default_name(l); }));
     meetpoints_to_patterns<direction::kBackward>(tt, rtt, q, k, arrive_by);
@@ -306,11 +307,58 @@ void bidir_lb_raptor::execute(timetable const& tt,
     any = fwd || bwd;
   }
 
-  trace(
+  trace_lb(
       "[bidir_lb_raptor] terminating, pattern_reconstructions: {}, "
       "truncated: {}, repetitions: {}, unrealizable: {}",
       stats_.pattern_reconstructions_, stats_.truncated_patterns_,
       stats_.pattern_repetitions_, stats_.unrealizable_patterns_);
+}
+
+routing_result bidir_lb_raptor_search(
+    timetable const& tt,
+    rt_timetable const* rtt,
+    search_state& s_state,
+    query q,
+    direction const search_dir,
+    std::optional<std::chrono::seconds> /* timeout */) {
+  q.sanitize(tt);
+
+  auto const start = std::chrono::steady_clock::now();
+
+  // `q.start_` is the search source in both directions (motis flips the query
+  // for arriveBy), which is the convention `execute` expects.
+  auto const search_interval = std::visit(
+      utl::overloaded{
+          [](interval<unixtime_t> const i) { return i; },
+          [](unixtime_t const t) {
+            return interval<unixtime_t>{t, t + duration_t{1}};
+          }},
+      q.start_time_);
+
+  auto lbr = bidir_lb_raptor{};
+  lbr.execute(tt, rtt, q, search_dir == direction::kBackward);
+
+  s_state.results_.clear();
+  for (auto& j : lbr.journeys_) {
+    s_state.results_.add_not_optimal(std::move(j));
+  }
+
+  auto const execute_time =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now() - start);
+
+  return routing_result{
+      .journeys_ = &s_state.results_,
+      .interval_ = search_interval,
+      .search_stats_ = {.execute_time_ = execute_time},
+      .algo_stats_ = {
+          {"pattern_reconstructions", lbr.stats_.pattern_reconstructions_},
+          {"truncated_patterns", lbr.stats_.truncated_patterns_},
+          {"pattern_repetitions", lbr.stats_.pattern_repetitions_},
+          {"unrealizable_patterns", lbr.stats_.unrealizable_patterns_},
+          {"pruned_meetpoints", lbr.stats_.pruned_meetpoints_},
+          {"patterns", lbr.patterns_.size()},
+          {"journeys", s_state.results_.size()}}};
 }
 
 }  // namespace nigiri::routing

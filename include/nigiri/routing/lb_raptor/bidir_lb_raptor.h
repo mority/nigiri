@@ -3,6 +3,7 @@
 #include <tuple>
 
 #include "nigiri/routing/journey.h"
+#include "nigiri/routing/search.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/types.h"
 
@@ -112,5 +113,20 @@ public:
   std::vector<journey> journeys_;
   bidir_lb_raptor_stats stats_;
 };
+
+// Entry point matching `raptor_search` / `pong_search`, so the algorithm can
+// be selected like any other.
+//
+// Unlike those, the result is *not* a pareto front: every alternative found is
+// handed on via `pareto_set::add_not_optimal`. A journey that is dominated on
+// (departure, arrival, transfers) may still be interesting because of the
+// transfer pattern it uses, which is the whole point of this algorithm.
+routing_result bidir_lb_raptor_search(
+    timetable const&,
+    rt_timetable const*,
+    search_state&,
+    query,
+    direction search_dir,
+    std::optional<std::chrono::seconds> timeout = std::nullopt);
 
 }  // namespace nigiri::routing

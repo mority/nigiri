@@ -10,8 +10,8 @@
 #include "nigiri/routing/lb_raptor/pattern_to_journey.h"
 #include "nigiri/timetable.h"
 
-// #define trace(...)
-#define trace fmt::println
+#define trace_lb(...)
+// #define trace_lb fmt::println
 
 namespace nigiri::routing {
 constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
@@ -28,7 +28,7 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
   auto const find_in_prev_round =
       [&](location_idx_t const x, unsigned const k,
           std::uint16_t const time) -> std::optional<location_idx_t> {
-    trace("[find_in_prev_round][{}] location={}, round={}, time={}",
+    trace_lb("[find_in_prev_round][{}] location={}, round={}, time={}",
           kFwd ? "fwd" : "bwd", tt.get_default_name(x), k, time);
 
     for (auto const r : tt.location_lb_routes_[q.prf_idx_][x]) {
@@ -68,7 +68,7 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
   };
 
   if (round_times[k_start][l] == kUnreachable) {
-    trace("[reconstruct][{}][k={}] {} not reached, nothing to reconstruct",
+    trace_lb("[reconstruct][{}][k={}] {} not reached, nothing to reconstruct",
           kFwd ? "fwd" : "bwd", k_start, tt.get_default_name(l));
     return false;
   }
@@ -76,7 +76,7 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
   auto cur = l;
   for (auto k = k_start; k != 0U; --k) {
     if (is_terminal.test(to_idx(cur))) {
-      trace("[reconstruct][{}][k={}] reached terminal {}, terminating",
+      trace_lb("[reconstruct][{}][k={}] reached terminal {}, terminating",
             kFwd ? "fwd" : "bwd", k, tt.get_default_name(cur));
       return true;
     }
@@ -143,14 +143,14 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
       prev = footpath_transfer(cur);
     }
     if (!prev) {
-      trace(
+      trace_lb(
           "[reconstruct][{}][k={}][cur={}] failed, could not find matching "
           "entry in previous round,",
           kFwd ? "fwd" : "bwd", k, tt.get_default_name(cur));
       return false;
     }
 
-    trace("[reconstruct][{}][k={}][cur={}] adding {} to pattern",
+    trace_lb("[reconstruct][{}][k={}][cur={}] adding {} to pattern",
           kFwd ? "fwd" : "bwd", k, tt.get_default_name(cur),
           tt.get_default_name(*prev));
     current_pattern_.emplace_back(*prev);
@@ -200,7 +200,7 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
     // and the other half is built as usual. Only a meetpoint that is start
     // *and* destination is degenerate.
     if (is_start_.test(to_idx(m)) && is_dest_.test(to_idx(m))) {
-      trace("[meetpoints_to_patterns][{}][k={}] skipping start == destination",
+      trace_lb("[meetpoints_to_patterns][{}][k={}] skipping start == destination",
             kFwd ? "fwd" : "bwd", k);
       continue;
     }
@@ -238,7 +238,7 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
   }
 
   for (auto const& [m, transfers, travel_time_lb] : scored_meetpoints_) {
-    trace("[meetpoints_to_patterns][{}][k={}] meetpoint: {} ({} transfers, {})",
+    trace_lb("[meetpoints_to_patterns][{}][k={}] meetpoint: {} ({} transfers, {})",
           kFwd ? "fwd" : "bwd", k, tt.get_default_name(m), transfers,
           travel_time_lb);
 
@@ -252,7 +252,7 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
 
     if (!complete) {
       ++stats_.truncated_patterns_;
-      trace("[meetpoints_to_patterns][{}][k={}] truncated pattern: {}",
+      trace_lb("[meetpoints_to_patterns][{}][k={}] truncated pattern: {}",
             kFwd ? "fwd" : "bwd", k,
             utl::to_vec(current_pattern_,
                         [&](auto const l) { return tt.get_default_name(l); }));
@@ -263,14 +263,14 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
     // the most expensive step, so skip it for a pattern already seen.
     if (!patterns_.emplace(to_array(current_pattern_)).second) {
       ++stats_.pattern_repetitions_;
-      trace("[meetpoints_to_patterns][{}][k={}] pattern repetition: {}",
+      trace_lb("[meetpoints_to_patterns][{}][k={}] pattern repetition: {}",
             kFwd ? "fwd" : "bwd", k,
             utl::to_vec(current_pattern_,
                         [&](auto const l) { return tt.get_default_name(l); }));
       continue;
     }
 
-    trace("[meetpoints_to_patterns][{}][k={}] new pattern: {}",
+    trace_lb("[meetpoints_to_patterns][{}][k={}] new pattern: {}",
           kFwd ? "fwd" : "bwd", k,
           utl::to_vec(current_pattern_,
                       [&](auto const l) { return tt.get_default_name(l); }));
@@ -300,10 +300,10 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
 
     if (journeys_.size() == n_before) {
       ++stats_.unrealizable_patterns_;
-      trace("[meetpoints_to_patterns][{}][k={}] pattern not realizable",
+      trace_lb("[meetpoints_to_patterns][{}][k={}] pattern not realizable",
             kFwd ? "fwd" : "bwd", k);
     } else {
-      trace("[meetpoints_to_patterns][{}][k={}] {} journeys", kFwd ? "fwd" : "bwd",
+      trace_lb("[meetpoints_to_patterns][{}][k={}] {} journeys", kFwd ? "fwd" : "bwd",
             k, journeys_.size() - n_before);
     }
   }

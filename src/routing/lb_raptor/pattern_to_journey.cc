@@ -11,8 +11,8 @@
 #include "nigiri/td_footpath.h"
 #include "nigiri/timetable.h"
 
-// #define trace(...)
-#define trace fmt::println
+#define trace_lb(...)
+// #define trace_lb fmt::println
 
 namespace nigiri::routing {
 
@@ -30,7 +30,7 @@ std::optional<journey> realize(timetable const& tt,
   constexpr auto const kFwd = SearchDir == direction::kForward;
 
   if (pattern.size() < 2U) {
-    trace("[pattern_to_journey] pattern too short: {}", pattern.size());
+    trace_lb("[pattern_to_journey] pattern too short: {}", pattern.size());
     return std::nullopt;
   }
 
@@ -77,7 +77,7 @@ std::optional<journey> realize(timetable const& tt,
   auto const start_offset = find_offset(
       q.start_, q.td_start_, q.start_match_mode_, at(0U), start_time);
   if (!start_offset.has_value()) {
-    trace("[pattern_to_journey] no start offset for {}",
+    trace_lb("[pattern_to_journey] no start offset for {}",
           tt.get_default_name(at(0U)));
     return std::nullopt;
   }
@@ -108,7 +108,7 @@ std::optional<journey> realize(timetable const& tt,
         alternative_options{.from_is_terminal_ = i == 1U,
                             .to_is_terminal_ = is_last});
     if (!alt.has_value()) {
-      trace("[pattern_to_journey] no transport {} -> {} after {}",
+      trace_lb("[pattern_to_journey] no transport {} -> {} after {}",
             tt.get_default_name(cur), tt.get_default_name(next), cur_time);
       return std::nullopt;
     }
@@ -149,14 +149,14 @@ std::optional<journey> realize(timetable const& tt,
                                        q.dest_match_mode_, at(n - 1U),
                                        cur_time);
   if (!dest_offset.has_value()) {
-    trace("[pattern_to_journey] no destination offset for {}",
+    trace_lb("[pattern_to_journey] no destination offset for {}",
           tt.get_default_name(at(n - 1U)));
     return std::nullopt;
   }
 
   auto const dest_time = cur_time + adv(dest_offset->duration());
   if (kFwd ? dest_time > deadline : dest_time < deadline) {
-    trace("[pattern_to_journey] exceeds max_travel_time: {} vs {}", dest_time,
+    trace_lb("[pattern_to_journey] exceeds max_travel_time: {} vs {}", dest_time,
           deadline);
     return std::nullopt;
   }
@@ -177,6 +177,8 @@ std::optional<journey> realize(timetable const& tt,
   j.dest_time_ = dest_time;
   j.dest_ = at(n - 1U);
   j.transfers_ = static_cast<std::uint8_t>(n_transports - 1U);
+  // The legs are built here directly, there is no separate reconstruct step.
+  j.is_reconstructed_ = true;
   return j;
 }
 
