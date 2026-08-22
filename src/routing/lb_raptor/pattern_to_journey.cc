@@ -53,16 +53,28 @@ std::optional<journey> realize(timetable const& tt,
                                location_match_mode const match_mode,
                                location_idx_t const l,
                                unixtime_t const t) -> std::optional<offset> {
+    // `bidir_lb_raptor::init` seeds the search at *root* locations, so the
+    // pattern is made of roots. An offset may target a child platform, and
+    // `matches` only expands downwards (parent -> children), so comparing the
+    // offset target against the root directly would miss it. Mirror what
+    // `init` does instead: expand the target and check the roots.
+    auto const targets_l = [&](location_idx_t const target) {
+      auto found = false;
+      for_each_meta(tt, match_mode, target, [&](location_idx_t const m) {
+        found = found || tt.locations_.get_root_idx(m) == l;
+      });
+      return found;
+    };
+
     auto best = std::optional<offset>{};
     for (auto const& o : offsets) {
-      if (o.duration() < footpath::kMaxDuration &&
-          matches(tt, match_mode, o.target(), l) &&
+      if (o.duration() < footpath::kMaxDuration && targets_l(o.target()) &&
           (!best.has_value() || o.duration() < best->duration())) {
         best = o;
       }
     }
     for (auto const& [x, tds] : td_offsets) {
-      if (!matches(tt, match_mode, x, l)) {
+      if (!targets_l(x)) {
         continue;
       }
       auto const d = get_td_duration<SearchDir>(tds, t);
