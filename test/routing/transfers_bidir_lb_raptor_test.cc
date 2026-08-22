@@ -9,6 +9,30 @@
 //     --gtest_also_run_disabled_tests
 //     --gtest_filter='*transfers_lb_raptor_real*'
 //
+// Measured on DELFI (nationwide, 2026-09-01, 3 days: 500515 locations,
+// 177361 routes -> 170419 lb routes), best of 5 per query, gcc-14 -O3.
+// Four Berlin ontrip queries, bidir_lb_raptor -> transfers_bidir_lb_raptor:
+//
+//   search only (NIGIRI_MAX_PATTERNS=0, no reconstruction)
+//     786 -> 234ms | 572 -> 136ms | 461 -> 69ms | 432 -> 79ms
+//     i.e. 3.4x - 6.6x faster. The first-touch BFS is the whole win.
+//
+//   end to end, one chain per meetpoint (NIGIRI_MAX_PREDS=1 NIGIRI_MAX_CHAINS=1)
+//     946 -> 629ms | 809 -> 593ms | 572 -> 747ms | 502 -> 1560ms
+//     i.e. 1.5x / 1.4x faster, 0.8x / 0.3x slower. The search win is eaten by
+//     realization: transfer-optimal patterns have longer hops, so
+//     get_alternative has more work per pattern even at equal pattern counts.
+//
+//   end to end, default caps (3 preds/step, 4 chains/meetpoint)
+//     946 -> 1148ms | 809 -> 2096ms | 572 -> 1775ms | 502 -> 2456ms
+//     0.2x - 0.8x, but 4x the patterns (590 -> 2268) and journeys
+//     (361 -> 1549). The DAG enumeration buys alternatives, not speed.
+//
+// Quality: both recover the same share of the plain-RAPTOR pareto front, and
+// best-arrival per transfer count agrees up to ~2 transfers. Beyond that the
+// transfers-only patterns are noticeably worse (hours later, or missing) -
+// the transport count alone cannot tell a good predecessor from a bad one.
+//
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
