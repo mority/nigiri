@@ -22,7 +22,7 @@ rt_timetable create_rt_timetable(timetable const& tt,
   // resize for later memory accesses
   rtt.location_rt_transports_[location_idx_t{tt.n_locations() - 1U}];
   rtt.location_rt_routes_[location_idx_t{tt.n_locations() - 1U}];
-  rtt.location_rt_unrouted_[location_idx_t{tt.n_locations() - 1U}];
+  rtt.location_rt_unrouted_.resize(tt.n_locations());
   rtt.alerts_.route_type_.resize(tt.n_sources());
   rtt.alerts_.route_id_.resize(tt.n_sources());
   for (auto const [src, r] : utl::enumerate(tt.route_ids_)) {

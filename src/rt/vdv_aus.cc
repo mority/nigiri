@@ -489,8 +489,7 @@ void monotonize(frun& fr, rt_timetable& rtt) {
 
 void handle_first_last_cancelation(frun& fr, rt_timetable& rtt) {
   auto const cancel_stop = [&](auto& rs) {
-    auto& stp = rtt.rt_transport_location_seq_[fr.rt_][rs.stop_idx_];
-    stp = stop{stop{stp}.location_idx(), false, false, false, false}.value();
+    rtt.cancel_stop(fr.rt_, rs.stop_idx_);
   };
 
   auto first = fr[0U];

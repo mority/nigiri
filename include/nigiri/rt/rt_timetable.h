@@ -64,16 +64,33 @@ struct rt_timetable {
     return clamp(d);
   }
 
-  void update_time(rt_transport_idx_t const rt_t,
-                   stop_idx_t const stop_idx,
-                   event_type const ev_type,
-                   unixtime_t const new_time) {
-    auto const ev_idx = stop_idx * 2 - (ev_type == event_type::kArr ? 1 : 0);
-    assert(ev_idx >= 0 && static_cast<stop_idx_t>(ev_idx) <
-                              rt_transport_stop_times_[rt_t].size());
-    rt_transport_stop_times_[rt_t][static_cast<std::size_t>(ev_idx)] =
-        unix_to_delta(new_time);
-  }
+  // Sets one event time. If this is the first event of `rt_t` to move off its
+  // scheduled time, the transport is taken off the static scan and put on a
+  // real-time scan in the same step -- see mark_deviating().
+  void update_time(rt_transport_idx_t rt_t,
+                   stop_idx_t,
+                   event_type,
+                   unixtime_t new_time);
+
+  // Cancels one stop (no boarding, no alighting). Also a deviation: the stop
+  // sequence no longer matches the static route's.
+  void cancel_stop(rt_transport_idx_t, stop_idx_t);
+
+  // Takes the transport's day off the static scan *and* registers it for a
+  // real-time scan. These two always happen together: a transport whose
+  // traffic day is cleared while it is in no scan list is invisible to the
+  // routing, which is silent data loss rather than a degradation. Keeping the
+  // pair inside one function is what makes that state unrepresentable.
+  //
+  // finalize_rt_transport() may afterwards move the transport into an rt route
+  // (faster), or back onto the static scan if it turns out to match the
+  // schedule again. Both are optimisations: forgetting to call it costs
+  // performance, never journeys.
+  void mark_deviating(rt_transport_idx_t);
+
+  // Sets or clears one day of `t` in the rt traffic days, creating the
+  // rt-owned bitfield copy on first use.
+  void set_rt_traffic_day(transport t, bool active);
 
   void update_lbs(timetable const& tt,
                   rt_transport_idx_t,
@@ -257,6 +274,12 @@ struct rt_timetable {
   // grouped or unchanged is filtered out when the marks are built.
   void register_unrouted(rt_transport_idx_t);
 
+  // Removes `rt_t` from location_rt_unrouted_ again, once it has a group to be
+  // scanned in. Without this every transport that ever deviated would stay in
+  // the per-transport list and the routing would walk them all when building
+  // its marks -- which is exactly the cost rt routes exist to remove.
+  void deregister_unrouted(rt_transport_idx_t);
+
   rt_route_idx_t rt_route_of(rt_transport_idx_t const rt_t) const noexcept {
     return to_idx(rt_t) < rt_transport_rt_route_.size()
                ? rt_transport_rt_route_[rt_t]
@@ -385,7 +408,9 @@ struct rt_timetable {
   // group: additional trips, reroutings, cancelled stops, cancelled runs.
   // Together with location_rt_routes_ this replaces walking
   // location_rt_transports_ when the routing builds its marks.
-  mutable_fws_multimap<location_idx_t, rt_transport_idx_t>
+  // A plain vector per location, not a mutable_fws_multimap: entries have to
+  // be removable again (see deregister_unrouted).
+  vector_map<location_idx_t, std::vector<rt_transport_idx_t>>
       location_rt_unrouted_;
   bitvec rt_transport_unrouted_registered_;
 

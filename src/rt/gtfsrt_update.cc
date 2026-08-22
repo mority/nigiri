@@ -385,7 +385,7 @@ bool update_run(source_idx_t const src,
           gtfsrt::TripUpdate_StopTimeUpdate_ScheduleRelationship_SKIPPED) {
         auto l_idx = stop{stp}.location_idx();
         // Cancel skipped stops (in_allowed = out_allowed = false).
-        stp = stop{l_idx, false, false, false, false}.value();
+        rtt.cancel_stop(r.rt_, stop_idx);
         rtt.dispatch_stop_change(r, stop_idx, event_type::kArr, l_idx, false);
         rtt.dispatch_stop_change(r, stop_idx, event_type::kDep, l_idx, false);
       } else if (upd_it->stop_time_properties().has_assigned_stop_id() ||

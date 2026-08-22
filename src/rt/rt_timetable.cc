@@ -20,11 +20,94 @@ void rt_timetable::register_unrouted(rt_transport_idx_t const rt_t) {
   }
   rt_transport_unrouted_registered_.set(to_idx(rt_t), true);
   for (auto const s : rt_transport_location_seq_[rt_t]) {
-    auto unrouted = location_rt_unrouted_[stop{s}.location_idx()];
+    auto const l = stop{s}.location_idx();
+    // create_rt_timetable() sizes this, but an rt_timetable can also be built
+    // by hand (tests do), so grow on demand rather than trusting the size
+    if (to_idx(l) >= location_rt_unrouted_.size()) {
+      location_rt_unrouted_.resize(to_idx(l) + 1U);
+    }
+    auto& unrouted = location_rt_unrouted_[l];
     if (unrouted.empty() || unrouted.back() != rt_t) {
       unrouted.push_back(rt_t);
     }
   }
+}
+
+void rt_timetable::deregister_unrouted(rt_transport_idx_t const rt_t) {
+  if (to_idx(rt_t) >= rt_transport_unrouted_registered_.size() ||
+      !rt_transport_unrouted_registered_.test(to_idx(rt_t))) {
+    return;
+  }
+  rt_transport_unrouted_registered_.set(to_idx(rt_t), false);
+  for (auto const s : rt_transport_location_seq_[rt_t]) {
+    auto const l = stop{s}.location_idx();
+    if (to_idx(l) >= location_rt_unrouted_.size()) {
+      continue;
+    }
+    auto& unrouted = location_rt_unrouted_[l];
+    unrouted.erase(std::remove(begin(unrouted), end(unrouted), rt_t),
+                   end(unrouted));
+  }
+}
+
+void rt_timetable::set_rt_traffic_day(transport const t, bool const active) {
+  if (!t.is_valid()) {
+    return;
+  }
+  auto bf_idx = transport_traffic_days_[t.t_idx_];
+  if ((to_idx(bf_idx) & kRtBitfieldFlag) == 0U) {
+    // still pointing at the shared static bitfield: take a private copy
+    bitfields_.emplace_back(traffic_days(bf_idx));
+    transport_traffic_days_[t.t_idx_] = rt_bitfield_idx();
+    bf_idx = transport_traffic_days_[t.t_idx_];
+  }
+  bitfields_[bitfield_idx_t{to_idx(bf_idx) & ~kRtBitfieldFlag}].set(
+      to_idx(t.day_), active);
+}
+
+void rt_timetable::mark_deviating(rt_transport_idx_t const rt_t) {
+  set_unchanged(rt_t, false);
+  set_rt_traffic_day(resolve_static(rt_t), false);
+  register_unrouted(rt_t);
+}
+
+void rt_timetable::update_time(rt_transport_idx_t const rt_t,
+                               stop_idx_t const stop_idx,
+                               event_type const ev_type,
+                               unixtime_t const new_time) {
+  auto const ev_idx = stop_idx * 2 - (ev_type == event_type::kArr ? 1 : 0);
+  assert(ev_idx >= 0 && static_cast<stop_idx_t>(ev_idx) <
+                            rt_transport_stop_times_[rt_t].size());
+  auto const v = unix_to_delta(new_time);
+  rt_transport_stop_times_[rt_t][static_cast<std::size_t>(ev_idx)] = v;
+
+  if (!is_unchanged(rt_t)) {
+    return;  // already off the static scan
+  }
+
+  // O(1): only this one event has to be compared, and only while the
+  // transport still counts as identical to its schedule.
+  auto const t = resolve_static(rt_t);
+  if (tt_ == nullptr || !t.is_valid()) {
+    mark_deviating(rt_t);  // nothing to compare against: assume it deviates
+    return;
+  }
+  auto const r = tt_->transport_route_[t.t_idx_];
+  auto const scheduled =
+      (static_cast<int>(to_idx(t.day_)) -
+       static_cast<int>(to_idx(base_day_idx_))) *
+          1440 +
+      tt_->event_mam(r, t.t_idx_, stop_idx, ev_type).count();
+  if (static_cast<int>(v) != scheduled) {
+    mark_deviating(rt_t);
+  }
+}
+
+void rt_timetable::cancel_stop(rt_transport_idx_t const rt_t,
+                               stop_idx_t const stop_idx) {
+  auto& stp = rt_transport_location_seq_[rt_t][stop_idx];
+  stp = stop{stop{stp}.location_idx(), false, false, false, false}.value();
+  mark_deviating(rt_t);  // stop sequence no longer matches the static route
 }
 
 bool rt_timetable::try_insert_into_rt_route(rt_route_idx_t const rt_r,
@@ -104,6 +187,7 @@ void rt_timetable::regroup_rt_transport(timetable const& tt,
   for (auto const rt_r : subs) {
     if (try_insert_into_rt_route(rt_r, rt_t)) {
       cur = rt_r;
+      deregister_unrouted(rt_t);
       return;
     }
   }
@@ -114,6 +198,7 @@ void rt_timetable::regroup_rt_transport(timetable const& tt,
   rt_route_static_route_.emplace_back(r);
   subs.push_back(rt_r);
   cur = rt_r;
+  deregister_unrouted(rt_t);
   for (auto const s : static_seq) {
     auto rt_routes = location_rt_routes_[stop{s}.location_idx()];
     if (rt_routes.empty() || rt_routes.back() != rt_r) {
@@ -203,11 +288,7 @@ void rt_timetable::finalize_rt_transport(timetable const& tt,
     // traffic the schedule already has, never invent it.
     auto const on_static_scan =
         unchanged && tt.is_transport_active(t.t_idx_, t.day_);
-    auto const bf_idx = transport_traffic_days_[t.t_idx_];
-    utl::verify((to_idx(bf_idx) & kRtBitfieldFlag) != 0U,
-                "finalize_rt_transport: {} has no rt bitfield", t.t_idx_);
-    bitfields_[bitfield_idx_t{to_idx(bf_idx) & ~kRtBitfieldFlag}].set(
-        to_idx(t.day_), on_static_scan);
+    set_rt_traffic_day(t, on_static_scan);
   }
 
   regroup_rt_transport(tt, rt_t);
@@ -232,15 +313,18 @@ rt_transport_idx_t rt_timetable::add_rt_transport(
     static_trip_lookup_.emplace(t, rt_t_idx);
     rt_transport_static_transport_.emplace_back(t);
 
-    auto const static_bf = traffic_days(transport_traffic_days_[t_idx]);
-    bitfields_.emplace_back(static_bf).set(to_idx(day), false);
-    transport_traffic_days_[t_idx] = rt_bitfield_idx();
+    // No traffic day is cleared here: the times below are copied verbatim from
+    // the schedule, so until something changes them the static scan is the
+    // correct -- and cheaper -- place for this transport. update_time(),
+    // cancel_stop() and cancel_run() take it off there the moment it deviates.
+    set_unchanged(rt_t, true);
   } else {
     auto const rt_add_idx =
         rt_add_trip_id_idx_t{additional_trips_.at(src).transports_.size()};
     additional_trips_.at(src).ids_.store(new_trip_id);
     additional_trips_.at(src).transports_.emplace_back(rt_t_idx);
     rt_transport_static_transport_.emplace_back(rt_add_idx);
+    set_unchanged(rt_t, false);
   }
 
   auto const r =
@@ -542,9 +626,7 @@ void rt_timetable::cancel_run(rt::run const& r) {
     register_unrouted(r.rt_);  // still scanned, just no longer in a group
   }
   if (r.is_scheduled()) {
-    auto const bf = traffic_days(transport_traffic_days_[r.t_.t_idx_]);
-    bitfields_.emplace_back(bf).set(to_idx(r.t_.day_), false);
-    transport_traffic_days_[r.t_.t_idx_] = rt_bitfield_idx();
+    set_rt_traffic_day(r.t_, false);
 
     for (auto i = r.stop_range_.from_; i != r.stop_range_.to_; ++i) {
       dispatch_stop_change(r, i, event_type::kArr, std::nullopt, false);
