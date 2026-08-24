@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cassert>
-#include <type_traits>
+#include <algorithm>
 #include <span>
+#include <type_traits>
+#include <utility>
 
 #include "nigiri/common/delta_t.h"
 #include "nigiri/common/linear_lower_bound.h"
@@ -178,22 +180,36 @@ struct raptor {
 
   void set_bounds(unsigned const last_round) { bounds_last_k_ = last_round; }
 
-  // Records an improvement at location l for one slot. station_mark_ is the
-  // union both slots' route scans work from; station_mark_rt_ additionally
-  // tracks the rt slot on its own, because rt transports are an rtt_-only
-  // concept the scheduled slot can never ride (see raptor_state.h).
+  // Records an improvement at location l for one slot, in that slot's own
+  // mark set -- the two are never merged, see raptor_state.h.
   template <bool ForSched>
   void mark_station(std::size_t const l) {
-    state_.station_mark_.set(l, true);
-    if constexpr (RtMode == rt_mode::both && !ForSched) {
-      state_.station_mark_rt_.set(l, true);
+    if constexpr (RtMode == rt_mode::both && ForSched) {
+      state_.station_mark_sched_.set(l, true);
+    } else {
+      state_.station_mark_.set(l, true);
     }
   }
 
   void clear_station_marks() {
     utl::fill(state_.station_mark_.blocks_, 0U);
     if constexpr (RtMode == rt_mode::both) {
-      utl::fill(state_.station_mark_rt_.blocks_, 0U);
+      utl::fill(state_.station_mark_sched_.blocks_, 0U);
+    }
+  }
+
+  void swap_station_marks() {
+    std::swap(state_.prev_station_mark_, state_.station_mark_);
+    if constexpr (RtMode == rt_mode::both) {
+      std::swap(state_.prev_station_mark_sched_, state_.station_mark_sched_);
+    }
+    clear_station_marks();
+  }
+
+  void clear_route_marks() {
+    utl::fill(state_.route_mark_.blocks_, 0U);
+    if constexpr (RtMode == rt_mode::both) {
+      utl::fill(state_.route_mark_sched_.blocks_, 0U);
     }
   }
 
@@ -211,11 +227,12 @@ struct raptor {
     utl::fill(tmp_, kInvalidArray);
     utl::fill(state_.prev_station_mark_.blocks_, 0U);
     clear_station_marks();
-    utl::fill(state_.route_mark_.blocks_, 0U);
+    clear_route_marks();
     if constexpr (RtMode != rt_mode::off) {
       utl::fill(state_.rt_transport_mark_.blocks_, 0U);
     }
     if constexpr (RtMode == rt_mode::both) {
+      utl::fill(state_.prev_station_mark_sched_.blocks_, 0U);
       utl::fill(best_sched_, kInvalidArray);
       utl::fill(tmp_sched_, kInvalidArray);
     }
@@ -279,13 +296,23 @@ struct raptor {
         }
       });
 
+      // Each slot expands its own marks: a slot can only board where that
+      // same slot has a round-(k-1) label, and round_times_[k-1] is set
+      // exactly where that slot marked. (Labels carried over from an earlier
+      // start time of a range search are the one exception -- round_times_
+      // set without a mark -- and they need no re-expansion: next_start_time()
+      // clears every mark while keeping round_times_, so the search already
+      // relies on that invariant. Splitting the marks only applies it per
+      // slot.) Routes reached by both slots land in both route mark sets and
+      // are scanned once for both, see for_each_marked_route().
       auto any_marked = false;
       state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
         for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
           any_marked = true;
           state_.route_mark_.set(to_idx(r), true);
         }
-        if constexpr (RtMode == rt_mode::on) {
+        // rt transports are an rtt_-only concept: only the rt slot rides them.
+        if constexpr (RtMode != rt_mode::off) {
           for (auto const& rt_t :
                rtt_->location_rt_transports_[location_idx_t{i}]) {
             any_marked = true;
@@ -293,25 +320,11 @@ struct raptor {
           }
         }
       });
-      // Both slots ride the static routes above, so those are marked from the
-      // union. An rt transport, though, can only ever be boarded by the rt
-      // slot, so marking one because the *scheduled* slot reached one of its
-      // stops only makes the rt slot re-walk that transport's whole stop
-      // sequence for nothing: update_rt_transport() boards off
-      // round_times_[k-1], which this round is set exactly where the rt slot
-      // improved -- i.e. exactly where station_mark_rt_ is set.
-      //
-      // Labels carried over from an earlier start time of a range search are
-      // the one case where round_times_[k-1] is set without a mark, and they
-      // need no re-expansion: next_start_time() already clears every mark
-      // while keeping round_times_, so the search as a whole relies on that
-      // same invariant. Splitting the mark per slot only applies it per slot.
       if constexpr (RtMode == rt_mode::both) {
-        state_.station_mark_rt_.for_each_set_bit([&](std::uint64_t const i) {
-          for (auto const& rt_t :
-               rtt_->location_rt_transports_[location_idx_t{i}]) {
+        state_.station_mark_sched_.for_each_set_bit([&](std::uint64_t const i) {
+          for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
             any_marked = true;
-            state_.rt_transport_mark_.set(to_idx(rt_t), true);
+            state_.route_mark_sched_.set(to_idx(r), true);
           }
         });
       }
@@ -320,8 +333,7 @@ struct raptor {
         break;
       }
 
-      std::swap(state_.prev_station_mark_, state_.station_mark_);
-      clear_station_marks();
+      swap_station_marks();
 
       bool const clasz_filter = allowed_claszes_ != all_clasz_allowed();
       uint8_t const filters =
@@ -447,11 +459,10 @@ struct raptor {
         break;
       }
 
-      utl::fill(state_.route_mark_.blocks_, 0U);
+      clear_route_marks();
       utl::fill(state_.rt_transport_mark_.blocks_, 0U);
 
-      std::swap(state_.prev_station_mark_, state_.station_mark_);
-      clear_station_marks();
+      swap_station_marks();
 
       update_transfers(k);
       update_intermodal_footpaths(k);
@@ -585,6 +596,61 @@ private:
     return is_better_or_eq(t, row[l][slot] + transfer + dir(stays_l));
   }
 
+  // Visits every route either slot marked, exactly once, and tells `fn` which
+  // slots want it: fn(r, do_rt, do_sched). A route only one slot reached is
+  // scanned for that slot alone -- the other has no round-(k-1) label at any
+  // of its stops and could not board it anyway. A route both slots reached is
+  // scanned once with both active: the stop sequence walk, the section
+  // filters and the via bookkeeping are schedule-independent, so only the
+  // per-slot label updates have to happen twice.
+  template <typename Fn>
+  void for_each_marked_route(Fn&& fn) {
+    state_.route_mark_.for_each_set_bit([&](auto const r_idx) {
+      if constexpr (RtMode == rt_mode::both) {
+        fn(route_idx_t{r_idx}, true,
+           state_.route_mark_sched_.test(
+               static_cast<bitvec::size_type>(r_idx)));
+      } else {
+        fn(route_idx_t{r_idx}, true, false);
+      }
+    });
+    if constexpr (RtMode == rt_mode::both) {
+      state_.route_mark_sched_.for_each_set_bit([&](auto const r_idx) {
+        // the shared ones already ran above, with both slots active
+        if (!state_.route_mark_.test(static_cast<bitvec::size_type>(r_idx))) {
+          fn(route_idx_t{r_idx}, false, true);
+        }
+      });
+    }
+  }
+
+  // The same walk over the locations each slot improved in the previous
+  // round, for the footpath/transfer phase: fn(l, do_rt, do_sched). A
+  // location both slots reached is visited once, so the per-location work
+  // that does not depend on the schedule -- via state, transfer time, the
+  // footpath list -- is done once for both.
+  template <typename Fn>
+  void for_each_prev_marked(Fn&& fn) {
+    state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+      if constexpr (RtMode == rt_mode::both) {
+        fn(i, true,
+           state_.prev_station_mark_sched_.test(
+               static_cast<bitvec::size_type>(i)));
+      } else {
+        fn(i, true, false);
+      }
+    });
+    if constexpr (RtMode == rt_mode::both) {
+      state_.prev_station_mark_sched_.for_each_set_bit(
+          [&](std::uint64_t const i) {
+            if (!state_.prev_station_mark_.test(
+                    static_cast<bitvec::size_type>(i))) {
+              fn(i, false, true);
+            }
+          });
+    }
+  }
+
   template <bool WithClaszFilter,
             bool WithBikeFilter,
             bool WithCarFilter,
@@ -592,8 +658,9 @@ private:
             bool WithReservationNotRequiredFilter>
   bool loop_routes(unsigned const k) {
     auto any_marked = false;
-    state_.route_mark_.for_each_set_bit([&](auto const r_idx) {
-      auto const r = route_idx_t{r_idx};
+    for_each_marked_route([&](route_idx_t const r, bool const do_rt,
+                              bool const do_sched) {
+      auto const r_idx = static_cast<std::size_t>(to_idx(r));
 
       if constexpr (WithClaszFilter) {
         if (!is_allowed(allowed_claszes_, tt_.route_clasz_[r])) {
@@ -648,22 +715,54 @@ private:
 
       any_marked |= [&]() {
         switch (filters) {
-          case 0b0000: return update_route<false, false, false, false>(k, r);
-          case 0b0001: return update_route<false, false, false, true>(k, r);
-          case 0b0010: return update_route<false, false, true, false>(k, r);
-          case 0b0011: return update_route<false, false, true, true>(k, r);
-          case 0b0100: return update_route<false, true, false, false>(k, r);
-          case 0b0101: return update_route<false, true, false, true>(k, r);
-          case 0b0110: return update_route<false, true, true, false>(k, r);
-          case 0b0111: return update_route<false, true, true, true>(k, r);
-          case 0b1000: return update_route<true, false, false, false>(k, r);
-          case 0b1001: return update_route<true, false, false, true>(k, r);
-          case 0b1010: return update_route<true, false, true, false>(k, r);
-          case 0b1011: return update_route<true, false, true, true>(k, r);
-          case 0b1100: return update_route<true, true, false, false>(k, r);
-          case 0b1101: return update_route<true, true, false, true>(k, r);
-          case 0b1110: return update_route<true, true, true, false>(k, r);
-          case 0b1111: return update_route<true, true, true, true>(k, r);
+          case 0b0000:
+            return update_route<false, false, false, false>(k, r, do_rt,
+                                                            do_sched);
+          case 0b0001:
+            return update_route<false, false, false, true>(k, r, do_rt,
+                                                           do_sched);
+          case 0b0010:
+            return update_route<false, false, true, false>(k, r, do_rt,
+                                                           do_sched);
+          case 0b0011:
+            return update_route<false, false, true, true>(k, r, do_rt,
+                                                          do_sched);
+          case 0b0100:
+            return update_route<false, true, false, false>(k, r, do_rt,
+                                                           do_sched);
+          case 0b0101:
+            return update_route<false, true, false, true>(k, r, do_rt,
+                                                          do_sched);
+          case 0b0110:
+            return update_route<false, true, true, false>(k, r, do_rt,
+                                                          do_sched);
+          case 0b0111:
+            return update_route<false, true, true, true>(k, r, do_rt,
+                                                         do_sched);
+          case 0b1000:
+            return update_route<true, false, false, false>(k, r, do_rt,
+                                                           do_sched);
+          case 0b1001:
+            return update_route<true, false, false, true>(k, r, do_rt,
+                                                          do_sched);
+          case 0b1010:
+            return update_route<true, false, true, false>(k, r, do_rt,
+                                                          do_sched);
+          case 0b1011:
+            return update_route<true, false, true, true>(k, r, do_rt,
+                                                         do_sched);
+          case 0b1100:
+            return update_route<true, true, false, false>(k, r, do_rt,
+                                                          do_sched);
+          case 0b1101:
+            return update_route<true, true, false, true>(k, r, do_rt,
+                                                         do_sched);
+          case 0b1110:
+            return update_route<true, true, true, false>(k, r, do_rt,
+                                                         do_sched);
+          case 0b1111:
+            return update_route<true, true, true, true>(k, r, do_rt,
+                                                        do_sched);
           default: std::unreachable();
         }
       }();
@@ -776,9 +875,9 @@ private:
 
   // Slot accessors: ForSched selects between the rt-slot storage (tmp_,
   // best_, round_times_, time_at_dest_) and its scheduled-slot counterpart
-  // (only meaningful for RtMode == rt_mode::both). station_mark_ stays shared
-  // -- it is the union both slots' route scans work from -- and is written
-  // through mark_station<ForSched>(), see raptor_state.h.
+  // (only meaningful for RtMode == rt_mode::both). The mark sets follow the
+  // same split and are written through mark_station<ForSched>(), see
+  // raptor_state.h.
   template <bool ForSched>
   auto& get_tmp() {
     if constexpr (ForSched) {
@@ -901,7 +1000,8 @@ private:
   }
 
   void update_transfers(unsigned const k) {
-    state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+    for_each_prev_marked([&](std::uint64_t const i, bool const do_rt,
+                             [[maybe_unused]] bool const do_sched) {
       for (auto v = 0U; v != Vias + 1; ++v) {
         // Schedule-independent (is_via_/via_stops_/transfer_time_settings_
         // are shared), so computed once and reused by both slots below.
@@ -917,11 +1017,15 @@ private:
                       tt_.locations_.transfer_time_[location_idx_t{i}]
                           .count()));
 
-        update_transfer<false>(k, i, v, is_via, is_dest, target_v,
-                                    transfer_time, stay);
+        if (do_rt) {
+          update_transfer<false>(k, i, v, is_via, is_dest, target_v,
+                                 transfer_time, stay);
+        }
         if constexpr (RtMode == rt_mode::both) {
-          update_transfer<true>(k, i, v, is_via, is_dest, target_v,
-                                     transfer_time, stay);
+          if (do_sched) {
+            update_transfer<true>(k, i, v, is_via, is_dest, target_v,
+                                  transfer_time, stay);
+          }
         }
       }
     });
@@ -948,13 +1052,15 @@ private:
   }
 
   void update_footpaths(unsigned const k) {
-    state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+    for_each_prev_marked([&](std::uint64_t const i, bool const do_rt,
+                             [[maybe_unused]] bool const do_sched) {
       auto const l_idx = location_idx_t{i};
 
-      // td_footpaths are an rtt_-only concept: the rt slot skips this
-      // location entirely if it has any, but the sched slot -- which always
-      // uses the static footpath graph below -- must still process it.
-      auto const skip_rt = [&] {
+      // Skip the rt slot here either because it did not reach this location
+      // this round, or because td_footpaths -- an rtt_-only concept -- take
+      // over for it (update_td_offsets()). The sched slot always uses the
+      // static footpath graph below and is unaffected either way.
+      auto const skip_rt = !do_rt || [&] {
         if constexpr (RtMode != rt_mode::off) {
           return prf_idx_ != 0U &&
                  (kFwd ? rtt_->has_td_footpaths_out_
@@ -995,7 +1101,9 @@ private:
             update_footpath<false>(k, i, v, target, target_v, stay, fp);
           }
           if constexpr (RtMode == rt_mode::both) {
-            update_footpath<true>(k, i, v, target, target_v, stay, fp);
+            if (do_sched) {
+              update_footpath<true>(k, i, v, target, target_v, stay, fp);
+            }
           }
         }
       }
@@ -1011,6 +1119,8 @@ private:
       return;
     }
 
+    // td footpaths and tmp_ are both rt-slot only, so this walks the rt
+    // slot's own marks -- the sched slot never enters here.
     state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
       auto const l_idx = location_idx_t{i};
       if (!(kFwd ? rtt_->has_td_footpaths_out_
@@ -1173,7 +1283,8 @@ private:
     // schedule-independent (static distances resp. q.td_dest_), so they're
     // shared between slots; only the tmp_/round_times_/best_/time_at_dest_
     // storage differs.
-    state_.prev_station_mark_.for_each_set_bit([&](auto const i) {
+    for_each_prev_marked([&](std::uint64_t const i, bool const do_rt,
+                             [[maybe_unused]] bool const do_sched) {
       if (!end_reachable_.test(i)) {
         return;
       }
@@ -1184,10 +1295,13 @@ private:
       auto const td_it = td_dist_to_end_.find(l);
       auto const has_td = td_it != end(td_dist_to_end_);
 
-      update_intermodal_footpath<false>(k, i, has_static, has_td, td_it);
+      if (do_rt) {
+        update_intermodal_footpath<false>(k, i, has_static, has_td, td_it);
+      }
       if constexpr (RtMode == rt_mode::both) {
-        update_intermodal_footpath<true>(k, i, has_static, has_td,
-                                              td_it);
+        if (do_sched) {
+          update_intermodal_footpath<true>(k, i, has_static, has_td, td_it);
+        }
       }
     });
   }
@@ -1305,11 +1419,19 @@ private:
     return any_marked;
   }
 
+  // do_rt/do_sched say which slots marked this route (see
+  // for_each_marked_route()). Both set means one walk of the stop sequence
+  // serves both; only one set means the other slot has no label to board from
+  // and its per-stop work is skipped entirely. For rt_mode::off/on there is
+  // only the rt slot and it always runs.
   template <bool WithSectionBikeFilter,
             bool WithSectionCarFilter,
             bool WithSectionWheelchairFilter,
             bool WithSectionReservationNotRequiredFilter>
-  bool update_route(unsigned const k, route_idx_t const r) {
+  bool update_route(unsigned const k, route_idx_t const r,
+                    [[maybe_unused]] bool const do_rt,
+                    [[maybe_unused]] bool const do_sched) {
+    auto const scan_rt = RtMode != rt_mode::both || do_rt;
     auto const stop_seq = tt_.route_location_seq_[r];
     bool any_marked = false;
 
@@ -1375,53 +1497,117 @@ private:
       }
     };
 
-    // Applies the "board a fresh transport here" step for one slot: for each
-    // via state v, if the slot's own earliest known arrival at this stop
-    // (round_times[k-1][l_idx][v]) permits catching an earlier ride than the
-    // one already carried in et_arr[v][0], replace it. ForSched selects rt vs.
-    // scheduled storage, including which get_earliest_transport<ForSched>()
-    // activity/pruning rules apply.
-    auto const update_boarding = [&](auto const for_sched, stop const& stp,
+    auto const dep_ev = kFwd ? event_type::kDep : event_type::kArr;
+
+    // The label a slot would look for a fresh boarding from at this stop:
+    // its own round-(k-1) arrival, but only if that beats the departure of
+    // the ride it already carries in et_arr[v][0] (reported back through
+    // `carried`). kInvalid means this slot has nothing to board with here.
+    auto const boarding_start = [&](auto const for_sched,
                                     stop_idx_t const stop_idx,
-                                    std::size_t const l_idx,
-                                    std::array<std::array<transport, Vias + 1>,
-                                               Vias + 1>& et_arr,
-                                    std::array<delta_t, Vias + 1>&
-                                        current_best) {
+                                    std::size_t const l_idx, unsigned const v,
+                                    auto const& et_arr, delta_t& carried) {
       constexpr auto ForSched = decltype(for_sched)::value;
-      auto& tmp = get_tmp<ForSched>();
-      auto& best = get_best<ForSched>();
-      auto& round_times = get_round_times<ForSched>();
+      auto const& fresh = et_arr[v][0];
+      carried = fresh.is_valid()
+                    ? time_at_stop(r, fresh, stop_idx, dep_ev)
+                    : kInvalid;
+      auto const prev_round_time = get_round_times<ForSched>()[k - 1][l_idx][v];
+      return prev_round_time != kInvalid &&
+                     is_better_or_eq(prev_round_time, carried)
+                 ? prev_round_time
+                 : kInvalid;
+    };
+
+    // Installs the transport found for a slot as its fresh ride, if it is an
+    // improvement over the one carried.
+    auto const accept_boarding = [&](auto const for_sched,
+                                     stop_idx_t const stop_idx,
+                                     std::size_t const l_idx, unsigned const v,
+                                     auto& et_arr,
+                                     std::array<delta_t, Vias + 1>&
+                                         current_best,
+                                     delta_t const carried,
+                                     transport const new_et) {
+      constexpr auto ForSched = decltype(for_sched)::value;
+      current_best[v] = get_best(current_best[v], get_best<ForSched>()[l_idx][v],
+                                 get_tmp<ForSched>()[l_idx][v]);
+      if (new_et.is_valid() &&
+          (current_best[v] == kInvalid ||
+           is_better_or_eq(time_at_stop(r, new_et, stop_idx, dep_ev),
+                           carried))) {
+        et_arr[v][0] = new_et;
+      }
+    };
+
+    // Applies the "board a fresh transport here" step. Both slots are handled
+    // together: fresh boardings from a slot-v label always enter rider (v, 0)
+    // -- carried riders (e < v with crossings) continue unaffected -- and
+    // wherever both slots are looking for one, the two searches are the same
+    // walk over the same route at the same stop, so they are answered by a
+    // single get_earliest_transports() call.
+    auto const update_boarding = [&](stop const& stp,
+                                     stop_idx_t const stop_idx,
+                                     std::size_t const l_idx,
+                                     bool const board_rt,
+                                     [[maybe_unused]] bool const board_sched,
+                                     std::array<delta_t, Vias + 1>&
+                                         current_best,
+                                     [[maybe_unused]]
+                                     std::array<delta_t, Vias + 1>&
+                                         current_best_sched) {
+      auto const l = stp.location_idx();
 
       for (auto v = 0U; v != Vias + 1; ++v) {
-        // fresh boardings from a slot-v label always enter rider (v, 0);
-        // carried riders (e < v with crossings) continue unaffected
-        auto& fresh = et_arr[v][0];
-        auto const et_time_at_stop =
-            fresh.is_valid()
-                ? time_at_stop(r, fresh, stop_idx,
-                               kFwd ? event_type::kDep : event_type::kArr)
-                : kInvalid;
-        auto const prev_round_time = round_times[k - 1][l_idx][v];
-        if (prev_round_time != kInvalid &&
-            is_better_or_eq(prev_round_time, et_time_at_stop)) {
-          auto const [day, mam] = split(prev_round_time);
-          auto const new_et = get_earliest_transport<ForSched>(
-              k, r, stop_idx, day, mam, stp.location_idx());
-          current_best[v] =
-              get_best(current_best[v], best[l_idx][v], tmp[l_idx][v]);
-          if (new_et.is_valid() &&
-              (current_best[v] == kInvalid ||
-               is_better_or_eq(
-                   time_at_stop(r, new_et, stop_idx,
-                                kFwd ? event_type::kDep : event_type::kArr),
-                   et_time_at_stop))) {
-            fresh = new_et;
+        auto carried = kInvalid;
+        auto const rt_start =
+            board_rt ? boarding_start(std::false_type{}, stop_idx, l_idx, v,
+                                      et, carried)
+                     : kInvalid;
+
+        auto carried_sched = kInvalid;
+        auto sched_start = kInvalid;
+        if constexpr (RtMode == rt_mode::both) {
+          if (board_sched) {
+            sched_start = boarding_start(std::true_type{}, stop_idx, l_idx, v,
+                                         et_sched, carried_sched);
+          }
+        }
+
+        auto new_et = transport{};
+        auto new_et_sched = transport{};
+        if constexpr (RtMode == rt_mode::both) {
+          if (rt_start != kInvalid && sched_start != kInvalid) {
+            std::tie(new_et, new_et_sched) =
+                get_earliest_transports<true, true>(k, r, stop_idx, rt_start,
+                                                    sched_start, l);
+          } else if (sched_start != kInvalid) {
+            new_et_sched = get_earliest_transports<false, true>(
+                               k, r, stop_idx, kInvalid, sched_start, l)
+                               .second;
+          } else if (rt_start != kInvalid) {
+            new_et = get_earliest_transports<true, false>(k, r, stop_idx,
+                                                          rt_start, kInvalid, l)
+                         .first;
+          }
+        } else if (rt_start != kInvalid) {
+          new_et = get_earliest_transports<true, false>(k, r, stop_idx,
+                                                        rt_start, kInvalid, l)
+                       .first;
+        }
+
+        if (rt_start != kInvalid) {
+          accept_boarding(std::false_type{}, stop_idx, l_idx, v, et,
+                          current_best, carried, new_et);
+        }
+        if constexpr (RtMode == rt_mode::both) {
+          if (sched_start != kInvalid) {
+            accept_boarding(std::true_type{}, stop_idx, l_idx, v, et_sched,
+                            current_best_sched, carried_sched, new_et_sched);
           }
         }
       }
     };
-
 
     for (auto i = 0U; i != n_stops; ++i) {
       auto const stop_idx =
@@ -1490,18 +1676,33 @@ private:
 
       auto current_best = std::array<delta_t, Vias + 1>{};
       current_best.fill(kInvalid);
-      update_arrival(std::false_type{}, stp, stop_idx, l_idx, et,
-                     current_best);
+      if (scan_rt) {
+        update_arrival(std::false_type{}, stp, stop_idx, l_idx, et,
+                       current_best);
+      }
 
       auto current_best_sched = std::array<delta_t, Vias + 1>{};
       if constexpr (RtMode == rt_mode::both) {
         current_best_sched.fill(kInvalid);
-        update_arrival(std::true_type{}, stp, stop_idx, l_idx, et_sched,
-                       current_best_sched);
+        if (do_sched) {
+          update_arrival(std::true_type{}, stp, stop_idx, l_idx, et_sched,
+                         current_best_sched);
+        }
       }
 
+      // Each slot boards only where it has a label of its own from the
+      // previous round; the stop is worth looking at as long as either does.
+      auto const marked = state_.prev_station_mark_[l_idx];
+      auto const marked_sched = [&] {
+        if constexpr (RtMode == rt_mode::both) {
+          return state_.prev_station_mark_sched_[l_idx];
+        } else {
+          return false;
+        }
+      }();
+
       if (is_last || !stp.can_start<SearchDir>(is_wheelchair_) ||
-          !state_.prev_station_mark_[l_idx]) {
+          (!marked && !marked_sched)) {
         continue;
       }
 
@@ -1509,48 +1710,109 @@ private:
         break;
       }
 
-      update_boarding(std::false_type{}, stp, stop_idx, l_idx, et,
-                      current_best);
-      if constexpr (RtMode == rt_mode::both) {
-        update_boarding(std::true_type{}, stp, stop_idx, l_idx, et_sched,
-                        current_best_sched);
-      }
+      update_boarding(stp, stop_idx, l_idx, scan_rt && marked,
+                      do_sched && marked_sched, current_best,
+                      current_best_sched);
     }
     return any_marked;
   }
 
-  // ForSched selects which slot's pruning bound and transport-activity check
-  // to use. false (the default): today's single-slot behavior, unchanged for
-  // rt_mode::off/on. true: static-only activity (tt_.is_transport_active,
-  // never rtt_) pruned against time_at_dest_sched_ -- used by rt_mode::both
-  // to find the scheduled-slot boarding, independent of realtime data.
-  template <bool ForSched = false>
-  transport get_earliest_transport(unsigned const k,
-                                   route_idx_t const r,
-                                   stop_idx_t const stop_idx,
-                                   day_idx_t const day_at_stop,
-                                   minutes_after_midnight_t const mam_at_stop,
-                                   location_idx_t const l) {
-    ++stats_.n_earliest_trip_calls_;
+  // Finds the earliest boardable transport of route `r` at `stop_idx` for one
+  // or both slots in a single walk.
+  //
+  // The candidates -- the route's transports in departure order at this stop
+  // -- are the same list for both slots. Only three things differ: where each
+  // slot enters the list (its own round-(k-1) label), which bound it prunes
+  // against (time_at_dest_ vs. time_at_dest_sched_) and which activity it
+  // asks about (rtt_-aware vs. static-only). So everything the walk actually
+  // costs -- seeking into the event times, stepping them, resolving the
+  // transport and its start day -- is done once, and each candidate is then
+  // offered to whichever slots are still looking. When the two slots arrive
+  // at similar times, which is the normal case (the rt label being the
+  // scheduled one plus a delay), they settle on the same candidate and the
+  // second scan is gone; when they diverge, the walk simply runs as long as
+  // the slower slot needs and the faster one drops out early.
+  //
+  // WithRt/WithSched say which slots take part; the other slot's start is
+  // ignored and its result comes back invalid. rt_mode::off/on only ever
+  // instantiate <true, false>, which is the single-slot scan unchanged.
+  template <bool WithRt, bool WithSched>
+  std::pair<transport, transport> get_earliest_transports(
+      unsigned const k,
+      route_idx_t const r,
+      stop_idx_t const stop_idx,
+      delta_t const rt_start,
+      delta_t const sched_start,
+      location_idx_t const l) {
+    static_assert(WithRt || WithSched);
+    stats_.n_earliest_trip_calls_ +=
+        (WithRt ? 1U : 0U) + (WithSched ? 1U : 0U);
+
+    auto rt_res = transport{};
+    auto sched_res = transport{};
+    auto rt_open = WithRt;
+    auto sched_open = WithSched;
+
+    // A slot that does not take part is pinned to the other one's start, so
+    // it never widens the day window below.
+    auto const rt_at = split(WithRt ? rt_start : sched_start);
+    auto const sched_at = split(WithSched ? sched_start : rt_start);
+    auto const [rt_day, rt_mam] = rt_at;
+    auto const [sched_day, sched_mam] = sched_at;
+
+    // The walk starts wherever the slot that can leave first starts; a slot
+    // that arrives later skips the candidates it cannot reach through its own
+    // gate below. Seeking by the earlier one is safe for both: a candidate
+    // the later slot could take departs no earlier than one the earlier slot
+    // could take.
+    auto const [anchor_day, anchor_mam] =
+        is_better(rt_start, sched_start) && WithRt ? rt_at : sched_at;
 
     auto const event_times = tt_.event_times_at_stop(
         r, stop_idx, kFwd ? event_type::kDep : event_type::kArr);
 
     auto const seek_first_day = [&]() {
       return linear_lb(get_begin_it(event_times), get_end_it(event_times),
-                       mam_at_stop,
+                       anchor_mam,
                        [&](delta const a, minutes_after_midnight_t const b) {
                          return is_better(a.mam(), b.count());
                        });
     };
 
     trace("┊ │k={}    et: current_best_at_stop={}, stop_idx={}, location={}\n",
-          k, tt_.to_unixtime(day_at_stop, mam_at_stop), stop_idx,
+          k, tt_.to_unixtime(anchor_day, anchor_mam), stop_idx,
           loc{tt_, stop{tt_.route_location_seq_[r][stop_idx]}.location_idx()});
 
-    auto const n_days_to_iterate = kMaxTravelTime / std::chrono::days{1} + 1U;
-    for (auto i = day_idx_t::value_t{0U}; i != n_days_to_iterate; ++i) {
-      auto const day = kFwd ? day_at_stop + i : day_at_stop - i;
+    // Days counted in search direction: >0 is past the slot's arrival day,
+    // <0 is before it (only possible for the slot that is not the anchor).
+    auto const days_after = [&](day_idx_t const from, day_idx_t const day) {
+      return kFwd ? as_int(day) - as_int(from) : as_int(from) - as_int(day);
+    };
+
+    auto const lb_at_l = get_lb(to_idx(l));
+    auto const n_days_to_iterate =
+        static_cast<int>(kMaxTravelTime / std::chrono::days{1} + 1U);
+    // Each slot still gets its own full day window, so a slot that starts
+    // later than the anchor keeps the walk going past the anchor's window.
+    auto const max_i = static_cast<day_idx_t::value_t>(
+        std::max(days_after(anchor_day, rt_day),
+                 days_after(anchor_day, sched_day)) +
+        n_days_to_iterate);
+
+    for (auto i = day_idx_t::value_t{0U}; i != max_i; ++i) {
+      auto const day = kFwd ? anchor_day + i : anchor_day - i;
+      auto const rt_off = days_after(rt_day, day);
+      auto const sched_off = days_after(sched_day, day);
+
+      if (rt_off >= n_days_to_iterate) {
+        rt_open = false;
+      }
+      if (sched_off >= n_days_to_iterate) {
+        sched_open = false;
+      }
+      if (!rt_open && !sched_open) {
+        break;
+      }
 
       if (!tt_.is_route_active(r, day)) {
         continue;
@@ -1562,73 +1824,104 @@ private:
       if (ev_time_range.empty()) {
         continue;
       }
+
       for (auto it = begin(ev_time_range); it != end(ev_time_range); ++it) {
         auto const t_offset =
             static_cast<std::size_t>(&*it - event_times.data());
         auto const ev = *it;
         auto const ev_mam = ev.mam();
 
-        auto const dest_bound = [&] {
-          if constexpr (ForSched) {
-            return time_at_dest_sched_[k];
-          } else {
-            return time_at_dest_[k];
+        // Shared: the candidate's absolute departure. Only the bound it is
+        // held against is per slot, and since departures only get later from
+        // here, a slot that fails it is done for good.
+        auto const dep = to_delta(day, ev_mam) + dir(lb_at_l);
+        auto const prune = [&](auto const for_sched, bool& open,
+                               int const off) {
+          constexpr auto ForSched = decltype(for_sched)::value;
+          if (open && off >= 0 &&
+              !is_better_loose(dep, get_time_at_dest<ForSched>()[k])) {
+            trace(
+                "┊ │k={}      => name={}, dbg={}, day={}={}, best_mam={}, "
+                "transport_mam={}, transport_time={} => TIME AT DEST {} IS "
+                "BETTER!\n",
+                k, tt_.transport_name(tt_.route_transport_ranges_[r][t_offset]),
+                tt_.dbg(tt_.route_transport_ranges_[r][t_offset]), day,
+                tt_.to_unixtime(day, 0_minutes), anchor_mam, ev_mam,
+                tt_.to_unixtime(day, duration_t{ev_mam}),
+                to_unix(get_time_at_dest<ForSched>()[k]));
+            open = false;
           }
-        }();
-        if (!is_better_loose(to_delta(day, ev_mam) + dir(get_lb(to_idx(l))),
-                             dest_bound)) {
-          trace(
-              "┊ │k={}      => name={}, dbg={}, day={}={}, best_mam={}, "
-              "transport_mam={}, transport_time={} => TIME AT DEST {} IS "
-              "BETTER!\n",
-              k, tt_.transport_name(tt_.route_transport_ranges_[r][t_offset]),
-              tt_.dbg(tt_.route_transport_ranges_[r][t_offset]), day,
-              tt_.to_unixtime(day, 0_minutes), mam_at_stop, ev_mam,
-              tt_.to_unixtime(day, duration_t{ev_mam}), to_unix(dest_bound));
-          return {transport_idx_t::invalid(), day_idx_t::invalid()};
+        };
+        if constexpr (WithRt) {
+          prune(std::false_type{}, rt_open, rt_off);
+        }
+        if constexpr (WithSched) {
+          prune(std::true_type{}, sched_open, sched_off);
+        }
+        if (!rt_open && !sched_open) {
+          return {rt_res, sched_res};
         }
 
+        // Shared: which transport this candidate is, and which day it started
+        // on -- the same answer for both slots.
         auto const t = tt_.route_transport_ranges_[r][t_offset];
-        if (i == 0U && !is_better_or_eq(mam_at_stop.count(), ev_mam)) {
-          trace(
-              "┊ │k={}      => transport={}, name={}, dbg={}, day={}/{}, "
-              "best_mam={}, "
-              "transport_mam={}, transport_time={} => NO REACH!\n",
-              k, t, tt_.transport_name(t), tt_.dbg(t), i, day, mam_at_stop,
-              ev_mam, ev);
-          continue;
-        }
-
-        auto const ev_day_offset = ev.days();
         auto const start_day =
-            static_cast<day_idx_t>(as_int(day) - ev_day_offset);
-        auto const active = [&] {
-          if constexpr (ForSched) {
-            return tt_.is_transport_active(t, start_day);
-          } else {
-            return is_transport_active(t, start_day);
-          }
-        }();
-        if (!active) {
-          trace(
-              "┊ │k={}      => transport={}, name={}, dbg={}, day={}/{}, "
-              "ev_day_offset={}, "
-              "best_mam={}, "
-              "transport_mam={}, transport_time={} => NO TRAFFIC!\n",
-              k, t, tt_.transport_name(t), tt_.dbg(t), i, day, ev_day_offset,
-              mam_at_stop, ev_mam, ev);
-          continue;
-        }
+            static_cast<day_idx_t>(as_int(day) - ev.days());
 
-        trace(
-            "┊ │k={}      => ET FOUND: name={}, dbg={}, at day {} "
-            "(day_offset={}) - ev_mam={}, ev_time={}, ev={}\n",
-            k, tt_.transport_name(t), tt_.dbg(t), day, ev_day_offset, ev_mam,
-            ev, tt_.to_unixtime(day, duration_t{ev_mam}));
-        return {t, static_cast<day_idx_t>(as_int(day) - ev_day_offset)};
+        // Per slot: can it still make this departure, and does the transport
+        // run for it. That is all that is left to do twice.
+        auto const offer = [&](auto const for_sched, bool& open,
+                               transport& res, int const off,
+                               minutes_after_midnight_t const mam) {
+          constexpr auto ForSched = decltype(for_sched)::value;
+          if (!open || off < 0) {
+            return;
+          }
+          if (off == 0 && !is_better_or_eq(mam.count(), ev_mam)) {
+            trace(
+                "┊ │k={}      => transport={}, name={}, dbg={}, day={}/{}, "
+                "best_mam={}, transport_mam={}, transport_time={} => NO "
+                "REACH!\n",
+                k, t, tt_.transport_name(t), tt_.dbg(t), off, day, mam, ev_mam,
+                ev);
+            return;
+          }
+          auto const active = [&] {
+            if constexpr (ForSched) {
+              return tt_.is_transport_active(t, start_day);
+            } else {
+              return is_transport_active(t, start_day);
+            }
+          }();
+          if (!active) {
+            trace(
+                "┊ │k={}      => transport={}, name={}, dbg={}, day={}/{}, "
+                "ev_day_offset={}, best_mam={}, transport_mam={}, "
+                "transport_time={} => NO TRAFFIC!\n",
+                k, t, tt_.transport_name(t), tt_.dbg(t), off, day, ev.days(),
+                mam, ev_mam, ev);
+            return;
+          }
+          trace(
+              "┊ │k={}      => ET FOUND: name={}, dbg={}, at day {} "
+              "(day_offset={}) - ev_mam={}, ev_time={}, ev={}\n",
+              k, tt_.transport_name(t), tt_.dbg(t), day, ev.days(), ev_mam, ev,
+              tt_.to_unixtime(day, duration_t{ev_mam}));
+          res = {t, start_day};
+          open = false;
+        };
+        if constexpr (WithRt) {
+          offer(std::false_type{}, rt_open, rt_res, rt_off, rt_mam);
+        }
+        if constexpr (WithSched) {
+          offer(std::true_type{}, sched_open, sched_res, sched_off, sched_mam);
+        }
+        if (!rt_open && !sched_open) {
+          return {rt_res, sched_res};
+        }
       }
     }
-    return {};
+    return {rt_res, sched_res};
   }
 
   bool is_transport_active(transport_idx_t const t, day_idx_t const day) const {

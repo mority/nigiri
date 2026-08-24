@@ -171,17 +171,23 @@ struct raptor_state {
   std::vector<delta_t> best_storage_;
   std::vector<delta_t> round_times_storage_;
   std::vector<delta_t> bounds_storage_;
+  // The rt slot's marks, like tmp_/best_/round_times_ above: a location or
+  // route is marked here because the *rt* slot improved there. For
+  // rt_mode::off/on that is the only slot, so these are simply "the" marks.
   bitvec station_mark_;
   bitvec prev_station_mark_;
   bitvec route_mark_;
   bitvec rt_transport_mark_;
 
-  // rt_mode::both only: the rt slot's improvements alone, where station_mark_
-  // is the union of both slots'. Routes are scanned for the union -- both
-  // slots ride them -- but rt transports exist only in the rt timetable, so
-  // they are marked from this set. Empty (and unused) for rt_mode::off/on,
-  // where the two sets coincide.
-  bitvec station_mark_rt_;
+  // The scheduled slot's marks for rt_mode::both -- never a union with the
+  // rt ones above. A slot can only ever board where that same slot has a
+  // label from the previous round, so mixing the two just makes each slot
+  // re-walk stop sequences the other one reached. Where both sets agree the
+  // route is still scanned only once, with both slots active.
+  // Empty (and unused) for rt_mode::off/on.
+  bitvec station_mark_sched_;
+  bitvec prev_station_mark_sched_;
+  bitvec route_mark_sched_;
 
   // Scheduled-slot state for rt_mode::both (see get_*_sched() above).
   // Unused (but still allocated) by rt_mode::off/on.
