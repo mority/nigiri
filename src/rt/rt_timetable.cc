@@ -80,6 +80,7 @@ void rt_timetable::update_time(rt_transport_idx_t const rt_t,
                             rt_transport_stop_times_[rt_t].size());
   auto const v = unix_to_delta(new_time);
   rt_transport_stop_times_[rt_t][static_cast<std::size_t>(ev_idx)] = v;
+  note_event(v);
 
   if (!is_unchanged(rt_t)) {
     return;  // already off the static scan
@@ -93,11 +94,10 @@ void rt_timetable::update_time(rt_transport_idx_t const rt_t,
     return;
   }
   auto const r = tt_->transport_route_[t.t_idx_];
-  auto const scheduled =
-      (static_cast<int>(to_idx(t.day_)) -
-       static_cast<int>(to_idx(base_day_idx_))) *
-          1440 +
-      tt_->event_mam(r, t.t_idx_, stop_idx, ev_type).count();
+  auto const scheduled = (static_cast<int>(to_idx(t.day_)) -
+                          static_cast<int>(to_idx(base_day_idx_))) *
+                             1440 +
+                         tt_->event_mam(r, t.t_idx_, stop_idx, ev_type).count();
   if (static_cast<int>(v) != scheduled) {
     mark_deviating(rt_t);
   }
@@ -207,8 +207,8 @@ void rt_timetable::regroup_rt_transport(timetable const& tt,
   }
 }
 
-bool rt_timetable::matches_schedule(
-    timetable const& tt, rt_transport_idx_t const rt_t) const {
+bool rt_timetable::matches_schedule(timetable const& tt,
+                                    rt_transport_idx_t const rt_t) const {
   if (rt_transport_is_cancelled_.test(to_idx(rt_t))) {
     return false;
   }
@@ -366,6 +366,10 @@ rt_transport_idx_t rt_timetable::add_rt_transport(
     }
   } else {
     rt_transport_stop_times_.emplace_back(time_seq);
+  }
+
+  for (auto const st : rt_transport_stop_times_.back()) {
+    note_event(st);  // the transport's initial times count as coverage too
   }
 
   rt_transport_track_sequence_.add_back_sized(0U);

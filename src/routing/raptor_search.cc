@@ -21,6 +21,57 @@ namespace nigiri::routing {
 
 namespace {
 
+// True if real-time data could possibly change this query's answer.
+//
+// The search only ever looks at events inside the window it can reach: forward
+// from the earliest start until max_travel_time later, backward from the latest
+// arrival until max_travel_time earlier. If that window does not touch the span
+// the feed actually covers, every rt transport the search would mark is out of
+// range -- it walks their stop sequences, boards nothing, and returns exactly
+// the scheduled answer, having paid for the whole real-time scan.
+//
+// Conservative on purpose: when in doubt this says yes, because a wrong "no"
+// silently drops real-time from the result while a wrong "yes" only costs time.
+template <direction SearchDir>
+bool rt_in_reach(rt_timetable const* rtt, query const& q) {
+  if (rtt == nullptr) {
+    return false;
+  }
+
+  // Time-dependent footpaths live in the rt timetable as well and are not tied
+  // to transport events at all, so their presence alone makes it relevant
+  // whatever the query's time window is.
+  if ((SearchDir == direction::kForward
+           ? rtt->has_td_footpaths_out_
+           : rtt->has_td_footpaths_in_)[q.prf_idx_]
+          .any()) {
+    return true;
+  }
+
+  if (!rtt->has_rt_events()) {
+    return false;
+  }
+
+  auto const start = std::visit(
+      utl::overloaded{[](unixtime_t const t) { return interval{t, t}; },
+                      [](interval<unixtime_t> const i) { return i; }},
+      q.start_time_);
+  auto const covered = rtt->event_interval();
+
+  // `to_` of a start interval is exclusive, and an ontrip query has from_==to_,
+  // so compare against the last instant the search can start from.
+  auto const last_start =
+      start.to_ > start.from_ ? start.to_ - duration_t{1} : start.from_;
+
+  if constexpr (SearchDir == direction::kForward) {
+    return start.from_ < covered.to_ &&
+           last_start + q.max_travel_time_ >= covered.from_;
+  } else {
+    return last_start >= covered.from_ &&
+           start.from_ - q.max_travel_time_ < covered.to_;
+  }
+}
+
 template <direction SearchDir, via_offset_t Vias, typename AlgoState>
 routing_result raptor_search_with_vias(
     timetable const& tt,
@@ -57,6 +108,13 @@ routing_result raptor_search_with_dir(
     query q,
     std::optional<std::chrono::seconds> const timeout) {
   q.sanitize(tt);
+
+  // Nothing the real-time data says can reach this query: route it on the
+  // scheduled timetable, which is the same answer for less work.
+  if (rtt != nullptr && !rt_in_reach<SearchDir>(rtt, q)) {
+    rtt = nullptr;
+  }
+
   utl::verify(q.via_stops_.size() <= kMaxVias,
               "too many via stops: {}, limit: {}", q.via_stops_.size(),
               kMaxVias);

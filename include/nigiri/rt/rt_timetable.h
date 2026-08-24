@@ -1,14 +1,5 @@
 #pragma once
 
-#include "utl/pairwise.h"
-
-#include <memory>
-#include <optional>
-#include <string_view>
-#include <variant>
-
-#include "utl/visit.h"
-
 #include "nigiri/common/delta_t.h"
 #include "nigiri/common/interval.h"
 #include "nigiri/rt/run.h"
@@ -18,18 +9,24 @@
 #include "nigiri/timetable.h"
 #include "nigiri/types.h"
 
+#include <memory>
+#include <optional>
+#include <string_view>
+#include <variant>
+
+#include "utl/pairwise.h"
+#include "utl/visit.h"
+
 namespace nigiri {
 
 // If set, the bitfield has to be looked up in the RT timetable.
 constexpr auto const kRtBitfieldFlag = std::uint32_t{0x8000'0000U};
 
-using change_callback_t =
-    std::function<void(transport const transport,
-                       stop_idx_t const stop_idx,
-                       event_type const ev_type,
-                       std::optional<location_idx_t> const location_idx,
-                       std::optional<bool> const in_out_allowed,
-                       std::optional<duration_t> const delay)>;
+using change_callback_t = std::function<void(
+    transport const transport, stop_idx_t const stop_idx,
+    event_type const ev_type, std::optional<location_idx_t> const location_idx,
+    std::optional<bool> const in_out_allowed,
+    std::optional<duration_t> const delay)>;
 
 // General note:
 // - To deactivate bits for static transports that are updated with delays,
@@ -46,9 +43,7 @@ using change_callback_t =
 // - All RT transports that did not exist in the static timetable, can be looked
 //   up with their trip_id in the RT timetable.
 struct rt_timetable {
-  rt_transport_idx_t add_rt_transport(source_idx_t,
-                                      timetable const&,
-                                      transport,
+  rt_transport_idx_t add_rt_transport(source_idx_t, timetable const&, transport,
                                       std::span<stop::value_type> stop_seq = {},
                                       std::span<delta_t> time_seq = {},
                                       std::string_view new_trip_id = {},
@@ -67,9 +62,7 @@ struct rt_timetable {
   // Sets one event time. If this is the first event of `rt_t` to move off its
   // scheduled time, the transport is taken off the static scan and put on a
   // real-time scan in the same step -- see mark_deviating().
-  void update_time(rt_transport_idx_t rt_t,
-                   stop_idx_t,
-                   event_type,
+  void update_time(rt_transport_idx_t rt_t, stop_idx_t, event_type,
                    unixtime_t new_time);
 
   // Cancels one stop (no boarding, no alighting). Also a deviation: the stop
@@ -92,9 +85,7 @@ struct rt_timetable {
   // rt-owned bitfield copy on first use.
   void set_rt_traffic_day(transport t, bool active);
 
-  void update_lbs(timetable const& tt,
-                  rt_transport_idx_t,
-                  stop_idx_t,
+  void update_lbs(timetable const& tt, rt_transport_idx_t, stop_idx_t,
                   vector_map<location_idx_t, std::vector<footpath>>&,
                   vector_map<location_idx_t, std::vector<footpath>>&);
   void update_lbs(timetable const& tt);
@@ -107,8 +98,7 @@ struct rt_timetable {
 
   void reset_change_callback() { change_callback_ = nullptr; }
 
-  void dispatch_event(rt::run const& r,
-                      stop_idx_t const stop_idx,
+  void dispatch_event(rt::run const& r, stop_idx_t const stop_idx,
                       event_type const ev_type,
                       std::optional<location_idx_t> const location_idx,
                       std::optional<bool> const in_out_allowed,
@@ -121,15 +111,12 @@ struct rt_timetable {
     }
   }
 
-  void dispatch_delay(rt::run const& r,
-                      stop_idx_t const stop_idx,
-                      event_type const ev_type,
-                      duration_t const delay) {
+  void dispatch_delay(rt::run const& r, stop_idx_t const stop_idx,
+                      event_type const ev_type, duration_t const delay) {
     dispatch_event(r, stop_idx, ev_type, std::nullopt, std::nullopt, delay);
   }
 
-  void dispatch_stop_change(rt::run const& r,
-                            stop_idx_t const stop_idx,
+  void dispatch_stop_change(rt::run const& r, stop_idx_t const stop_idx,
                             event_type const ev_type,
                             std::optional<location_idx_t> const location_idx,
                             std::optional<bool> const in_out_allowed) {
@@ -138,8 +125,7 @@ struct rt_timetable {
   }
 
   void set_track(rt_transport_idx_t, stop_idx_t, event_type, std::string_view);
-  std::optional<std::string_view> get_track(rt_transport_idx_t,
-                                            stop_idx_t,
+  std::optional<std::string_view> get_track(rt_transport_idx_t, stop_idx_t,
                                             event_type) const;
 
   unixtime_t unix_event_time(rt_transport_idx_t const rt_t,
@@ -149,8 +135,7 @@ struct rt_timetable {
            std::chrono::minutes{event_time(rt_t, stop_idx, ev_type)};
   }
 
-  delta_t event_time(rt_transport_idx_t const rt_t,
-                     stop_idx_t const stop_idx,
+  delta_t event_time(rt_transport_idx_t const rt_t, stop_idx_t const stop_idx,
                      event_type const ev_type) const {
     auto const ev_idx = stop_idx * 2 - (ev_type == event_type::kArr ? 1 : 0);
     return rt_transport_stop_times_[rt_t][static_cast<unsigned>(ev_idx)];
@@ -233,6 +218,28 @@ struct rt_timetable {
   }
 
   bool matches_schedule(timetable const&, rt_transport_idx_t) const;
+
+  // The span of time the real-time data actually says something about, as
+  // opposed to base_day_, which is only the anchor its deltas are relative to.
+  // A query whose reachable time window does not touch this cannot be affected
+  // by real-time data, and routing it against the rt timetable is pure cost --
+  // see raptor_search().
+  bool has_rt_events() const noexcept { return min_event_ <= max_event_; }
+
+  interval<unixtime_t> event_interval() const noexcept {
+    return has_rt_events()
+               ? interval<unixtime_t>{base_day_ +
+                                          std::chrono::minutes{min_event_},
+                                      base_day_ +
+                                          std::chrono::minutes{max_event_} +
+                                          std::chrono::minutes{1}}
+               : interval<unixtime_t>{unixtime_t{}, unixtime_t{}};
+  }
+
+  void note_event(delta_t const t) noexcept {
+    min_event_ = std::min(min_event_, t);
+    max_event_ = std::max(max_event_, t);
+  }
 
   // --- rt routes ---------------------------------------------------------
   //
@@ -444,6 +451,10 @@ struct rt_timetable {
     std::unique_ptr<void, void (*)(void*)> ptr_{nullptr, [](void*) {}};
   };
   gpu_rtt_slot gpu_rtt_;
+  // Extent of the real-time data, maintained by note_event(); see
+  // event_interval(). Inverted while there is none.
+  delta_t min_event_{std::numeric_limits<delta_t>::max()};
+  delta_t max_event_{std::numeric_limits<delta_t>::min()};
 };
 
 }  // namespace nigiri
