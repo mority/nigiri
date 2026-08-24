@@ -80,9 +80,8 @@ struct raptor {
         n_locations_{tt_.n_locations()},
         n_routes_{tt.n_routes()},
         n_rt_transports_{RtMode != rt_mode::off ? rtt->n_rt_transports() : 0U},
-        n_rt_routes_{RtMode != rt_mode::off ? rtt->n_rt_routes() : 0U},
         state_{state.resize(n_locations_, n_routes_, n_rt_transports_,
-                            n_rt_routes_, RtMode == rt_mode::both)},
+                            RtMode == rt_mode::both)},
         tmp_{state_.get_tmp<Vias>()},
         best_{state_.get_best<Vias>()},
         round_times_{state.get_round_times<Vias>()},
@@ -215,7 +214,6 @@ struct raptor {
     utl::fill(state_.route_mark_.blocks_, 0U);
     if constexpr (RtMode != rt_mode::off) {
       utl::fill(state_.rt_transport_mark_.blocks_, 0U);
-      utl::fill(state_.rt_route_mark_.blocks_, 0U);
     }
     if constexpr (RtMode == rt_mode::both) {
       utl::fill(best_sched_, kInvalidArray);
@@ -288,24 +286,8 @@ struct raptor {
           state_.route_mark_.set(to_idx(r), true);
         }
         if constexpr (RtMode == rt_mode::on) {
-          // Grouped rt transports are scanned once per group; the rest --
-          // additional trips, reroutings, cancelled stops and runs -- keep
-          // their own scan. Neither list holds the transports that are
-          // identical to schedule, so those cost nothing here either.
-          for (auto const& rt_r :
-               rtt_->location_rt_routes_[location_idx_t{i}]) {
-            if (rtt_->rt_route_transports_[rt_r].empty()) {
-              continue;  // every member left the group again
-            }
-            any_marked = true;
-            state_.rt_route_mark_.set(to_idx(rt_r), true);
-          }
           for (auto const& rt_t :
-               rtt_->location_rt_unrouted_[location_idx_t{i}]) {
-            if (rtt_->is_unchanged(rt_t) ||
-                rtt_->rt_route_of(rt_t) != rt_route_idx_t::invalid()) {
-              continue;  // registered once, but no longer scanned this way
-            }
+               rtt_->location_rt_transports_[location_idx_t{i}]) {
             any_marked = true;
             state_.rt_transport_mark_.set(to_idx(rt_t), true);
           }
@@ -326,24 +308,8 @@ struct raptor {
       // same invariant. Splitting the mark per slot only applies it per slot.
       if constexpr (RtMode == rt_mode::both) {
         state_.station_mark_rt_.for_each_set_bit([&](std::uint64_t const i) {
-          // Grouped rt transports are scanned once per group; the rest --
-          // additional trips, reroutings, cancelled stops and runs -- keep
-          // their own scan. Neither list holds the transports that are
-          // identical to schedule, so those cost nothing here either.
-          for (auto const& rt_r :
-               rtt_->location_rt_routes_[location_idx_t{i}]) {
-            if (rtt_->rt_route_transports_[rt_r].empty()) {
-              continue;  // every member left the group again
-            }
-            any_marked = true;
-            state_.rt_route_mark_.set(to_idx(rt_r), true);
-          }
           for (auto const& rt_t :
-               rtt_->location_rt_unrouted_[location_idx_t{i}]) {
-            if (rtt_->is_unchanged(rt_t) ||
-                rtt_->rt_route_of(rt_t) != rt_route_idx_t::invalid()) {
-              continue;  // registered once, but no longer scanned this way
-            }
+               rtt_->location_rt_transports_[location_idx_t{i}]) {
             any_marked = true;
             state_.rt_transport_mark_.set(to_idx(rt_t), true);
           }
@@ -483,7 +449,6 @@ struct raptor {
 
       utl::fill(state_.route_mark_.blocks_, 0U);
       utl::fill(state_.rt_transport_mark_.blocks_, 0U);
-      utl::fill(state_.rt_route_mark_.blocks_, 0U);
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
       clear_station_marks();
@@ -802,86 +767,6 @@ private:
             return update_rt_transport<true, true, true, false>(k, rt_t);
           case 0b1111:
             return update_rt_transport<true, true, true, true>(k, rt_t);
-          default: std::unreachable();
-        }
-      }();
-    });
-
-    // Grouped rt transports: one scan per group. A group shares its static
-    // route's stop sequence, and with it that route's flags and claszes (see
-    // rt_timetable::regroup_rt_transport()), so the group filters exactly like
-    // a static route does in loop_routes().
-    state_.rt_route_mark_.for_each_set_bit([&](auto const rt_r_idx) {
-      auto const rt_r = rt_route_idx_t{rt_r_idx};
-      auto const r = rtt_->rt_route_static_route_[rt_r];
-      auto const r_idx = to_idx(r);
-
-      if constexpr (WithClaszFilter) {
-        if (!is_allowed(allowed_claszes_, tt_.route_clasz_[r])) {
-          return;
-        }
-      }
-
-      auto filters = static_cast<uint8_t>(0);
-
-      auto const apply_filter = [&](route_flag const f) {
-        auto const flag_set_on_all_sections =
-            tt_.route_flags_[f].test(r_idx * 2);
-        if (!flag_set_on_all_sections) {
-          auto const flag_set_on_some_sections =
-              tt_.route_flags_[f].test(r_idx * 2 + 1);
-          if (!flag_set_on_some_sections) {
-            return false;
-          }
-          filters |=
-              static_cast<uint8_t>(1 << (route_flag::kNumRouteFlags - f - 1));
-          return true;
-        }
-        return true;
-      };
-
-      if constexpr (WithBikeFilter) {
-        if (!apply_filter(route_flag::kBikesAllowed)) {
-          return;
-        }
-      }
-      if constexpr (WithCarFilter) {
-        if (!apply_filter(route_flag::kCarsAllowed)) {
-          return;
-        }
-      }
-      if constexpr (WithWheelchairFilter) {
-        if (!apply_filter(route_flag::kWheelchairAccessible)) {
-          return;
-        }
-      }
-      if constexpr (WithReservationNotRequiredFilter) {
-        if (!apply_filter(route_flag::kReservationNotRequired)) {
-          return;
-        }
-      }
-
-      ++stats_.n_routes_visited_;
-      trace("┊ ├k={} updating rt route {}\n", k, rt_r);
-
-      any_marked |= [&]() {
-        switch (filters) {
-          case 0b0000: return update_rt_route<false, false, false, false>(k, rt_r);
-          case 0b0001: return update_rt_route<false, false, false, true>(k, rt_r);
-          case 0b0010: return update_rt_route<false, false, true, false>(k, rt_r);
-          case 0b0011: return update_rt_route<false, false, true, true>(k, rt_r);
-          case 0b0100: return update_rt_route<false, true, false, false>(k, rt_r);
-          case 0b0101: return update_rt_route<false, true, false, true>(k, rt_r);
-          case 0b0110: return update_rt_route<false, true, true, false>(k, rt_r);
-          case 0b0111: return update_rt_route<false, true, true, true>(k, rt_r);
-          case 0b1000: return update_rt_route<true, false, false, false>(k, rt_r);
-          case 0b1001: return update_rt_route<true, false, false, true>(k, rt_r);
-          case 0b1010: return update_rt_route<true, false, true, false>(k, rt_r);
-          case 0b1011: return update_rt_route<true, false, true, true>(k, rt_r);
-          case 0b1100: return update_rt_route<true, true, false, false>(k, rt_r);
-          case 0b1101: return update_rt_route<true, true, false, true>(k, rt_r);
-          case 0b1110: return update_rt_route<true, true, true, false>(k, rt_r);
-          case 0b1111: return update_rt_route<true, true, true, true>(k, rt_r);
           default: std::unreachable();
         }
       }();
@@ -1420,133 +1305,6 @@ private:
     return any_marked;
   }
 
-  // One scan for a whole group of rt transports, the real-time counterpart of
-  // update_route(). et[v] carries the rt transport a rider with via state v is
-  // on; the members are ordered by time and free of overtaking, so the first
-  // member departing late enough is also the best one.
-  template <bool WithSectionBikeFilter,
-            bool WithSectionCarFilter,
-            bool WithSectionWheelchairFilter,
-            bool WithSectionReservationNotRequiredFilter>
-  bool update_rt_route(unsigned const k, rt_route_idx_t const rt_r) {
-    auto const& members = rtt_->rt_route_transports_[rt_r];
-    if (members.empty()) {
-      return false;  // every member left the group again
-    }
-
-    auto const r = rtt_->rt_route_static_route_[rt_r];
-    auto const stop_seq = tt_.route_location_seq_[r];
-    auto const kNoRide = rt_transport_idx_t::invalid();
-    auto et = std::array<rt_transport_idx_t, Vias + 1>{};
-    et.fill(kNoRide);
-    auto any_marked = false;
-    auto const n_stops = stop_seq.size();
-
-    for (auto i = 0U; i != n_stops; ++i) {
-      auto const stop_idx =
-          static_cast<stop_idx_t>(kFwd ? i : n_stops - i - 1U);
-      auto const stp = stop{stop_seq[stop_idx]};
-      auto const l_idx = cista::to_idx(stp.location_idx());
-      auto const is_first = i == 0U;
-      auto const is_last = i == n_stops - 1U;
-
-      auto const apply_filter = [&](route_flag const f) {
-        if (!is_first && !tt_.route_flags_per_section_[f][r][kFwd ? stop_idx - 1
-                                                                  : stop_idx]) {
-          et.fill(kNoRide);
-        }
-      };
-
-      if constexpr (WithSectionBikeFilter) {
-        apply_filter(route_flag::kBikesAllowed);
-      }
-      if constexpr (WithSectionCarFilter) {
-        apply_filter(route_flag::kCarsAllowed);
-      }
-      if constexpr (WithSectionWheelchairFilter) {
-        apply_filter(route_flag::kWheelchairAccessible);
-      }
-      if constexpr (WithSectionReservationNotRequiredFilter) {
-        apply_filter(route_flag::kReservationNotRequired);
-      }
-
-      if ((kFwd && stop_idx != 0U) || (kBwd && stop_idx != n_stops - 1U)) {
-        // passing a no-stay via stop moves the ride up one via slot
-        if constexpr (Vias != 0U) {
-          for (auto v = Vias; v != 0U; --v) {
-            if (et[v - 1U] != kNoRide && is_via_[v - 1U][l_idx] &&
-                via_stops_[v - 1U].stay_ == 0_minutes) {
-              et[v] = et[v - 1U];
-              et[v - 1U] = kNoRide;
-            }
-          }
-        }
-
-        for (auto j = 0U; j != Vias + 1; ++j) {
-          auto const v = Vias - j;
-          if (et[v] != kNoRide && stp.can_finish<SearchDir>(is_wheelchair_)) {
-            auto const by_transport = rt_time_at_stop(
-                et[v], stop_idx, kFwd ? event_type::kArr : event_type::kDep);
-            if (is_better_loose(by_transport, time_at_dest_[k]) &&
-                lb_reachable(l_idx) &&
-                is_better_loose(by_transport + dir(get_lb(l_idx)),
-                                time_at_dest_[k]) &&
-                within_bounds(k, l_idx, by_transport, v)) {
-              ++stats_.n_earliest_arrival_updated_by_route_;
-              tmp_[l_idx][v] = get_best(by_transport, tmp_[l_idx][v]);
-              mark_station<false>(l_idx);
-              any_marked = true;
-            }
-          }
-        }
-      }
-
-      if (!lb_reachable(l_idx)) {
-        break;
-      }
-
-      if (is_last || !(stp.can_start<SearchDir>(is_wheelchair_)) ||
-          !state_.prev_station_mark_[l_idx]) {
-        continue;
-      }
-
-      auto const dep_at_stop = [&](rt_transport_idx_t const m) {
-        return rt_time_at_stop(
-            m, stop_idx, kFwd ? event_type::kDep : event_type::kArr);
-      };
-
-      for (auto v = 0U; v != Vias + 1; ++v) {
-        auto const prev_round_time = round_times_[k - 1][l_idx][v];
-        if (prev_round_time == kInvalid) {
-          continue;
-        }
-        auto const carried = et[v] == kNoRide ? kInvalid : dep_at_stop(et[v]);
-        if (!is_better_or_eq(prev_round_time, carried)) {
-          continue;  // the ride already carried cannot be improved on here
-        }
-        // members are in departure order, so the first one this label reaches
-        // is the earliest one it can reach
-        auto const take = [&](auto begin_it, auto end_it) {
-          for (auto it = begin_it; it != end_it; ++it) {
-            auto const dep = dep_at_stop(*it);
-            if (is_better_or_eq(prev_round_time, dep)) {
-              if (carried == kInvalid || is_better_or_eq(dep, carried)) {
-                et[v] = *it;
-              }
-              return;
-            }
-          }
-        };
-        if constexpr (kFwd) {
-          take(begin(members), end(members));
-        } else {
-          take(rbegin(members), rend(members));
-        }
-      }
-    }
-    return any_marked;
-  }
-
   template <bool WithSectionBikeFilter,
             bool WithSectionCarFilter,
             bool WithSectionWheelchairFilter,
@@ -1931,7 +1689,7 @@ private:
   timetable const& tt_;
   rt_timetable const* rtt_{nullptr};
   int n_days_;
-  std::uint32_t n_locations_, n_routes_, n_rt_transports_, n_rt_routes_;
+  std::uint32_t n_locations_, n_routes_, n_rt_transports_;
   raptor_state& state_;
   bitvec end_reachable_;
   std::span<std::array<delta_t, Vias + 1>> tmp_;

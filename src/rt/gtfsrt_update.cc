@@ -503,8 +503,6 @@ bool update_run(source_idx_t const src,
       [](stop::value_type const s) { return !stop{s}.is_cancelled(); });
   if (n_not_cancelled_stops <= 1U) {
     rtt.cancel_run(r);
-  } else {
-    rtt.finalize_rt_transport(tt, r.rt_);
   }
   return true;
 }
@@ -539,7 +537,6 @@ void handle_vehicle_position(timetable const& tt,
     // add rt_transport if not existent
     if (!r.is_rt()) {
       r.rt_ = rtt.add_rt_transport(src, tt, r.t_);
-      rtt.finalize_rt_transport(tt, r.rt_);
     }
 
     // match position to stop

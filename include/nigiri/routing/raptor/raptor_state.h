@@ -30,7 +30,6 @@ struct raptor_state {
   raptor_state& resize(unsigned n_locations,
                        unsigned n_routes,
                        unsigned n_rt_transports,
-                       unsigned n_rt_routes,
                        bool with_sched);
 
   template <via_offset_t Vias>
@@ -176,9 +175,6 @@ struct raptor_state {
   bitvec prev_station_mark_;
   bitvec route_mark_;
   bitvec rt_transport_mark_;
-  // rt transports grouped into rt routes are marked here instead, and scanned
-  // once per group -- see rt_timetable::regroup_rt_transport().
-  bitvec rt_route_mark_;
 
   // rt_mode::both only: the rt slot's improvements alone, where station_mark_
   // is the union of both slots'. Routes are scanned for the union -- both

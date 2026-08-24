@@ -177,96 +177,6 @@ struct rt_timetable {
                         [&](rt_add_trip_id_idx_t) { return debug{"RT"}; }});
   }
 
-  // Call after applying an update to `rt_t`, once its times are final.
-  //
-  // A real-time update that turns out to change nothing -- a feed covering a
-  // trip and reporting it exactly on time, which is what most of a real feed
-  // is -- still materialises an rt_transport, and add_rt_transport() still
-  // clears the trip's static traffic day. That moves the trip off the static
-  // scan onto the per-transport real-time scan, which is far more expensive:
-  // the static scan walks a whole route's stop sequence once for all of its
-  // transports, the real-time scan walks one stop sequence per transport.
-  //
-  // For a transport whose times and stops are identical to the schedule, the
-  // scheduled and the real-time answer are the same by definition, so the
-  // static scan serves both. This restores the traffic day and flags the
-  // transport; the routing then leaves flagged transports off
-  // rt_transport_mark_ and rides them statically.
-  //
-  // The rt_transport itself stays, so trip lookup, alerts, tracks and
-  // real-time annotation are unaffected -- frun resolves rt_ from the static
-  // transport. Idempotent and authoritative in both directions: a transport
-  // that was unchanged and is now delayed gets its flag and its traffic day
-  // cleared again.
-  void finalize_rt_transport(timetable const&, rt_transport_idx_t);
-
-  // True if `rt_t` is identical to its static counterpart *for routing* and is
-  // therefore ridden on the static scan. Track-only changes still count as
-  // unchanged: they do not affect routing, and frun still surfaces them.
-  bool is_unchanged(rt_transport_idx_t const rt_t) const noexcept {
-    return to_idx(rt_t) < rt_transport_is_unchanged_.size() &&
-           rt_transport_is_unchanged_.test(to_idx(rt_t));
-  }
-
-  void set_unchanged(rt_transport_idx_t const rt_t, bool const x) {
-    if (to_idx(rt_t) >= rt_transport_is_unchanged_.size()) {
-      rt_transport_is_unchanged_.resize(to_idx(rt_t) + 1U);
-    }
-    rt_transport_is_unchanged_.set(to_idx(rt_t), x);
-  }
-
-  bool matches_schedule(timetable const&, rt_transport_idx_t) const;
-
-  // --- rt routes ---------------------------------------------------------
-  //
-  // The static scan walks a route's stop sequence *once* for all of that
-  // route's transports; the real-time scan walks one stop sequence *per*
-  // transport, because rt transports are not grouped. For the transports that
-  // are still on the real-time scan -- the ones that actually deviate -- that
-  // is the dominant cost of a real-time search.
-  //
-  // An rt route is the same idea as a static route, maintained incrementally:
-  // rt transports that share a stop sequence and do not overtake each other,
-  // kept ordered by time. Unlike the static timetable the groups are tiny
-  // (a handful of transports), so the times stay where they are and the
-  // members are just a small sorted list -- no transposed per-route time
-  // array.
-  //
-  // Only transports whose stop sequence still equals their static route's are
-  // grouped, which also means they share that route's flags and claszes
-  // (add_rt_transport() copies them verbatim), so the routing can filter a
-  // whole group at once exactly like a static route. Everything else --
-  // additional trips, reroutings, cancelled stops, cancelled runs -- keeps
-  // its own per-transport scan.
-  //
-  // Called from finalize_rt_transport(), i.e. after every update, since an
-  // update can change a transport's times and therefore its position (or its
-  // eligibility) in a group.
-  void regroup_rt_transport(timetable const&, rt_transport_idx_t);
-
-  // Inserts in time order if `rt_t` overtakes neither of its neighbours at any
-  // event; false if it does, in which case it belongs in another group.
-  bool try_insert_into_rt_route(rt_route_idx_t, rt_transport_idx_t);
-
-  // Registers `rt_t` in location_rt_unrouted_, the list the routing scans
-  // per transport. Called once, the first time a transport turns out to need
-  // its own scan; an rt transport's *locations* never change after
-  // add_rt_transport() -- the only in-place edits to rt_transport_location_seq_
-  // cancel a stop, which keeps its location_idx() -- so the registration stays
-  // valid for the transport's whole life. A transport that later becomes
-  // grouped or unchanged is filtered out when the marks are built.
-  void register_unrouted(rt_transport_idx_t);
-
-  rt_route_idx_t rt_route_of(rt_transport_idx_t const rt_t) const noexcept {
-    return to_idx(rt_t) < rt_transport_rt_route_.size()
-               ? rt_transport_rt_route_[rt_t]
-               : rt_route_idx_t::invalid();
-  }
-
-  std::uint32_t n_rt_routes() const noexcept {
-    return static_cast<std::uint32_t>(rt_route_static_route_.size());
-  }
-
   transport resolve_static(rt_transport_idx_t const rt_t) const noexcept {
     auto const t = rt_transport_static_transport_[rt_t];
     return holds_alternative<transport>(t) ? t.as<transport>() : transport{};
@@ -367,27 +277,6 @@ struct rt_timetable {
 
   // RT transport -> canceled flag
   bitvec rt_transport_is_cancelled_;
-
-  // Set for rt transports that are identical to their static counterpart, see
-  // finalize_rt_transport(). Empty until that has run.
-  bitvec rt_transport_is_unchanged_;
-
-  // rt routes, see regroup_rt_transport(). Members are ordered by time and
-  // free of overtaking; the stop sequence is the static route's.
-  vector_map<rt_route_idx_t, std::vector<rt_transport_idx_t>>
-      rt_route_transports_;
-  vector_map<rt_route_idx_t, route_idx_t> rt_route_static_route_;
-  vector_map<rt_transport_idx_t, rt_route_idx_t> rt_transport_rt_route_;
-  hash_map<route_idx_t, std::vector<rt_route_idx_t>> rt_routes_by_static_route_;
-  mutable_fws_multimap<location_idx_t, rt_route_idx_t> location_rt_routes_;
-
-  // The rt transports that are scanned one by one because they do not fit a
-  // group: additional trips, reroutings, cancelled stops, cancelled runs.
-  // Together with location_rt_routes_ this replaces walking
-  // location_rt_transports_ when the routing builds its marks.
-  mutable_fws_multimap<location_idx_t, rt_transport_idx_t>
-      location_rt_unrouted_;
-  bitvec rt_transport_unrouted_registered_;
 
   // RT transport * 2 -> flags (bikes, cars, wheelchairs, reservtion) along the
   // transport RT transport * 2 + 1 -> flags along parts of the transport
