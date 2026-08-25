@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cassert>
+#include <cstdint>
 #include <algorithm>
+#include <limits>
 #include <span>
 #include <type_traits>
 #include <utility>
@@ -1747,11 +1749,45 @@ private:
     static_assert(WithRt || WithSched);
     stats_.n_earliest_trip_calls_ +=
         (WithRt ? 1U : 0U) + (WithSched ? 1U : 0U);
+    if constexpr (WithRt && WithSched) {
+      ++stats_.n_earliest_trip_calls_shared_;
+    }
 
     auto rt_res = transport{};
     auto sched_res = transport{};
     auto rt_open = WithRt;
     auto sched_open = WithSched;
+
+    // Divergence tracking, shared walks only: where in the walk each slot
+    // stopped needing candidates, counted in candidates examined. Equal
+    // values mean the walk ended for both at the same point, so the second
+    // scan was saved in full; different values mean it ran on for the slower
+    // slot and only the shared per-candidate work up to the split was saved.
+    // Both still kStillOpen means neither slot ever closed, i.e. the walk was
+    // exhausted for both alike -- also a full saving.
+    constexpr auto kStillOpen = std::numeric_limits<std::uint32_t>::max();
+    [[maybe_unused]] auto n_steps = std::uint32_t{0U};
+    [[maybe_unused]] auto rt_close = kStillOpen;
+    [[maybe_unused]] auto sched_close = kStillOpen;
+    auto const note_closes = [&]() {
+      if constexpr (WithRt && WithSched) {
+        if (!rt_open && rt_close == kStillOpen) {
+          rt_close = n_steps;
+        }
+        if (!sched_open && sched_close == kStillOpen) {
+          sched_close = n_steps;
+        }
+      }
+    };
+    auto const finish = [&]() {
+      if constexpr (WithRt && WithSched) {
+        note_closes();
+        if (rt_close != sched_close) {
+          ++stats_.n_earliest_trip_calls_diverged_;
+        }
+      }
+      return std::pair{rt_res, sched_res};
+    };
 
     // A slot that does not take part is pinned to the other one's start, so
     // it never widens the day window below.
@@ -1810,6 +1846,7 @@ private:
       if (sched_off >= n_days_to_iterate) {
         sched_open = false;
       }
+      note_closes();
       if (!rt_open && !sched_open) {
         break;
       }
@@ -1828,6 +1865,9 @@ private:
       for (auto it = begin(ev_time_range); it != end(ev_time_range); ++it) {
         auto const t_offset =
             static_cast<std::size_t>(&*it - event_times.data());
+        if constexpr (WithRt && WithSched) {
+          ++n_steps;
+        }
         auto const ev = *it;
         auto const ev_mam = ev.mam();
 
@@ -1858,8 +1898,9 @@ private:
         if constexpr (WithSched) {
           prune(std::true_type{}, sched_open, sched_off);
         }
+        note_closes();
         if (!rt_open && !sched_open) {
-          return {rt_res, sched_res};
+          return finish();
         }
 
         // Shared: which transport this candidate is, and which day it started
@@ -1916,12 +1957,13 @@ private:
         if constexpr (WithSched) {
           offer(std::true_type{}, sched_open, sched_res, sched_off, sched_mam);
         }
+        note_closes();
         if (!rt_open && !sched_open) {
-          return {rt_res, sched_res};
+          return finish();
         }
       }
     }
-    return {rt_res, sched_res};
+    return finish();
   }
 
   bool is_transport_active(transport_idx_t const t, day_idx_t const day) const {
