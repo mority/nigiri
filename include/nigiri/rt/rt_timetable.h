@@ -64,16 +64,64 @@ struct rt_timetable {
     return clamp(d);
   }
 
-  void update_time(rt_transport_idx_t const rt_t,
-                   stop_idx_t const stop_idx,
-                   event_type const ev_type,
-                   unixtime_t const new_time) {
-    auto const ev_idx = stop_idx * 2 - (ev_type == event_type::kArr ? 1 : 0);
-    assert(ev_idx >= 0 && static_cast<stop_idx_t>(ev_idx) <
-                              rt_transport_stop_times_[rt_t].size());
-    rt_transport_stop_times_[rt_t][static_cast<std::size_t>(ev_idx)] =
-        unix_to_delta(new_time);
+  // Sets one event time. If this is the first event of `rt_t` to move off its
+  // scheduled time, the transport is taken off the static scan and put on the
+  // real-time scan in the same step -- see mark_deviating().
+  void update_time(rt_transport_idx_t, stop_idx_t, event_type, unixtime_t);
+
+  // Cancels one stop (no boarding, no alighting). Also a deviation: the stop
+  // sequence no longer matches the static route's.
+  void cancel_stop(rt_transport_idx_t, stop_idx_t);
+
+  // Call after applying an update to `rt_t`, once its times are final.
+  //
+  // A real-time update that changes nothing -- a feed covering a trip and
+  // reporting it exactly on time, which is most of a real feed -- still
+  // materialises an rt_transport, and add_rt_transport() used to clear the
+  // trip's static traffic day, moving it onto the per-transport real-time
+  // scan. For a transport identical to its schedule the static scan gives the
+  // same answer far more cheaply, so it stays there instead.
+  //
+  // Idempotent and authoritative in both directions: a transport that was
+  // punctual and is now delayed gets its traffic day cleared and joins the
+  // real-time scan; one that becomes punctual again is handed back.
+  void finalize_rt_transport(timetable const&, rt_transport_idx_t);
+
+  // Takes the transport's day off the static scan *and* puts it on the
+  // real-time scan. These always happen together: a transport whose traffic
+  // day is cleared while it is on no scan is invisible to the routing, which
+  // is silent data loss rather than a degradation. Keeping the pair inside one
+  // function makes that state unrepresentable.
+  void mark_deviating(rt_transport_idx_t);
+
+  // Sets or clears one day of `t` in the rt traffic days, creating the
+  // rt-owned bitfield copy on first use.
+  void set_rt_traffic_day(transport t, bool active);
+
+  // Registers `rt_t` on location_rt_scan_, the list the routing builds its
+  // marks from. Called once: an rt transport's *locations* never change after
+  // add_rt_transport() -- the only in-place edits to rt_transport_location_seq_
+  // cancel a stop, which keeps its location_idx() -- so one registration holds
+  // for the transport's whole life, and a transport that later becomes
+  // identical to schedule is filtered out when the marks are built.
+  void register_scan(rt_transport_idx_t);
+
+  // True if `rt_t` is identical to its static counterpart *for routing*, and
+  // therefore ridden on the static scan. Track-only changes still count as
+  // unchanged: they do not affect routing, and frun still surfaces them.
+  bool is_unchanged(rt_transport_idx_t const rt_t) const noexcept {
+    return to_idx(rt_t) < rt_transport_is_unchanged_.size() &&
+           rt_transport_is_unchanged_.test(to_idx(rt_t));
   }
+
+  void set_unchanged(rt_transport_idx_t const rt_t, bool const x) {
+    if (to_idx(rt_t) >= rt_transport_is_unchanged_.size()) {
+      rt_transport_is_unchanged_.resize(to_idx(rt_t) + 1U);
+    }
+    rt_transport_is_unchanged_.set(to_idx(rt_t), x);
+  }
+
+  bool matches_schedule(timetable const&, rt_transport_idx_t) const;
 
   void update_lbs(timetable const& tt,
                   rt_transport_idx_t,
@@ -277,6 +325,17 @@ struct rt_timetable {
 
   // RT transport -> canceled flag
   bitvec rt_transport_is_cancelled_;
+
+  // Set for rt transports identical to their static counterpart, see
+  // finalize_rt_transport(). Those ride the static scan and are on no list
+  // below, so they cost the routing nothing.
+  bitvec rt_transport_is_unchanged_;
+
+  // The rt transports the routing has to scan, i.e. the ones that deviate.
+  // Building marks from this instead of from location_rt_transports_ keeps the
+  // punctual majority out of the mark-building walk entirely.
+  mutable_fws_multimap<location_idx_t, rt_transport_idx_t> location_rt_scan_;
+  bitvec rt_transport_scan_registered_;
 
   // RT transport * 2 -> flags (bikes, cars, wheelchairs, reservtion) along the
   // transport RT transport * 2 + 1 -> flags along parts of the transport
