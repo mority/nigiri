@@ -71,8 +71,21 @@ struct rt_timetable {
     auto const ev_idx = stop_idx * 2 - (ev_type == event_type::kArr ? 1 : 0);
     assert(ev_idx >= 0 && static_cast<stop_idx_t>(ev_idx) <
                               rt_transport_stop_times_[rt_t].size());
-    rt_transport_stop_times_[rt_t][static_cast<std::size_t>(ev_idx)] =
-        unix_to_delta(new_time);
+    auto const d = unix_to_delta(new_time);
+    rt_transport_stop_times_[rt_t][static_cast<std::size_t>(ev_idx)] = d;
+
+    // Only a write that actually moves the event away from its scheduled time
+    // makes the two worlds diverge. Feeds report most of their coverage as
+    // running to plan, and those updates leave the schedule and the real-time
+    // world rideable as one.
+    if (tt_ != nullptr) {
+      auto const t = resolve_static(rt_t);
+      if (t.is_valid() &&
+          d != unix_to_delta(tt_->event_time(t, stop_idx, ev_type))) {
+        mark_diverges_from_schedule(t.t_idx_);
+        promote_to_scan_unit(rt_t, t);
+      }
+    }
   }
 
   void update_lbs(timetable const& tt,
@@ -218,6 +231,68 @@ struct rt_timetable {
     return (to_idx(transport_traffic_days_[t]) & kRtBitfieldFlag) != 0U;
   }
 
+  // Does the real-time feed actually disagree with the schedule for `t`?
+  //
+  // `has_rt_traffic_days()` only says that the transport was re-pointed, which
+  // happens as soon as it appears in the feed at all -- a feed reporting a
+  // transport as exactly on time re-points it just like a delayed one. For
+  // anything that has to know whether the scheduled and the real-time world can
+  // still share work, that is the wrong question: an on-time `rt_transport`
+  // carries the same event times as the schedule, so both worlds ride it
+  // identically.
+  //
+  // This is set only when the two actually differ: a changed event time, a
+  // changed stop sequence, a cancellation, or an added trip.
+  bool diverges_from_schedule(transport_idx_t const t) const {
+    return to_idx(t) < transport_diverges_.size() &&
+           transport_diverges_.test(to_idx(t));
+  }
+
+  // Is this rt_transport a faithful copy of the schedule?
+  //
+  // A feed reports most of its coverage as running to plan. Such an
+  // rt_transport carries the same stops at the same times as the static
+  // transport, so the routing does not need it as a scan unit of its own: the
+  // static transport is still live in the rt world (its traffic day was left
+  // alone) and serves both worlds in one pass. It stays in
+  // `location_rt_transports_` and `static_trip_lookup_` regardless, because
+  // everything outside the routing -- stop-time boards, railviz, the
+  // annotation that puts `realTime: true` on a leg -- resolves realtime facts
+  // through those and must keep seeing it.
+  bool is_clean_rt_transport(rt_transport_idx_t const rt_t) const {
+    return to_idx(rt_t) < rt_transport_is_clean_.size() &&
+           rt_transport_is_clean_.test(to_idx(rt_t));
+  }
+
+  // An rt_transport that was a faithful copy has just been moved off schedule.
+  // Hand the rt world over to it: stop treating it as clean, and take the day
+  // away from the static transport so the rt world stops finding that one --
+  // otherwise both would be live and the transport would be scanned twice.
+  void promote_to_scan_unit(rt_transport_idx_t const rt_t,
+                            transport const& t) {
+    if (!is_clean_rt_transport(rt_t)) {
+      return;
+    }
+    rt_transport_is_clean_.set(to_idx(rt_t), false);
+    auto const static_bf = traffic_days(transport_traffic_days_[t.t_idx_]);
+    bitfields_.emplace_back(static_bf).set(to_idx(t.day_), false);
+    transport_traffic_days_[t.t_idx_] = rt_bitfield_idx();
+  }
+
+  void mark_diverges_from_schedule(transport_idx_t const t) {
+    if (to_idx(t) >= transport_diverges_.size()) {
+      transport_diverges_.resize(to_idx(t) + 1U);
+    }
+    transport_diverges_.set(to_idx(t), true);
+    ++diverge_version_;
+  }
+
+  // Bumped on every divergence mark. Callers caching anything derived from
+  // `diverges_from_schedule()` must fold this into their cache key: an
+  // update_time() that moves a transport off schedule changes the answer
+  // without growing `bitfields_`.
+  std::size_t diverge_version() const { return diverge_version_; }
+
   timetable const* tt_{nullptr};
 
   array<bitvec_map<location_idx_t>, kNProfiles> has_td_footpaths_out_;
@@ -263,6 +338,17 @@ struct rt_timetable {
   vecvec<trip_direction_string_idx_t, char> rt_transport_direction_strings_;
   vecvec<rt_transport_idx_t, trip_direction_string_idx_t>
       rt_transport_section_directions_;
+
+  // static transport -> the feed disagrees with the schedule on some day
+  // (changed time, changed stops, cancellation). See
+  // `diverges_from_schedule()`; sized lazily, an unset/absent bit means "the
+  // feed either does not mention this transport or reports it exactly as
+  // scheduled".
+  bitvec transport_diverges_;
+  std::size_t diverge_version_{0U};
+
+  // rt transport -> identical to the schedule (see is_clean_rt_transport())
+  bitvec rt_transport_is_clean_;
 
   // RT transport -> event times (dep, arr, dep, arr, ...)
   vecvec<rt_transport_idx_t, delta_t> rt_transport_stop_times_;

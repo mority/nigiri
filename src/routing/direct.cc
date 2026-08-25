@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "nigiri/routing/direct.h"
 
 #include <queue>
@@ -541,6 +543,17 @@ utl::generator<std::vector<journey::leg>> get_direct_journeys(
     for (auto const loc : alighting_locs) {
       merge_sorted(to_rt, rtt->location_rt_transports_[loc]);
     }
+    // clean rt transports are not scan units of their own: the static
+    // transport is still live in the rt world and is picked up above
+    auto const drop_clean = [&](std::vector<rt_transport_idx_t>& v) {
+      v.erase(std::remove_if(begin(v), end(v),
+                             [&](rt_transport_idx_t const rt_t) {
+                               return rtt->is_clean_rt_transport(rt_t);
+                             }),
+              end(v));
+    };
+    drop_clean(from_rt);
+    drop_clean(to_rt);
     utl::sorted_diff(
         from_rt, to_rt, std::less<rt_transport_idx_t>{},
         [](auto&&, auto&&) { return false; },

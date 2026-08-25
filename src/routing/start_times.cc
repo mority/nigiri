@@ -176,6 +176,10 @@ void add_starts_in_interval(direction const search_dir,
   // Real-time starts
   if (rtt != nullptr) {
     for (auto const& rt_t : rtt->location_rt_transports_.at(l)) {
+      // covered by the static start above: identical times, day still live
+      if (rtt->is_clean_rt_transport(rt_t)) {
+        continue;
+      }
       auto const location_seq = rtt->rt_transport_location_seq_.at(rt_t);
       for (auto const [i, s] : utl::enumerate(location_seq)) {
         auto const stp = stop{s};

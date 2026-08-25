@@ -28,9 +28,24 @@ rt_transport_idx_t rt_timetable::add_rt_transport(
     static_trip_lookup_.emplace(t, rt_t_idx);
     rt_transport_static_transport_.emplace_back(t);
 
-    auto const static_bf = traffic_days(transport_traffic_days_[t_idx]);
-    bitfields_.emplace_back(static_bf).set(to_idx(day), false);
-    transport_traffic_days_[t_idx] = rt_bitfield_idx();
+    // Times are copied from the schedule below whenever the caller supplies
+    // neither its own stop sequence nor its own times and no offset, so such
+    // an rt_transport starts out identical to the schedule. Leave the static
+    // transport live in the rt world and let it serve both worlds in one
+    // scan; the rt_transport is still registered everywhere else, it just is
+    // not a scan unit of its own until an update actually moves it
+    // (promote_to_scan_unit()). Anything else differs from the outset and
+    // takes the day now.
+    auto const is_clean = stop_seq.empty() && time_seq.empty() && offset == 0;
+    if (is_clean) {
+      rt_transport_is_clean_.resize(rt_t_idx + 1U);
+      rt_transport_is_clean_.set(rt_t_idx, true);
+    } else {
+      mark_diverges_from_schedule(t_idx);
+      auto const static_bf = traffic_days(transport_traffic_days_[t_idx]);
+      bitfields_.emplace_back(static_bf).set(to_idx(day), false);
+      transport_traffic_days_[t_idx] = rt_bitfield_idx();
+    }
   } else {
     auto const rt_add_idx =
         rt_add_trip_id_idx_t{additional_trips_.at(src).transports_.size()};
@@ -327,11 +342,16 @@ void rt_timetable::update_lbs(timetable const& tt) {
 void rt_timetable::cancel_run(rt::run const& r) {
   if (r.is_rt()) {
     rt_transport_is_cancelled_.set(to_idx(r.rt_), true);
+    if (is_clean_rt_transport(r.rt_)) {
+      rt_transport_is_clean_.set(to_idx(r.rt_), false);
+    }
   }
   if (r.is_scheduled()) {
     auto const bf = traffic_days(transport_traffic_days_[r.t_.t_idx_]);
     bitfields_.emplace_back(bf).set(to_idx(r.t_.day_), false);
     transport_traffic_days_[r.t_.t_idx_] = rt_bitfield_idx();
+    // the schedule still has this run, the real-time world does not
+    mark_diverges_from_schedule(r.t_.t_idx_);
 
     for (auto i = r.stop_range_.from_; i != r.stop_range_.to_; ++i) {
       dispatch_stop_change(r, i, event_type::kArr, std::nullopt, false);

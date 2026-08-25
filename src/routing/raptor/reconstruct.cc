@@ -444,6 +444,10 @@ void reconstruct_journey_with_vias(timetable const& tt,
 
     if (rtt != nullptr) {
       for (auto const& rt_t : rtt->location_rt_transports_[l]) {
+        // reconstructed via the static transport instead
+        if (rtt->is_clean_rt_transport(rt_t)) {
+          continue;
+        }
         if (!is_allowed(q.allowed_claszes_,
                         rtt->rt_transport_section_clasz_[rt_t][0])) {
           continue;

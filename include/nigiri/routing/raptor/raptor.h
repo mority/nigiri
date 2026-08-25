@@ -134,7 +134,9 @@ struct basic_raptor {
         transfer_time_settings_{tts} {
     reset_arrivals();
     if constexpr (kCoD) {
-      auto const version = rtt_ == nullptr ? 0U : rtt_->bitfields_.size();
+      auto const version = rtt_ == nullptr ? 0U
+                                          : rtt_->bitfields_.size() +
+                                                rtt_->diverge_version();
       if (state_.route_has_rt_src_ != rtt_ ||
           state_.route_has_rt_version_ != version) {
         state_.route_has_rt_src_ = rtt_;
@@ -145,7 +147,12 @@ struct basic_raptor {
           auto const n_transports = tt_.transport_route_.size();
           for (auto i = 0U; i != n_transports; ++i) {
             auto const t = transport_idx_t{i};
-            if (rtt_->has_rt_traffic_days(t)) {
+            // Not has_rt_traffic_days(): that is true as soon as the feed
+            // mentions the transport at all, so at high feed coverage nearly
+            // every route lost the clean-route lane even when the feed
+            // reported everything as running to plan. Ask instead whether the
+            // feed actually disagrees with the schedule.
+            if (rtt_->diverges_from_schedule(t)) {
               state_.route_has_rt_.set(to_idx(tt_.transport_route_[t]), true);
             }
           }
@@ -636,6 +643,11 @@ struct basic_raptor {
         if constexpr (Rt) {
           for (auto const& rt_t :
                rtt_->location_rt_transports_[location_idx_t{i}]) {
+            // clean rt transports are not scan units of their own: the static
+            // transport is still live in the rt world and covers them
+            if (rtt_->is_clean_rt_transport(rt_t)) {
+              continue;
+            }
             any_marked = true;
             state_.rt_transport_mark_.set(to_idx(rt_t), true);
           }
