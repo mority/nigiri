@@ -15,6 +15,7 @@
 
 #include "nigiri/get_otel_tracer.h"
 #include "nigiri/routing/gpu/raptor.h"
+#include "nigiri/routing/needs_rt.h"
 #include "nigiri/routing/query.h"
 
 namespace nigiri::routing {
@@ -57,6 +58,14 @@ routing_result raptor_search_with_dir(
     query q,
     std::optional<std::chrono::seconds> const timeout) {
   q.sanitize(tt);
+
+  // If the real-time timetable has no data for the time span this query can
+  // reach, it cannot influence the result - drop it and let the static
+  // `Rt = false` code path handle the query.
+  if (rtt != nullptr && !needs_rt<SearchDir>(tt, *rtt, q)) {
+    rtt = nullptr;
+  }
+
   utl::verify(q.via_stops_.size() <= kMaxVias,
               "too many via stops: {}, limit: {}", q.via_stops_.size(),
               kMaxVias);
