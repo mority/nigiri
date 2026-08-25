@@ -17,6 +17,7 @@
 #include "nigiri/routing/get_earliest_transport.h"
 #include "nigiri/routing/gpu/raptor.h"
 #include "nigiri/routing/leg_alternatives.h"
+#include "nigiri/routing/needs_rt.h"
 #include "nigiri/routing/transfer_time_settings.h"
 #include "nigiri/rt/frun.h"
 #include "nigiri/types.h"
@@ -78,7 +79,6 @@ routing_result pong(timetable const& tt,
       raptor<flip(SearchDir), Rt, Vias, search_mode::kOneToOne>>;
 
   s_state.results_.clear();
-  q.sanitize(tt);
 
   auto const processing_start_time = std::chrono::steady_clock::now();
 
@@ -497,6 +497,15 @@ routing_result pong_search_with_dir(
     AlgoState& r_state,
     query q,
     std::optional<std::chrono::seconds> timeout) {
+  q.sanitize(tt);
+
+  // If the real-time timetable has no data for the time span this query can
+  // reach, it cannot influence the result - drop it and let the static
+  // `Rt = false` code path handle the query.
+  if (rtt != nullptr && !pong_needs_rt<SearchDir>(tt, *rtt, q, kMinLookAhead)) {
+    rtt = nullptr;
+  }
+
   if constexpr (std::is_same_v<AlgoState, gpu::gpu_raptor_state>) {
     utl::verify(q.via_stops_.empty(), "GPU raptor does not support vias");
     return pong_with_vias<SearchDir, 0>(tt, rtt, s_state, r_state, std::move(q),

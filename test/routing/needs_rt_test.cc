@@ -3,6 +3,7 @@
 #include "nigiri/loader/gtfs/load_timetable.h"
 #include "nigiri/loader/init_finish.h"
 #include "nigiri/routing/needs_rt.h"
+#include "nigiri/routing/raptor/pong.h"
 #include "nigiri/rt/create_rt_timetable.h"
 
 using namespace date;
@@ -151,4 +152,78 @@ TEST(routing, needs_rt_profile) {
 
   q.prf_idx_ = 1U;
   EXPECT_TRUE(needs_rt<direction::kForward>(tt, rtt, q));
+}
+
+// PONG does not use the interval estimator: it walks the start time in search
+// direction until it leaves the timetable's external interval. Its window is
+// therefore much wider than the range RAPTOR one.
+TEST(routing, pong_needs_rt_interval_extension) {
+  auto const tt = load_tt();
+  auto rtt = rt::create_rt_timetable(tt, date::sys_days{kDay});
+  rtt.extend_coverage(interval{t(8h), t(9h + 10min)});
+
+  // Range RAPTOR cannot reach 05-01 from a month before / after.
+  EXPECT_FALSE(
+      needs_rt<direction::kForward>(tt, rtt, q_at(at_8(2019_y / April / 1))));
+  EXPECT_FALSE(
+      needs_rt<direction::kBackward>(tt, rtt, q_at(at_8(2019_y / June / 1))));
+
+  // PONG walks forward from 04-01 up to the end of the timetable (11-01) and
+  // backward from 06-01 down to its start (03-25) - both pass 05-01.
+  EXPECT_TRUE(pong_needs_rt<direction::kForward>(
+      tt, rtt, q_at(at_8(2019_y / April / 1)), kMinLookAhead));
+  EXPECT_TRUE(pong_needs_rt<direction::kBackward>(
+      tt, rtt, q_at(at_8(2019_y / June / 1)), kMinLookAhead));
+
+  // Against the search direction it is still bounded by the query itself.
+  EXPECT_FALSE(pong_needs_rt<direction::kForward>(
+      tt, rtt, q_at(at_8(2019_y / June / 1)), kMinLookAhead));
+  EXPECT_FALSE(pong_needs_rt<direction::kBackward>(
+      tt, rtt, q_at(at_8(2019_y / April / 1)), kMinLookAhead));
+}
+
+// PONG looks `kMinLookAhead` further than `max_travel_time_`.
+TEST(routing, pong_needs_rt_min_look_ahead) {
+  auto const tt = load_tt();
+
+  // Real-time data right after the end of the timetable (11-01 00:00).
+  auto rtt_after = rt::create_rt_timetable(tt, date::sys_days{kDay});
+  rtt_after.extend_coverage(
+      interval{unixtime_t{sys_days{2019_y / November / 1} + 12h},
+               unixtime_t{sys_days{2019_y / November / 1} + 13h}});
+
+  // The last start time PONG tries is just before 11-01 00:00. With one hour
+  // of travel time it stops looking at 01:00 ...
+  auto const q_fwd = q_at(at_8(2019_y / October / 31), 60min);
+  EXPECT_FALSE(
+      pong_needs_rt<direction::kForward>(tt, rtt_after, q_fwd, duration_t{0}));
+  // ... but with the additional look ahead it reaches 11-02 01:00.
+  EXPECT_TRUE(
+      pong_needs_rt<direction::kForward>(tt, rtt_after, q_fwd, kMinLookAhead));
+
+  // Same for the earliest start time backwards (03-25 00:00).
+  auto rtt_before = rt::create_rt_timetable(tt, date::sys_days{kDay});
+  rtt_before.extend_coverage(
+      interval{unixtime_t{sys_days{2019_y / March / 24} + 11h},
+               unixtime_t{sys_days{2019_y / March / 24} + 12h}});
+
+  auto const q_bwd = q_at(at_8(2019_y / March / 26), 60min);
+  EXPECT_FALSE(pong_needs_rt<direction::kBackward>(tt, rtt_before, q_bwd,
+                                                   duration_t{0}));
+  EXPECT_TRUE(pong_needs_rt<direction::kBackward>(tt, rtt_before, q_bwd,
+                                                  kMinLookAhead));
+}
+
+TEST(routing, pong_needs_rt_no_coverage_and_profile) {
+  auto const tt = load_tt();
+  auto const rtt = rt::create_rt_timetable(tt, date::sys_days{kDay});
+
+  ASSERT_FALSE(rtt.has_coverage());
+
+  auto q = q_at(at_8(kDay));
+  EXPECT_FALSE(pong_needs_rt<direction::kForward>(tt, rtt, q, kMinLookAhead));
+
+  // Time dependent footpaths are not tracked by the coverage.
+  q.prf_idx_ = 1U;
+  EXPECT_TRUE(pong_needs_rt<direction::kForward>(tt, rtt, q, kMinLookAhead));
 }
