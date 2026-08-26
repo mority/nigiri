@@ -1,7 +1,34 @@
 cmake_minimum_required(VERSION 3.22)
 project(nigiri)
 
-option(NIGIRI_CUDA "enable CUDA functions" OFF)
+option(NIGIRI_CUDA "enable GPU routing on NVIDIA (CUDA)" OFF)
+option(NIGIRI_HIP "enable GPU routing on AMD (HIP/ROCm)" OFF)
+set(NIGIRI_HIP_ARCH "" CACHE STRING
+        "AMD GPU architecture(s) to build for, e.g. gfx803 (default: autodetect)")
+
+if (NIGIRI_HIP AND NOT DEFINED CMAKE_HIP_ARCHITECTURES)
+  if (NIGIRI_HIP_ARCH)
+    set(CMAKE_HIP_ARCHITECTURES ${NIGIRI_HIP_ARCH})
+  else()
+    # every target picks up CMAKE_HIP_ARCHITECTURES as a property when it is
+    # created, so this has to resolve here, not next to enable_language(HIP)
+    find_program(NIGIRI_AMDGPU_ARCH NAMES amdgpu-arch offload-arch
+            rocm_agent_enumerator)
+    if (NIGIRI_AMDGPU_ARCH)
+      execute_process(COMMAND ${NIGIRI_AMDGPU_ARCH}
+              OUTPUT_VARIABLE nigiri-hip-arch
+              OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+      string(REGEX MATCHALL "gfx[0-9a-f]+" nigiri-hip-arch "${nigiri-hip-arch}")
+      list(REMOVE_DUPLICATES nigiri-hip-arch)
+    endif()
+    if (NOT nigiri-hip-arch)
+      message(FATAL_ERROR "NIGIRI_HIP: could not detect the AMD GPU "
+              "architecture, pass it explicitly, e.g. -DNIGIRI_HIP_ARCH=gfx803")
+    endif()
+    message(STATUS "NIGIRI_HIP: building for ${nigiri-hip-arch}")
+    set(CMAKE_HIP_ARCHITECTURES ${nigiri-hip-arch})
+  endif()
+endif()
 
 if (NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
   if (NIGIRI_MIMALLOC)
@@ -152,41 +179,74 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
   target_link_options(nigiri-benchmark PRIVATE -Wl,-no_deduplicate)
 endif()
 
-# CUDA Support
-if (NIGIRI_CUDA)
-  if (MSVC)
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
-  else()
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr -lineinfo")
-  endif()
-  enable_language(CUDA)
+# GPU Support (CUDA on NVIDIA, HIP on AMD)
+#
+# Both back ends compile the same src/*.cu sources; the platform differences
+# live behind include/nigiri/routing/gpu/gpu_runtime.cuh, gpu_std.cuh and
+# warp.cuh. NIGIRI_GPU is the feature gate the rest of the tree checks.
+if (NIGIRI_CUDA AND NIGIRI_HIP)
+  message(FATAL_ERROR "NIGIRI_CUDA and NIGIRI_HIP are mutually exclusive")
+endif()
 
-  find_package(CUDAToolkit REQUIRED)
+if (NIGIRI_CUDA OR NIGIRI_HIP)
   file(GLOB_RECURSE nigiri-gpu-files src/*.cu)
-  add_library(nigiri-gpu STATIC ${nigiri-gpu-files})
-  if (CMAKE_CXX_FLAGS MATCHES "-fsanitize")
-    # Keep device assertions when using host sanitizer. They push per thread
-    # register usage past what the launch configuration can satisfy, so cap it
-    # here - this build checks correctness, it is not measured.
-    set(nigiri-gpu-compile-options "-O3;-maxrregcount=64")
+
+  if (NIGIRI_CUDA)
+    if (MSVC)
+      set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
+    else()
+      set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-relaxed-constexpr -lineinfo")
+    endif()
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
   else()
-    set(nigiri-gpu-compile-options "-O3;-DNDEBUG")
+    enable_language(HIP)
+    find_package(hip REQUIRED)
+    find_package(rocthrust REQUIRED)
+    # hipcc treats .cu as HIP already, but CMake dispatches on the language
+    # property, so it has to be set explicitly for the glob above
+    set_source_files_properties(${nigiri-gpu-files} PROPERTIES LANGUAGE HIP)
   endif()
+
+  add_library(nigiri-gpu STATIC ${nigiri-gpu-files})
+
+  if (NIGIRI_CUDA)
+    if (CMAKE_CXX_FLAGS MATCHES "-fsanitize")
+      # Keep device assertions when using host sanitizer. They push per thread
+      # register usage past what the launch configuration can satisfy, so cap it
+      # here - this build checks correctness, it is not measured.
+      set(nigiri-gpu-compile-options "-O3;-maxrregcount=64")
+    else()
+      set(nigiri-gpu-compile-options "-O3;-DNDEBUG")
+    endif()
+    set_target_properties(nigiri-gpu PROPERTIES CUDA_STANDARD 20)
+    target_include_directories(nigiri-gpu PUBLIC ${CUDAToolkit_INCLUDE_DIRS})
+    target_link_libraries(nigiri-gpu PUBLIC CUDA::cudart)
+  else()
+    set(nigiri-gpu-compile-options
+            "-O3;-DNDEBUG;-include;${CMAKE_CURRENT_SOURCE_DIR}/include/nigiri/routing/gpu/cista_hip_compat.h")
+    set_target_properties(nigiri-gpu PROPERTIES HIP_STANDARD 20)
+    # hip::device carries the device compile options (-x hip among them), so
+    # it must not propagate to nigiri's plain C++ consumers; they only need
+    # hip::host for the runtime library
+    target_link_libraries(nigiri-gpu PRIVATE hip::device roc::rocthrust)
+    target_link_libraries(nigiri-gpu PUBLIC hip::host)
+    target_compile_definitions(nigiri-gpu PUBLIC NIGIRI_HIP)
+  endif()
+
   set_target_properties(nigiri-gpu PROPERTIES
           COMPILE_OPTIONS "${nigiri-gpu-compile-options}"
           WINDOWS_EXPORT_ALL_SYMBOLS ON
-          CUDA_STANDARD 20
           COMPILE_WARNING_AS_ERROR OFF
           RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
           LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
           INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN/"
   )
-  target_include_directories(nigiri-gpu PUBLIC include ${CUDAToolkit_INCLUDE_DIRS})
+  target_include_directories(nigiri-gpu PUBLIC include)
   target_link_libraries(nigiri-gpu PRIVATE cista fmt date unordered_dense geo utl)
-  target_link_libraries(nigiri-gpu PUBLIC CUDA::cudart)
 
-  target_compile_definitions(nigiri-gpu PUBLIC NIGIRI_CUDA)
-  target_compile_definitions(nigiri PUBLIC NIGIRI_CUDA)
+  target_compile_definitions(nigiri-gpu PUBLIC NIGIRI_GPU)
+  target_compile_definitions(nigiri PUBLIC NIGIRI_GPU)
 
   # propagate the GPU implementations to every consumer of nigiri (motis, tools,
   # tests) so pong.cc's gpu_raptor instantiations resolve at link time

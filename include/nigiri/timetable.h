@@ -6,7 +6,7 @@
 #include <optional>
 #include <span>
 
-#include "cista/cuda_check.h"
+#include "nigiri/gpu_compat.h"
 #include "cista/memory_holder.h"
 
 #include "geo/box.h"

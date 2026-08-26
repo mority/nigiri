@@ -6,6 +6,7 @@
 
 #include "cista/reflection/printable.h"
 
+#include "nigiri/gpu_compat.h"
 #include "nigiri/logging.h"
 #include "nigiri/types.h"
 
@@ -40,10 +41,10 @@ struct footpath {
     };
   }
 
-  CISTA_CUDA_COMPAT location_idx_t target() const {
+  NIGIRI_GPU_COMPAT location_idx_t target() const {
     return location_idx_t{target_};
   }
-  CISTA_CUDA_COMPAT duration_t duration() const {
+  NIGIRI_GPU_COMPAT duration_t duration() const {
     return duration_t{duration_};
   }
 
