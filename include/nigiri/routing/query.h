@@ -83,6 +83,10 @@ struct query {
   duration_t max_start_offset_{kMaxTravelTime};
   std::uint8_t max_transfers_{kMaxTransfers};
   duration_t max_travel_time_{kMaxTravelTime};
+  // Maximum distance in time between the queried start time and the
+  // start time of a journey. Journeys that start beyond this window are
+  // not reported. `std::nullopt` = no limit.
+  std::optional<duration_t> max_lookahead_{};
   unsigned min_connection_count_{0U};
   bool extend_interval_earlier_{false};
   bool extend_interval_later_{false};

@@ -99,6 +99,14 @@ routing_result pong(timetable const& tt,
                     tt.internal_interval().from_)
                     .count()};
 
+  // Latest (kFwd) / earliest (!kFwd) start time a journey may have to still
+  // be reported. Journeys beyond this point are outside the lookahead window
+  // the caller is interested in.
+  auto const lookahead_end =
+      q.max_lookahead_.transform([&](duration_t const d) {
+        return kFwd ? search_interval.from_ + d : search_interval.to_ - d;
+      });
+
   // ====
   // PING
   // ----
@@ -239,10 +247,19 @@ routing_result pong(timetable const& tt,
     }
     return false;
   };
+  auto const is_beyond_lookahead = [&](unixtime_t const t) {
+    return lookahead_end.has_value() && is_better(*lookahead_end, t);
+  };
   while ((is_better(start_time, end_time) ||
           get_result_count(true) + get_result_count(false) <
               2 * q.min_connection_count_) &&
          tt.external_interval().contains(start_time) && !is_timeout_reached()) {
+    if (is_beyond_lookahead(start_time)) {
+      trace_pong("MAX LOOKAHEAD REACHED [start_time={}, lookahead_end={}]",
+                 start_time, *lookahead_end);
+      result.max_lookahead_exceeded_ = true;
+      break;
+    }
     // ----
     // PING
     // ----
@@ -260,10 +277,20 @@ routing_result pong(timetable const& tt,
                  loc{tt, s.stop_}, s.time_at_start_, s.time_at_stop_);
       ping.add_start(s.stop_, s.time_at_stop_);
     }
-    auto const worst_time_at_dest =
+    auto worst_time_at_dest =
         start_time +
         (kFwd ? 1 : -1) *
             std::min(q.max_travel_time_ + kMinLookAhead, kMaxTravelTime);
+    if (lookahead_end.has_value()) {
+      // No journey starting within the lookahead window can reach the
+      // destination later than this.
+      auto const lookahead_bound = *lookahead_end +
+                                   (kFwd ? 1 : -1) * q.max_travel_time_ +
+                                   duration_t{kFwd ? 1 : -1};
+      if (is_better(lookahead_bound, worst_time_at_dest)) {
+        worst_time_at_dest = lookahead_bound;
+      }
+    }
     auto ping_results = pareto_set<journey>{};
     ping.execute(start_time, q.max_transfers_, worst_time_at_dest,
                  ping_results);
@@ -375,16 +402,22 @@ routing_result pong(timetable const& tt,
         kFwd ? !q.extend_interval_later_ && j_start_time >= search_interval.to_
              : !q.extend_interval_earlier_ &&
                    j_start_time < search_interval.from_;
+    auto const is_out_of_lookahead = is_beyond_lookahead(j_start_time);
+    if (is_out_of_lookahead) {
+      result.max_lookahead_exceeded_ = true;
+    }
     auto const erase = !j.is_reconstructed_ || !is_validated(j) ||
-                       is_out_of_interval ||
+                       is_out_of_interval || is_out_of_lookahead ||
                        j.travel_time() >= fastest_direct ||
                        j.travel_time() > q.max_travel_time_;
     if (erase) {
       trace_pong(
           "ERASE not_reconstructed={}, not_validated={}, "
-          "slower_than_direct={}, slower_than_query_max_travel_time={} {}",
+          "slower_than_direct={}, slower_than_query_max_travel_time={}, "
+          "beyond_max_lookahead={} {}",
           j.legs_.empty(), !is_validated(j), j.travel_time() >= fastest_direct,
-          j.travel_time() > q.max_travel_time_, to_tuple(j));
+          j.travel_time() > q.max_travel_time_, is_out_of_lookahead,
+          to_tuple(j));
     }
     return erase;
   });

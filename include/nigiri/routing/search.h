@@ -73,6 +73,9 @@ struct routing_result {
   interval<unixtime_t> interval_;
   search_stats search_stats_;
   std::map<std::string, std::uint64_t> algo_stats_;
+  // `true` if the search was truncated by `query::max_lookahead_`, i.e. there
+  // may be journeys beyond the lookahead window that are not reported.
+  bool max_lookahead_exceeded_{false};
 };
 
 template <direction SearchDir, typename Algo>

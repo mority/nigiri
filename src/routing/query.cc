@@ -27,6 +27,9 @@ void sanitize_query(query& q) {
   if (q.max_travel_time_.count() < 0 || q.max_travel_time_ > kMaxTravelTime) {
     q.max_travel_time_ = kMaxTravelTime;
   }
+  if (q.max_lookahead_.has_value() && q.max_lookahead_->count() < 0) {
+    q.max_lookahead_.reset();
+  }
 }
 
 void sanitize_via_stops(timetable const& tt, query& q) {
