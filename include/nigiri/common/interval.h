@@ -113,7 +113,7 @@ struct interval {
   CISTA_GPU_COMPAT bool empty() const { return to_ - from_ == 0U; }
 
   CISTA_GPU_COMPAT T operator[](std::size_t const i) const {
-#ifndef CISTA_GPU_DEVICE_COMPILE
+#if !defined(__CUDA_ARCH__) && !defined(__HIP_DEVICE_COMPILE__)
     assert(contains(from_ + static_cast<T>(i)));
 #endif
     return from_ + static_cast<T>(i);

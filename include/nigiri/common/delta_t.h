@@ -18,7 +18,8 @@ CISTA_GPU_DEVICE_COMPAT constexpr static auto const kInvalidDelta =
 
 template <typename T>
 inline constexpr delta_t clamp(T t) {
-#if defined(NIGIRI_TRACING)
+#if defined(NIGIRI_TRACING) && !defined(__CUDA_ARCH__) && \
+    !defined(__HIP_DEVICE_COMPILE__)
   if (t < std::numeric_limits<delta_t>::min()) {
     fmt::print("CLAMP {} TO {}\n", t, std::numeric_limits<delta_t>::min());
   }
