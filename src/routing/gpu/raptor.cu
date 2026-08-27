@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <optional>
 
@@ -1176,17 +1177,17 @@ void gpu_raptor<SearchDir, WithBounds>::next_start_time() {
   cudaMemsetAsync(thrust::raw_pointer_cast(s.tmp_.data()), 0xFF,
                   s.tmp_.size() * sizeof(std::uint64_t), s.stream_);
   thrust::fill(par_on(state_.impl_->stream_),
-               state_.impl_->prev_station_mark_.begin(),
-               state_.impl_->prev_station_mark_.end(), 0U);
+               std::begin(state_.impl_->prev_station_mark_),
+               std::end(state_.impl_->prev_station_mark_), 0U);
   thrust::fill(par_on(state_.impl_->stream_),
-               state_.impl_->station_mark_.begin(),
-               state_.impl_->station_mark_.end(), 0U);
+               std::begin(state_.impl_->station_mark_),
+               std::end(state_.impl_->station_mark_), 0U);
   thrust::fill(par_on(state_.impl_->stream_),
-               state_.impl_->route_mark_.begin(), state_.impl_->route_mark_.end(),
-               0U);
+               std::begin(state_.impl_->route_mark_),
+               std::end(state_.impl_->route_mark_), 0U);
   thrust::fill(par_on(state_.impl_->stream_),
-               state_.impl_->rt_transport_mark_.begin(),
-               state_.impl_->rt_transport_mark_.end(), 0U);
+               std::begin(state_.impl_->rt_transport_mark_),
+               std::end(state_.impl_->rt_transport_mark_), 0U);
 }
 
 // First/last mile mumo offset and start footpath legs are added here
