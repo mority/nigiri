@@ -223,8 +223,7 @@ if (NIGIRI_CUDA OR NIGIRI_HIP)
     target_include_directories(nigiri-gpu PUBLIC ${CUDAToolkit_INCLUDE_DIRS})
     target_link_libraries(nigiri-gpu PUBLIC CUDA::cudart)
   else()
-    set(nigiri-gpu-compile-options
-            "-O3;-DNDEBUG;-include;${CMAKE_CURRENT_SOURCE_DIR}/include/nigiri/routing/gpu/cista_hip_compat.h")
+    set(nigiri-gpu-compile-options "-O3;-DNDEBUG")
     set_target_properties(nigiri-gpu PROPERTIES HIP_STANDARD 20)
     # hip::device carries the device compile options (-x hip among them), so
     # it must not propagate to nigiri's plain C++ consumers; they only need

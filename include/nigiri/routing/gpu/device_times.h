@@ -18,19 +18,19 @@ template <direction SearchDir, via_offset_t Vias>
 struct device_times {
   static constexpr bool kFwd = SearchDir == direction::kForward;
 
-  NIGIRI_GPU_COMPAT static std::uint16_t to_key(delta_t const t) {
+  CISTA_GPU_COMPAT static std::uint16_t to_key(delta_t const t) {
     return kFwd ? static_cast<std::uint16_t>(static_cast<int>(t) + 32768)
                 : static_cast<std::uint16_t>(32767 - static_cast<int>(t));
   }
-  NIGIRI_GPU_COMPAT static delta_t from_key(std::uint16_t const k) {
+  CISTA_GPU_COMPAT static delta_t from_key(std::uint16_t const k) {
     return kFwd ? static_cast<delta_t>(static_cast<int>(k) - 32768)
                 : static_cast<delta_t>(32767 - static_cast<int>(k));
   }
-  NIGIRI_GPU_COMPAT static std::uint64_t pack(delta_t const t,
-                                              breadcrumb_t const bc) {
+  CISTA_GPU_COMPAT static std::uint64_t pack(delta_t const t,
+                                             breadcrumb_t const bc) {
     return (static_cast<std::uint64_t>(to_key(t)) << kBcBits) | (bc & kBcMask);
   }
-  NIGIRI_GPU_COMPAT static std::uint64_t invalid_packed() {
+  CISTA_GPU_COMPAT static std::uint64_t invalid_packed() {
     return ~std::uint64_t{0};  // 0xFFFF time key = kInvalid
   }
 

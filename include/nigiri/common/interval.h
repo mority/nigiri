@@ -11,7 +11,7 @@
 #include "fmt/ostream.h"
 #include "fmt/ranges.h"
 
-#include "nigiri/gpu_compat.h"
+#include "cista/gpu_compat.h"
 #include "cista/reflection/comparable.h"
 #include "cista/strong.h"
 
@@ -106,14 +106,14 @@ struct interval {
     return r.end();
   }
 
-  constexpr NIGIRI_GPU_COMPAT auto size() const {
+  constexpr CISTA_GPU_COMPAT auto size() const {
     return cista::to_idx(to_ - from_);
   }
 
-  NIGIRI_GPU_COMPAT bool empty() const { return to_ - from_ == 0U; }
+  CISTA_GPU_COMPAT bool empty() const { return to_ - from_ == 0U; }
 
-  NIGIRI_GPU_COMPAT T operator[](std::size_t const i) const {
-#ifndef NIGIRI_GPU_DEVICE_COMPILE
+  CISTA_GPU_COMPAT T operator[](std::size_t const i) const {
+#ifndef CISTA_GPU_DEVICE_COMPILE
     assert(contains(from_ + static_cast<T>(i)));
 #endif
     return from_ + static_cast<T>(i);

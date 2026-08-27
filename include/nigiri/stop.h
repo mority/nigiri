@@ -1,9 +1,9 @@
 #pragma once
 
-#include <bit>
 #include <compare>
+#include <bit>
 
-#include "nigiri/gpu_compat.h"
+#include "cista/gpu_compat.h"
 
 #include "nigiri/types.h"
 
@@ -14,7 +14,7 @@ struct stop {
 
   // std::bit_cast rather than memcpy: memcpy is a host function, which clang
   // rejects inside a __host__ __device__ function on the HIP device pass
-  NIGIRI_GPU_COMPAT stop(location_idx_t::value_t const val)
+  CISTA_GPU_COMPAT stop(location_idx_t::value_t const val)
       : stop{std::bit_cast<stop>(val)} {}
 
   constexpr stop(location_idx_t const location,
