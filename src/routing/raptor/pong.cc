@@ -516,9 +516,6 @@ routing_result pong_search_with_dir(
     std::optional<std::chrono::seconds> timeout) {
   q.sanitize(tt);
 
-  // If the real-time timetable has no data for the time span this query can
-  // reach, it cannot influence the result - drop it and let the static
-  // `Rt = false` code path handle the query.
   if (rtt != nullptr &&
       !rtt->affects(pong_search_interval(SearchDir, tt, q, kMinLookAhead),
                     q.prf_idx_)) {
