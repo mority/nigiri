@@ -1,7 +1,7 @@
 #include "nigiri/common/search_interval.h"
 
-#include <algorithm>
 #include <cstdint>
+#include <algorithm>
 #include <limits>
 
 #include "utl/overloaded.h"
