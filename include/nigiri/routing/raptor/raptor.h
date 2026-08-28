@@ -208,12 +208,13 @@ struct raptor {
                unixtime_t const worst_time_at_dest,
                pareto_set<journey>& results) {
     if constexpr (Rt) {
-      use_rt_ = rtt_->affects(
-          interval{std::min(start_time, worst_time_at_dest),
-                   std::max(start_time, worst_time_at_dest) +
-                       unixtime_t::duration{1}},
-          prf_idx_);
-      use_rt_ ? ++stats_.n_executes_with_rt_ : ++stats_.n_executes_without_rt_;
+      rt_active_ =
+          rtt_->affects(interval{std::min(start_time, worst_time_at_dest),
+                                 std::max(start_time, worst_time_at_dest) +
+                                     unixtime_t::duration{1}},
+                        prf_idx_);
+      rt_active_ ? ++stats_.n_executes_with_rt_
+                 : ++stats_.n_executes_without_rt_;
     }
 
     auto const end_k = std::min(max_transfers, kMaxTransfers) + 2U;
@@ -242,7 +243,7 @@ struct raptor {
           state_.route_mark_.set(to_idx(r), true);
         }
         if constexpr (Rt) {
-          if (use_rt_) {
+          if (rt_active_) {
             for (auto const& rt_t :
                  rtt_->location_rt_transports_[location_idx_t{i}]) {
               any_marked = true;
@@ -308,7 +309,7 @@ struct raptor {
       }();
 
       if constexpr (Rt) {
-        any_marked |= use_rt_ && [&]() {
+        any_marked |= rt_active_ && [&]() {
           switch (filters) {
             case 0b00000:
               return loop_rt_routes<false, false, false, false, false>(k);
@@ -1455,7 +1456,7 @@ private:
 
   bool is_transport_active(transport_idx_t const t, day_idx_t const day) const {
     if constexpr (Rt) {
-      if (use_rt_) {
+      if (rt_active_) {
         return rtt_->is_transport_active(t, day);
       }
     }
@@ -1544,7 +1545,7 @@ private:
   bool require_car_transport_;
   bool no_compulsory_reservation_;
   bool is_wheelchair_;
-  bool use_rt_{Rt};
+  bool rt_active_{Rt};
   transfer_time_settings transfer_time_settings_;
 };
 
