@@ -874,7 +874,16 @@ void gpu_raptor<SearchDir, WithBounds>::execute(unixtime_t start_time,
   cudaStreamSynchronize(s.stream_);
   CUDA_CHECK(cudaPeekAtLastError());
 
-  auto const rt_active = gpu_rtt_ != nullptr;
+  // Every journey this run can produce lies between `start_time` and
+  // `worst_time_at_dest` - if the real-time timetable holds no data for that
+  // span it cannot influence the result (see `raptor<>::execute()`).
+  auto const rt_active =
+      gpu_rtt_ != nullptr &&
+      rtt_->affects(std::min(start_time, worst_time_at_dest),
+                    std::max(start_time, worst_time_at_dest), prf_idx_);
+  if (gpu_rtt_ != nullptr) {
+    rt_active ? ++stats_.n_executes_with_rt_ : ++stats_.n_executes_without_rt_;
+  }
 
   auto const rt_transports_active =
       rt_active && gpu_rtt_->impl_->n_rt_transports_ != 0U;

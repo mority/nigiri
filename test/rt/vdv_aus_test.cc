@@ -373,6 +373,8 @@ TEST(vdv_aus, delay_propagation) {
   EXPECT_EQ(fr[4].time(event_type::kArr),
             date::sys_days{2024_y / July / 10} + 2_hours);
 
+  // Coverage maintenance for the VDV update path - see
+  // `test/rt/rt_coverage_test.cc` for the GTFS-RT side.
   // scheduled 22:00 -> 02:00, real-time max 02:00
   EXPECT_EQ((interval{unixtime_t{date::sys_days{2024_y / July / 9} + 22_hours},
                       unixtime_t{date::sys_days{2024_y / July / 10} + 2_hours +

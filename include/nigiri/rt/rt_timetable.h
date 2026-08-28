@@ -85,8 +85,22 @@ struct rt_timetable {
   // a real-time update, both their scheduled and their updated times (the
   // scheduled times are covered when the RT transport is created, the updated
   // times when they are written).
-
   bool has_coverage() const noexcept { return coverage_.from_ < coverage_.to_; }
+
+  // Can real-time data influence a search that only ever looks at event times
+  // in the closed interval `[from, to]`? See `routing/needs_rt.h` for why
+  // intersecting `coverage_` is sound in both directions.
+  //
+  // Profiles != 0 read time dependent footpaths (e.g. elevator status). Those
+  // are written from outside the real-time update pipeline and are therefore
+  // not tracked by `coverage_` - such a search always needs the real-time
+  // timetable.
+  bool affects(unixtime_t const from,
+               unixtime_t const to,
+               profile_idx_t const prf_idx) const noexcept {
+    return prf_idx != 0U ||
+           (has_coverage() && from < coverage_.to_ && coverage_.from_ <= to);
+  }
 
   // Extends `coverage_` to contain `t` (`coverage_` is a half-open interval,
   // so the last minute containing real-time data is `coverage_.to_ - 1min`).
@@ -98,10 +112,9 @@ struct rt_timetable {
     if (i.from_ >= i.to_) {
       return;  // empty
     }
-    coverage_ = has_coverage()
-                    ? interval{std::min(coverage_.from_, i.from_),
-                               std::max(coverage_.to_, i.to_)}
-                    : i;
+    coverage_ = has_coverage() ? interval{std::min(coverage_.from_, i.from_),
+                                          std::max(coverage_.to_, i.to_)}
+                               : i;
   }
 
   // Interval covered by the event times of `rt_t`.

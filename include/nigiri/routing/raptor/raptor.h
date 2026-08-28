@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <algorithm>
 #include <span>
 
 #include "nigiri/common/delta_t.h"
@@ -206,6 +207,13 @@ struct raptor {
                std::uint8_t const max_transfers,
                unixtime_t const worst_time_at_dest,
                pareto_set<journey>& results) {
+    if constexpr (Rt) {
+      use_rt_ =
+          rtt_->affects(std::min(start_time, worst_time_at_dest),
+                        std::max(start_time, worst_time_at_dest), prf_idx_);
+      use_rt_ ? ++stats_.n_executes_with_rt_ : ++stats_.n_executes_without_rt_;
+    }
+
     auto const end_k = std::min(max_transfers, kMaxTransfers) + 2U;
 
     auto const d_worst_at_dest = unix_to_delta(base(), worst_time_at_dest);
@@ -232,10 +240,12 @@ struct raptor {
           state_.route_mark_.set(to_idx(r), true);
         }
         if constexpr (Rt) {
-          for (auto const& rt_t :
-               rtt_->location_rt_transports_[location_idx_t{i}]) {
-            any_marked = true;
-            state_.rt_transport_mark_.set(to_idx(rt_t), true);
+          if (use_rt_) {
+            for (auto const& rt_t :
+                 rtt_->location_rt_transports_[location_idx_t{i}]) {
+              any_marked = true;
+              state_.rt_transport_mark_.set(to_idx(rt_t), true);
+            }
           }
         }
       });
@@ -296,7 +306,7 @@ struct raptor {
       }();
 
       if constexpr (Rt) {
-        any_marked |= [&]() {
+        any_marked |= use_rt_ && [&]() {
           switch (filters) {
             case 0b00000:
               return loop_rt_routes<false, false, false, false, false>(k);
@@ -1443,10 +1453,11 @@ private:
 
   bool is_transport_active(transport_idx_t const t, day_idx_t const day) const {
     if constexpr (Rt) {
-      return rtt_->is_transport_active(t, day);
-    } else {
-      return tt_.is_transport_active(t, day);
+      if (use_rt_) {
+        return rtt_->is_transport_active(t, day);
+      }
     }
+    return tt_.is_transport_active(t, day);
   }
 
   delta_t time_at_stop(route_idx_t const r,
@@ -1531,6 +1542,9 @@ private:
   bool require_car_transport_;
   bool no_compulsory_reservation_;
   bool is_wheelchair_;
+  // Whether the current `execute()` looks at `rtt_` at all - see there.
+  // Always false for `Rt == false`.
+  bool use_rt_{Rt};
   transfer_time_settings transfer_time_settings_;
 };
 

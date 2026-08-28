@@ -6,6 +6,15 @@
 #include "nigiri/rt/gtfsrt_update.h"
 #include "nigiri/rt/rt_timetable.h"
 
+// `rt_timetable::coverage_` - the interval real-time data is known for, so
+// that routing can tell whether a query can be influenced by it at all. This
+// file covers the maintenance of that interval by the GTFS-RT update path;
+// the VDV path is asserted inside `vdv_aus.delay_propagation`
+// (`test/rt/vdv_aus_test.cc`), which already has the fixture for it.
+//
+// What routing does with the coverage is tested in
+// `test/routing/rt_drop_test.cc`.
+
 using namespace date;
 using namespace nigiri;
 using namespace nigiri::loader;
