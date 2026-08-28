@@ -123,8 +123,8 @@ void delay_msg(timetable const& tt,
     stu->set_stop_sequence(2U);
     stu->mutable_arrival()->set_delay(*arr_delay * 60);
   }
-  auto const stats = rt::gtfsrt_update_msg(tt, rtt, source_idx_t{0}, "tag",
-                                           msg);
+  auto const stats =
+      rt::gtfsrt_update_msg(tt, rtt, source_idx_t{0}, "tag", msg);
   ASSERT_EQ(1U, stats.total_entities_success_);
 }
 
@@ -135,13 +135,13 @@ TEST(rt, coverage_delay_and_cancel) {
   auto rtt = rt::create_rt_timetable(tt, date::sys_days{kDay});
 
   // No real-time data yet.
-  EXPECT_FALSE(rtt.has_coverage());
+  EXPECT_TRUE(rtt.coverage_.empty());
   EXPECT_TRUE(rtt.coverage_.from_ == rtt.coverage_.to_);
 
   // T1 departs 10 minutes late, arrives on time
   // => scheduled + real-time times of T1.
   delay_msg(tt, rtt, "T1", "10:00:00", 10, 0);
-  EXPECT_TRUE(rtt.has_coverage());
+  EXPECT_FALSE(rtt.coverage_.empty());
   EXPECT_EQ((interval{t(8h), t(9h + 1min)}), rtt.coverage_);
 
   // T1 arrives 30 minutes late => extended to the back.
@@ -229,15 +229,15 @@ TEST(rt, coverage_added_trip) {
 
 TEST(rt, coverage_extend) {
   auto rtt = rt_timetable{};
-  EXPECT_FALSE(rtt.has_coverage());
+  EXPECT_TRUE(rtt.coverage_.empty());
 
   // Empty intervals are ignored.
   rtt.extend_coverage(interval<unixtime_t>{});
   rtt.extend_coverage(interval{t(12h), t(10h)});  // reversed
-  EXPECT_FALSE(rtt.has_coverage());
+  EXPECT_TRUE(rtt.coverage_.empty());
 
   rtt.extend_coverage(interval{t(10h), t(12h)});
-  EXPECT_TRUE(rtt.has_coverage());
+  EXPECT_FALSE(rtt.coverage_.empty());
   EXPECT_EQ((interval{t(10h), t(12h)}), rtt.coverage_);
 
   // Contained intervals do not shrink the coverage.
@@ -256,4 +256,38 @@ TEST(rt, coverage_extend) {
   EXPECT_EQ((interval{t(6h), t(6h + 1min)}), rtt1.coverage_);
   EXPECT_TRUE(rtt1.coverage_.contains(t(6h)));
   EXPECT_FALSE(rtt1.coverage_.contains(t(6h + 1min)));
+}
+
+// `rt_timetable::affects()` is the single predicate both real-time drop
+// decisions go through: the drivers (`raptor_search.cc` / `pong.cc`) and
+// `raptor<>::execute()` per start time. `test/routing/rt_drop_test.cc` covers
+// the intervals they feed it. Both intervals are half-open.
+TEST(rt, coverage_needs_rt) {
+  auto rtt = rt_timetable{};
+
+  // No real-time data at all: nothing can be affected ...
+  EXPECT_FALSE(rtt.affects(interval{t(0h), t(24h)}, 0U));
+  // ... except a profile reading time dependent footpaths, which `coverage_`
+  // does not track.
+  EXPECT_TRUE(rtt.affects(interval{t(0h), t(24h)}, 1U));
+
+  rtt.extend_coverage(interval{t(10h), t(12h)});
+
+  // Disjoint on either side.
+  EXPECT_FALSE(rtt.affects(interval{t(8h), t(10h)}, 0U));
+  EXPECT_FALSE(rtt.affects(interval{t(12h), t(14h)}, 0U));
+
+  // Touching by exactly one minute on either side.
+  EXPECT_TRUE(rtt.affects(interval{t(8h), t(10h + 1min)}, 0U));
+  EXPECT_TRUE(rtt.affects(interval{t(11h + 59min), t(14h)}, 0U));
+
+  // Contained, containing, overlapping.
+  EXPECT_TRUE(rtt.affects(interval{t(10h + 30min), t(11h)}, 0U));
+  EXPECT_TRUE(rtt.affects(interval{t(0h), t(24h)}, 0U));
+  EXPECT_TRUE(rtt.affects(interval{t(9h), t(11h)}, 0U));
+
+  // Coverage that starts exactly where the search stops looking, and vice
+  // versa: half-open on both sides, so neither touches.
+  EXPECT_FALSE(rtt.affects(interval{t(12h), t(12h + 1min)}, 0U));
+  EXPECT_FALSE(rtt.affects(interval{t(9h), t(10h)}, 0U));
 }

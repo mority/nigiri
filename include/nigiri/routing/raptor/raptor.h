@@ -208,9 +208,11 @@ struct raptor {
                unixtime_t const worst_time_at_dest,
                pareto_set<journey>& results) {
     if constexpr (Rt) {
-      use_rt_ =
-          rtt_->affects(std::min(start_time, worst_time_at_dest),
-                        std::max(start_time, worst_time_at_dest), prf_idx_);
+      use_rt_ = rtt_->affects(
+          interval{std::min(start_time, worst_time_at_dest),
+                   std::max(start_time, worst_time_at_dest) +
+                       unixtime_t::duration{1}},
+          prf_idx_);
       use_rt_ ? ++stats_.n_executes_with_rt_ : ++stats_.n_executes_without_rt_;
     }
 
@@ -1542,8 +1544,6 @@ private:
   bool require_car_transport_;
   bool no_compulsory_reservation_;
   bool is_wheelchair_;
-  // Whether the current `execute()` looks at `rtt_` at all - see there.
-  // Always false for `Rt == false`.
   bool use_rt_{Rt};
   transfer_time_settings transfer_time_settings_;
 };

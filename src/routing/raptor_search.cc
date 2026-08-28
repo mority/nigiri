@@ -13,12 +13,26 @@
 #include "utl/to_vec.h"
 #include "utl/verify.h"
 
+#include "nigiri/common/search_interval.h"
 #include "nigiri/get_otel_tracer.h"
 #include "nigiri/routing/gpu/raptor.h"
-#include "nigiri/routing/needs_rt.h"
+#include "nigiri/routing/interval_estimate.h"
 #include "nigiri/routing/query.h"
 
 namespace nigiri::routing {
+
+interval<unixtime_t> raptor_search_interval(direction const search_dir,
+                                            timetable const& tt,
+                                            query const& q) {
+  auto const query_itv = start_time_interval(q.start_time_);
+  auto const max_itv =
+      search_dir == direction::kForward
+          ? interval_estimator<direction::kForward>{tt, q}.max_interval()
+          : interval_estimator<direction::kBackward>{tt, q}.max_interval();
+  auto const start_itv = interval{std::min(query_itv.from_, max_itv.from_),
+                                  std::max(query_itv.to_, max_itv.to_)};
+  return reachable_events(search_dir, start_itv, q.max_travel_time_);
+}
 
 namespace {
 
@@ -62,7 +76,8 @@ routing_result raptor_search_with_dir(
   // If the real-time timetable has no data for the time span this query can
   // reach, it cannot influence the result - drop it and let the static
   // `Rt = false` code path handle the query.
-  if (rtt != nullptr && !needs_rt<SearchDir>(tt, *rtt, q)) {
+  if (rtt != nullptr &&
+      !rtt->affects(raptor_search_interval(SearchDir, tt, q), q.prf_idx_)) {
     rtt = nullptr;
   }
 
