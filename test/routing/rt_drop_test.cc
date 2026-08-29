@@ -11,6 +11,8 @@
 
 #include "results_to_string.h"
 
+#include "../util.h"
+
 // Dropping the real-time timetable for a query it cannot influence. There are
 // three layers, this file covers the two routing ones:
 //
@@ -37,6 +39,7 @@ using namespace nigiri::loader;
 using namespace nigiri::loader::gtfs;
 using namespace nigiri::routing;
 using namespace std::chrono_literals;
+using nigiri::test::to_unix;
 
 namespace {
 
@@ -303,10 +306,7 @@ void delay_first_day(timetable const& tt, rt_timetable& rtt) {
   hdr->set_gtfs_realtime_version("2.0");
   hdr->set_incrementality(
       transit_realtime::FeedHeader_Incrementality_FULL_DATASET);
-  hdr->set_timestamp(
-      std::chrono::time_point_cast<std::chrono::seconds>(sys_days{kDay} + 3h)
-          .time_since_epoch()
-          .count());
+  hdr->set_timestamp(to_unix(sys_days{kDay} + 3h));
 
   auto const e = msg.add_entity();
   e->set_id("1");
