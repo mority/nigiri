@@ -48,7 +48,7 @@ void read_ticketing_identifiers(timetable& tt,
   }
 }
 
-hash_map<std::string_view, ticketing_link_idx_t> read_ticketing_deep_links(
+hash_map<std::string, ticketing_link_idx_t> read_ticketing_deep_links(
     timetable& tt, std::string_view file_content) {
   struct ticketing_deep_links_row {
     utl::csv_col<utl::cstr, UTL_NAME("ticketing_deep_link_id")>
@@ -58,7 +58,7 @@ hash_map<std::string_view, ticketing_link_idx_t> read_ticketing_deep_links(
     utl::csv_col<utl::cstr, UTL_NAME("ios_universal_link_url")> ios_url;
   };
 
-  auto map = hash_map<std::string_view, ticketing_link_idx_t>{};
+  auto map = hash_map<std::string, ticketing_link_idx_t>{};
 
   utl::for_each_row<ticketing_deep_links_row>(
       file_content, [&](ticketing_deep_links_row const& t) {
