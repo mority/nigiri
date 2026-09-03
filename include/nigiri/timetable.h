@@ -289,6 +289,12 @@ struct timetable {
     return lb_route_times_[prf_idx][r][stop_idx * 2U];
   }
 
+  // The node the lb graph uses for `l`: its station complex, i.e. the connected
+  // component of parent/child *and* equivalences. Built by `build_lb_routes`.
+  location_idx_t get_complex_idx(location_idx_t const l) const {
+    return location_complex_[l];
+  }
+
   cista::base_t<lb_route_idx_t> n_lb_routes(profile_idx_t const prf_idx) const {
     return lb_route_times_[prf_idx].size();
   }
@@ -443,14 +449,16 @@ struct timetable {
   std::array<vecvec<location_idx_t, footpath>, kNProfiles> fwd_search_lb_graph_;
   std::array<vecvec<location_idx_t, footpath>, kNProfiles> bwd_search_lb_graph_;
 
-  // root location -> lb routes at location
+  // location -> the station complex it belongs to (its representative)
+  vector_map<location_idx_t, location_idx_t> location_complex_;
+  // complex -> lb routes at it
   std::array<vecvec<location_idx_t, lb_route_idx_t>, kNProfiles>
       location_lb_routes_;
   // segment - layover - segment - layover - ... - segment
   std::array<vecvec<lb_route_idx_t, duration_t>, kNProfiles> lb_route_times_;
-  // lb_route -> root location sequence
+  // lb_route -> station complex sequence
   std::array<vecvec<lb_route_idx_t, location_idx_t>, kNProfiles>
-      lb_route_root_seq_;
+      lb_route_complex_seq_;
 
   // profile name -> profile_idx_t
   hash_map<string, profile_idx_t> profiles_;

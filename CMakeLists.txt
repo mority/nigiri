@@ -124,6 +124,12 @@ add_executable(nigiri-benchmark ${nigiri-benchmark-files})
 target_link_libraries(nigiri-benchmark PRIVATE nigiri boost-program_options ianatzdb-res)
 target_compile_features(nigiri-benchmark PUBLIC cxx_std_23)
 
+# --- LB COMPARE ---
+file(GLOB_RECURSE nigiri-lb-compare-files exe/lb_compare.cc)
+add_executable(nigiri-lb-compare ${nigiri-lb-compare-files})
+target_link_libraries(nigiri-lb-compare PRIVATE nigiri boost-program_options ianatzdb-res)
+target_compile_features(nigiri-lb-compare PUBLIC cxx_std_23)
+
 # --- QA ---
 file(GLOB_RECURSE nigiri-qa-files exe/qa.cc)
 add_executable(nigiri-qa ${nigiri-qa-files})

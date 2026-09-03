@@ -43,9 +43,9 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
   // init (k = 0)
   std::map<location_idx_t, std::uint16_t> min;
   auto const update_min = [&](location_idx_t const l, std::uint16_t const d) {
-    auto const root = tt.locations_.get_root_idx(l);
-    auto& m = utl::get_or_create(min, root,
-                                 [&] { return state.round_times_[0][root]; });
+    auto const cplx = tt.get_complex_idx(l);
+    auto& m = utl::get_or_create(min, cplx,
+                                 [&] { return state.round_times_[0][cplx]; });
     m = std::min(d, m);
   };
 
@@ -99,7 +99,7 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
     any_marked = false;
     state.lb_route_mark_.for_each_set_bit([&](auto const i) {
       auto const r = lb_route_idx_t{i};
-      auto const& seq = tt.lb_route_root_seq_[q.prf_idx_][r];
+      auto const& seq = tt.lb_route_complex_seq_[q.prf_idx_][r];
 
       for (auto x = 1U; x != seq.size(); ++x) {
         auto const in = kFwd ? x : seq.size() - x - 1U;
@@ -161,13 +161,13 @@ void lb_raptor(timetable const& tt, query const& q, lb_raptor_state& state) {
         for (auto const fp :
              kFwd ? tt.locations_.footpaths_in_[q.prf_idx_][x]
                   : tt.locations_.footpaths_out_[q.prf_idx_][x]) {
-          auto const root = tt.locations_.get_root_idx(fp.target());
+          auto const cplx = tt.get_complex_idx(fp.target());
           auto const time_after_fp =
               state.tmp_[l] + adjusted_transfer_time(q.transfer_time_settings_,
                                                      fp.duration().count());
-          if (time_after_fp < state.round_times_[k][root]) {
-            state.round_times_[k][root] = time_after_fp;
-            state.station_mark_.set(to_idx(root), true);
+          if (time_after_fp < state.round_times_[k][cplx]) {
+            state.round_times_[k][cplx] = time_after_fp;
+            state.station_mark_.set(to_idx(cplx), true);
           }
         }
       };

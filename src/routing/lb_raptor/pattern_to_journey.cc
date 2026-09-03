@@ -48,20 +48,19 @@ std::optional<journey> realize(timetable const& tt,
   // Earliest (kFwd) / latest (kBwd) time the journey may end at.
   auto const deadline = start_time + adv(q.max_travel_time_);
 
-  auto const find_offset = [&](std::vector<offset> const& offsets,
-                               td_offsets_t const& td_offsets,
-                               location_match_mode const match_mode,
-                               location_idx_t const l,
-                               unixtime_t const t) -> std::optional<offset> {
-    // `bidir_lb_raptor::init` seeds the search at *root* locations, so the
-    // pattern is made of roots. An offset may target a child platform, and
-    // `matches` only expands downwards (parent -> children), so comparing the
-    // offset target against the root directly would miss it. Mirror what
-    // `init` does instead: expand the target and check the roots.
+  auto const find_offset =
+      [&](std::vector<offset> const& offsets, td_offsets_t const& td_offsets,
+          location_match_mode const match_mode, location_idx_t const l,
+          unixtime_t const t) -> std::optional<offset> {
+    // `bidir_lb_raptor::init` seeds the search at station *complexes*, so the
+    // pattern is made of complexes. An offset may target one member of a
+    // complex and `matches` only expands downwards (parent -> children), so
+    // comparing the offset target against the complex directly would miss it.
+    // Mirror what `init` does instead: expand the target and map to complexes.
     auto const targets_l = [&](location_idx_t const target) {
       auto found = false;
       for_each_meta(tt, match_mode, target, [&](location_idx_t const m) {
-        found = found || tt.locations_.get_root_idx(m) == l;
+        found = found || tt.get_complex_idx(m) == l;
       });
       return found;
     };
@@ -90,7 +89,7 @@ std::optional<journey> realize(timetable const& tt,
       q.start_, q.td_start_, q.start_match_mode_, at(0U), start_time);
   if (!start_offset.has_value()) {
     trace_lb("[pattern_to_journey] no start offset for {}",
-          tt.get_default_name(at(0U)));
+             tt.get_default_name(at(0U)));
     return std::nullopt;
   }
 
@@ -101,10 +100,9 @@ std::optional<journey> realize(timetable const& tt,
   auto cur_time = start_time + adv(start_offset->duration());
 
   if (q.start_match_mode_ == location_match_mode::kIntermodal) {
-    legs.emplace_back(journey::leg{SearchDir,
-                                   get_special_station(special_station::kStart),
-                                   at(0U), start_time, cur_time,
-                                   *start_offset});
+    legs.emplace_back(
+        journey::leg{SearchDir, get_special_station(special_station::kStart),
+                     at(0U), start_time, cur_time, *start_offset});
   }
 
   auto n_transports = 0U;
@@ -121,7 +119,7 @@ std::optional<journey> realize(timetable const& tt,
                             .to_is_terminal_ = is_last});
     if (!alt.has_value()) {
       trace_lb("[pattern_to_journey] no transport {} -> {} after {}",
-            tt.get_default_name(cur), tt.get_default_name(next), cur_time);
+               tt.get_default_name(cur), tt.get_default_name(next), cur_time);
       return std::nullopt;
     }
 
@@ -157,19 +155,18 @@ std::optional<journey> realize(timetable const& tt,
     }
   }
 
-  auto const dest_offset = find_offset(q.destination_, q.td_dest_,
-                                       q.dest_match_mode_, at(n - 1U),
-                                       cur_time);
+  auto const dest_offset = find_offset(
+      q.destination_, q.td_dest_, q.dest_match_mode_, at(n - 1U), cur_time);
   if (!dest_offset.has_value()) {
     trace_lb("[pattern_to_journey] no destination offset for {}",
-          tt.get_default_name(at(n - 1U)));
+             tt.get_default_name(at(n - 1U)));
     return std::nullopt;
   }
 
   auto const dest_time = cur_time + adv(dest_offset->duration());
   if (kFwd ? dest_time > deadline : dest_time < deadline) {
-    trace_lb("[pattern_to_journey] exceeds max_travel_time: {} vs {}", dest_time,
-          deadline);
+    trace_lb("[pattern_to_journey] exceeds max_travel_time: {} vs {}",
+             dest_time, deadline);
     return std::nullopt;
   }
 
@@ -181,6 +178,37 @@ std::optional<journey> realize(timetable const& tt,
 
   if constexpr (!kFwd) {
     std::reverse(begin(legs), end(legs));
+  }
+
+  // A zero-length walk at a terminal is the free move inside the query's own
+  // station complex (parent -> platform, or one of its equivalent stops), not
+  // something the passenger does: RAPTOR reports no leg there either. Drop it,
+  // or - when an intermodal access/egress leg sits next to it - retarget that
+  // leg to the stop the transport actually uses, so the itinerary stays
+  // connected.
+  auto const is_zero_walk = [](journey::leg const& l) {
+    return !std::holds_alternative<journey::run_enter_exit>(l.uses_) &&
+           l.dep_time_ == l.arr_time_;
+  };
+  // A zero-length access offset followed by a zero-length walk are two of
+  // these in a row, so strip them until something real is left.
+  while (legs.size() > 1U && is_zero_walk(legs.front())) {
+    legs.erase(begin(legs));
+  }
+  while (legs.size() > 1U && is_zero_walk(legs.back())) {
+    legs.pop_back();
+  }
+  // A *real* access/egress walk followed by the free hop into the complex:
+  // stretch it to the stop the transport uses instead of emitting both.
+  if (legs.size() > 2U && is_zero_walk(legs[1U]) &&
+      std::holds_alternative<offset>(legs.front().uses_)) {
+    legs.front().to_ = legs[1U].to_;
+    legs.erase(std::next(begin(legs)));
+  }
+  if (legs.size() > 2U && is_zero_walk(legs[legs.size() - 2U]) &&
+      std::holds_alternative<offset>(legs.back().uses_)) {
+    legs.back().from_ = legs[legs.size() - 2U].from_;
+    legs.erase(std::prev(end(legs), 2));
   }
 
   auto j = journey{};
@@ -211,16 +239,16 @@ void tighten_to_first_transport(journey& j) {
   // at the back for kBwd.
   auto const n = j.legs_.size();
   auto n_access = std::size_t{0U};
-  while (n_access != n && !is_transport(j.legs_[kFwd ? n_access
-                                                     : n - n_access - 1U])) {
+  while (n_access != n &&
+         !is_transport(j.legs_[kFwd ? n_access : n - n_access - 1U])) {
     ++n_access;
   }
   if (n_access == n) {
     return;  // no transport at all
   }
 
-  auto t = kFwd ? j.legs_[n_access].dep_time_
-                : j.legs_[n - n_access - 1U].arr_time_;
+  auto t =
+      kFwd ? j.legs_[n_access].dep_time_ : j.legs_[n - n_access - 1U].arr_time_;
   for (auto i = std::size_t{0U}; i != n_access; ++i) {
     auto& l = j.legs_[kFwd ? n_access - i - 1U : n - n_access + i];
     auto const d = l.arr_time_ - l.dep_time_;
@@ -257,35 +285,17 @@ std::optional<journey> pattern_to_journey(
 }
 
 template <direction SearchDir>
-void pattern_to_journeys(timetable const& tt,
-                         rt_timetable const* rtt,
-                         query const& q,
-                         std::vector<location_idx_t> const& pattern,
-                         interval<unixtime_t> const search_interval,
-                         std::vector<journey>& out) {
-  constexpr auto const kFwd = SearchDir == direction::kForward;
-
-  // Walk the interval in search direction, one distinct departure (kFwd) /
-  // arrival (kBwd) at a time - the same idea as range RAPTOR, but the pattern
-  // is fixed so no search is repeated, only the realization.
-  auto t = kFwd ? search_interval.from_ : search_interval.to_ - duration_t{1};
-  while (search_interval.contains(t)) {
-    auto j = realize<SearchDir>(tt, rtt, q, pattern, t);
-    if (!j.has_value()) {
-      // Nothing departs after `t` any more (or the pattern is unusable).
-      break;
-    }
-
+std::optional<journey> pattern_to_journey_at(
+    timetable const& tt,
+    rt_timetable const* rtt,
+    query const& q,
+    std::vector<location_idx_t> const& pattern,
+    unixtime_t const anchor) {
+  auto j = realize<SearchDir>(tt, rtt, q, pattern, anchor);
+  if (j.has_value()) {
     tighten_to_first_transport<SearchDir>(*j);
-    if (!search_interval.contains(j->start_time_)) {
-      // The first transport is already outside the interval.
-      break;
-    }
-
-    auto const next = j->start_time_ + (kFwd ? duration_t{1} : duration_t{-1});
-    out.emplace_back(std::move(*j));
-    t = next;
   }
+  return j;
 }
 
 template std::optional<journey> pattern_to_journey<direction::kForward>(
@@ -299,19 +309,18 @@ template std::optional<journey> pattern_to_journey<direction::kBackward>(
     query const&,
     std::vector<location_idx_t> const&);
 
-template void pattern_to_journeys<direction::kForward>(
+template std::optional<journey> pattern_to_journey_at<direction::kForward>(
     timetable const&,
     rt_timetable const*,
     query const&,
     std::vector<location_idx_t> const&,
-    interval<unixtime_t>,
-    std::vector<journey>&);
-template void pattern_to_journeys<direction::kBackward>(
+    unixtime_t);
+
+template std::optional<journey> pattern_to_journey_at<direction::kBackward>(
     timetable const&,
     rt_timetable const*,
     query const&,
     std::vector<location_idx_t> const&,
-    interval<unixtime_t>,
-    std::vector<journey>&);
+    unixtime_t);
 
 }  // namespace nigiri::routing

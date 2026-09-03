@@ -2,6 +2,9 @@
 
 #include <algorithm>
 
+#include "utl/helpers/algorithm.h"
+
+#include "nigiri/for_each_meta.h"
 #include "nigiri/routing/direct.h"
 #include "nigiri/routing/leg_alternatives.h"
 #include "nigiri/routing/query.h"
@@ -28,25 +31,74 @@ std::optional<std::array<journey::leg, 3U>> get_alternative(
   // the connection, so the two sides swap.
   auto const boarding = kFwd ? from : to;
   auto const alighting = kFwd ? to : from;
-  auto direct_query =
-      make_alternative_query(tt, rtt, q, boarding, alighting);
+  auto direct_query = make_alternative_query(tt, rtt, q, boarding, alighting);
 
-  // A terminal stands for its whole station complex.
-  auto const boarding_terminal =
-      kFwd ? opt.from_is_terminal_ : opt.to_is_terminal_;
-  auto const alighting_terminal =
-      kFwd ? opt.to_is_terminal_ : opt.from_is_terminal_;
-  // `kEquivalent` expands to root + children + equivalences, i.e. exactly the
-  // station complex. Do *not* copy the outer query's match mode here: for an
-  // intermodal query it means "use the offset targets", which makes
-  // `collect_locations` skip both meta expansion and footpaths - and since a
-  // parent station carries no routes of its own (they sit on its platforms),
-  // nothing would be boardable at all.
-  if (boarding_terminal) {
-    direct_query.start_match_mode_ = location_match_mode::kEquivalent;
+  // A terminal must be matched exactly the way the *query* defines it - not by
+  // re-expanding the pattern node. `bidir_lb_raptor::init` seeds the search at
+  // station complexes, so the node is the complex of some location the query
+  // named; the locations that may legitimately be boarded/alighted here are
+  // therefore `{m in the query's own expansion : complex(m) == node}`.
+  //
+  // Expanding the node itself instead (with `kEquivalent`) pulls in
+  // `equivalences_[node]`, which are separate stations - in a GTFS feed
+  // typically the neighbouring stop of the same name, tens or hundreds of
+  // metres away - and hands them the terminal's offset, zero. That produced
+  // access legs like "walk 4 min to Stadtpalais, then 0 s to Aschaffenburg
+  // Hbf", and journeys that end at a station the query never named (one stop
+  // short of the requested destination, arriving a minute earlier than the
+  // true optimum). Stations outside the sanctioned set stay reachable through
+  // the query's footpaths, at their real duration.
+  //
+  // `kOnlyChildren` on the sanctioned targets keeps their platforms boardable
+  // (a parent station carries no routes of its own) without crossing to
+  // another station.
+  auto const terminal_offsets = [&](std::vector<offset> const& offsets,
+                                    td_offsets_t const& td_offsets,
+                                    location_match_mode const mode,
+                                    location_idx_t const node) {
+    auto out = std::vector<offset>{};
+    auto const add = [&](location_idx_t const m) {
+      if (tt.get_complex_idx(m) == node &&
+          utl::find_if(out, [&](offset const& o) { return o.target() == m; }) ==
+              end(out)) {
+        out.emplace_back(m, duration_t{0}, transport_mode_id_t{0});
+      }
+    };
+    for (auto const& o : offsets) {
+      for_each_meta(tt, mode, o.target(), add);
+    }
+    for (auto const& [l, tds] : td_offsets) {
+      for_each_meta(tt, mode, l, add);
+    }
+    return out;
+  };
+
+  // `from` is the search source (`q.start_`), `to` the search target
+  // (`q.destination_`); `direct_query` is always in travel order.
+  auto const apply_terminal = [&](bool const is_from,
+                                  location_idx_t const node) {
+    auto sub = terminal_offsets(
+        is_from ? q.start_ : q.destination_, is_from ? q.td_start_ : q.td_dest_,
+        is_from ? q.start_match_mode_ : q.dest_match_mode_, node);
+    if (sub.empty()) {
+      // the node is not covered by the query's expansion (it can only be the
+      // complex of a location that is) - fall back to the node itself
+      sub.emplace_back(node, duration_t{0}, transport_mode_id_t{0});
+    }
+    if (is_from == kFwd) {
+      direct_query.start_ = std::move(sub);
+      direct_query.start_match_mode_ = location_match_mode::kOnlyChildren;
+    } else {
+      direct_query.destination_ = std::move(sub);
+      direct_query.dest_match_mode_ = location_match_mode::kOnlyChildren;
+    }
+  };
+
+  if (opt.from_is_terminal_) {
+    apply_terminal(true, from);
   }
-  if (alighting_terminal) {
-    direct_query.dest_match_mode_ = location_match_mode::kEquivalent;
+  if (opt.to_is_terminal_) {
+    apply_terminal(false, to);
   }
 
   auto cursor =

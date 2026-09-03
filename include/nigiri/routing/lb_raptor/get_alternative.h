@@ -16,9 +16,11 @@ namespace nigiri::routing {
 struct query;
 
 // Marks `from` / `to` as a journey terminal. At a terminal the passenger starts
-// or ends their journey, so the whole station complex counts as that terminal:
-// it is expanded with `kEquivalent` (root + children + equivalences) instead of
-// being matched exactly.
+// or ends their journey, so it is matched the way the *query* defines that
+// terminal: the boardable/alightable locations are the ones from the query's
+// own expansion that belong to this station, instead of an exact match on the
+// pattern node. Everything else is reached through footpaths, at its real
+// duration.
 // Off by default.
 struct alternative_options {
   // `from` is where the journey begins (kForward) / ends (kBackward)

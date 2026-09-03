@@ -42,25 +42,16 @@ std::optional<journey> pattern_to_journey(timetable const&,
                                           query const&,
                                           std::vector<location_idx_t> const&);
 
-// Range version, analogous to range RAPTOR in `search.h`: appends every
-// journey on `pattern` that departs (kForward) resp. arrives (kBackward)
-// within `search_interval` to `out`.
-//
-// The pattern is fixed, so nothing is searched again - only the realization is
-// repeated. Starting at the near end of the interval, each journey is tightened
-// so that it leaves as late as possible while still catching its first
-// transport; the next iteration then starts one minute past that, which is
-// exactly the next distinct departure. Iteration stops at the first anchor for
-// which the pattern yields nothing or falls outside the interval.
-//
-// `journey::start_time_` is the tightened departure/arrival, so it can be
-// compared against `search_interval` the same way `search.h` does it.
+// Realizes `pattern` for one explicit anchor time: the earliest (kForward) /
+// latest (kBackward) journey that sets off at or after (before) `anchor`. The
+// result is tightened, i.e. `journey::start_time_` is the departure of the
+// access leg that just catches the first transport - so anchoring the next call
+// one minute past it yields the next distinct departure.
 template <direction SearchDir>
-void pattern_to_journeys(timetable const&,
-                         rt_timetable const*,
-                         query const&,
-                         std::vector<location_idx_t> const&,
-                         interval<unixtime_t> search_interval,
-                         std::vector<journey>& out);
+std::optional<journey> pattern_to_journey_at(timetable const&,
+                                             rt_timetable const*,
+                                             query const&,
+                                             std::vector<location_idx_t> const&,
+                                             unixtime_t anchor);
 
 }  // namespace nigiri::routing

@@ -2,6 +2,7 @@
 
 #include "boost/geometry/algorithms/detail/envelope/interface.hpp"
 
+#include <numeric>
 #include <unordered_set>
 
 #include "utl/helpers/algorithm.h"
@@ -17,18 +18,57 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
   auto const timer = scoped_timer{"loader.build_lb_routes"};
 
   tt.location_lb_routes_[prf_idx].clear();
-  tt.lb_route_root_seq_[prf_idx].clear();
+  tt.lb_route_complex_seq_[prf_idx].clear();
   tt.lb_route_times_[prf_idx].clear();
+
+  // The lb graph works on station complexes: a station and its platforms, and
+  // the neighbouring stops the loader considers equivalent, are one node. The
+  // parent relation alone is not enough - in the German feeds the platforms of
+  // one station are usually separate top-level stops tied together only by
+  // `equivalences_` (see U Blissestr., seven locations, three of them
+  // children).
+  {
+    auto uf = std::vector<location_idx_t::value_t>(tt.n_locations());
+    std::iota(begin(uf), end(uf), location_idx_t::value_t{0U});
+    auto const find = [&](location_idx_t::value_t x) {
+      while (uf[x] != x) {
+        uf[x] = uf[uf[x]];
+        x = uf[x];
+      }
+      return x;
+    };
+    auto const unite = [&](location_idx_t const a, location_idx_t const b) {
+      auto const ra = find(to_idx(a)), rb = find(to_idx(b));
+      if (ra != rb) {
+        uf[std::max(ra, rb)] = std::min(ra, rb);
+      }
+    };
+    for (auto const l :
+         interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
+      if (tt.locations_.parents_[l] != location_idx_t::invalid()) {
+        unite(l, tt.locations_.parents_[l]);
+      }
+      for (auto const eq : tt.locations_.equivalences_[l]) {
+        unite(l, eq);
+      }
+    }
+    tt.location_complex_.clear();
+    tt.location_complex_.resize(tt.n_locations());
+    for (auto const l :
+         interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
+      tt.location_complex_[l] = location_idx_t{find(to_idx(l))};
+    }
+  }
 
   auto route_lb_route = vector_map<route_idx_t, lb_route_idx_t>{};
   route_lb_route.resize(tt.n_routes());
   utl::fill(route_lb_route, kUnset);
 
-  auto root_seq = std::vector<location_idx_t>{};
-  auto const set_root_seq = [&](route_idx_t const r) {
-    root_seq.clear();
+  auto complex_seq = std::vector<location_idx_t>{};
+  auto const set_complex_seq = [&](route_idx_t const r) {
+    complex_seq.clear();
     for (auto const s : tt.route_location_seq_[r]) {
-      root_seq.push_back(tt.locations_.get_root_idx(stop{s}.location_idx()));
+      complex_seq.push_back(tt.get_complex_idx(stop{s}.location_idx()));
     }
   };
 
@@ -43,14 +83,14 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
 
     add(representative);
 
-    auto const equal_root_stops = [&](auto const r) {
+    auto const equal_complex_stops = [&](auto const r) {
       auto const& seq = tt.route_location_seq_[r];
-      if (root_seq.size() != seq.size()) {
+      if (complex_seq.size() != seq.size()) {
         return false;
       }
-      return utl::all_of(utl::zip(root_seq, seq), [&](auto&& p) {
+      return utl::all_of(utl::zip(complex_seq, seq), [&](auto&& p) {
         auto const& [a, b] = p;
-        return a == tt.locations_.get_root_idx(stop{b}.location_idx());
+        return a == tt.get_complex_idx(stop{b}.location_idx());
       });
     };
 
@@ -61,7 +101,7 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
           (prf_idx == kBikeProfile && !tt.is_flag_set(kBikesAllowed, r))) {
         continue;
       }
-      if (equal_root_stops(r)) {
+      if (equal_complex_stops(r)) {
         add(r);
       }
     }
@@ -74,12 +114,14 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
   for (auto const representative :
        interval{route_idx_t{0U}, route_idx_t{tt.n_routes()}}) {
     if (route_lb_route[representative] != kUnset ||
-        (prf_idx == kCarProfile && !tt.is_flag_set(kCarsAllowed, representative)) ||
-        (prf_idx == kBikeProfile && !tt.is_flag_set(kBikesAllowed, representative))) {
+        (prf_idx == kCarProfile &&
+         !tt.is_flag_set(kCarsAllowed, representative)) ||
+        (prf_idx == kBikeProfile &&
+         !tt.is_flag_set(kBikesAllowed, representative))) {
       continue;
     }
 
-    set_root_seq(representative);
+    set_complex_seq(representative);
     set_equivalence(representative);
 
     auto const n_segments = tt.route_location_seq_[representative].size() - 1U;
@@ -111,7 +153,7 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
     }
 
     tt.lb_route_times_[prf_idx].emplace_back(lb_segments_layovers);
-    tt.lb_route_root_seq_[prf_idx].emplace_back(root_seq);
+    tt.lb_route_complex_seq_[prf_idx].emplace_back(complex_seq);
   }
 
   auto lb_routes = std::unordered_set<lb_route_idx_t>{};
@@ -123,21 +165,20 @@ void build_lb_routes(timetable& tt, profile_idx_t prf_idx) {
     }
   };
 
+  // every member's routes are reachable at the complex
+  auto per_complex =
+      vector_map<location_idx_t, std::unordered_set<lb_route_idx_t>>{};
+  per_complex.resize(tt.n_locations());
   for (auto const l :
        interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
     lb_routes.clear();
-
-    if (tt.locations_.parents_[l] == location_idx_t::invalid()) {
-      add_lb_routes(l);
-      for (auto const c : tt.locations_.children_[l]) {
-        add_lb_routes(c);
-        for (auto const cc : tt.locations_.children_[c]) {
-          add_lb_routes(cc);
-        }
-      }
-    }
-
-    tt.location_lb_routes_[prf_idx].emplace_back(lb_routes);
+    add_lb_routes(l);
+    auto& dst = per_complex[tt.get_complex_idx(l)];
+    dst.insert(begin(lb_routes), end(lb_routes));
+  }
+  for (auto const l :
+       interval{location_idx_t{0U}, location_idx_t{tt.n_locations()}}) {
+    tt.location_lb_routes_[prf_idx].emplace_back(per_complex[l]);
   }
 
   log(log_lvl::info, "nigiri.loader.lb_routes",

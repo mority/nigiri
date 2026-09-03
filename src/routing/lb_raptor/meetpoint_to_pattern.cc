@@ -1,12 +1,15 @@
 #include "nigiri/routing/lb_raptor/bidir_lb_raptor.h"
 
 #include <algorithm>
+#include <span>
 #include <variant>
 
 #include "utl/enumerate.h"
 #include "utl/to_vec.h"
 
 #include "nigiri/routing/journey.h"
+#include "utl/overloaded.h"
+
 #include "nigiri/routing/lb_raptor/pattern_to_journey.h"
 #include "nigiri/timetable.h"
 
@@ -15,6 +18,68 @@
 
 namespace nigiri::routing {
 constexpr auto kUnreachable = std::numeric_limits<std::uint16_t>::max();
+
+namespace {
+
+// The transit core: per transport, the vehicle and the stops it is entered and
+// left at. Two journeys agreeing on it are the same connection *including where
+// the passenger changes*; they can then only differ in the access and egress
+// walks, and their times only by the length of those, so the tightest one is
+// kept.
+//
+// The transfer stops are deliberately part of the key: changing between the
+// same two vehicles at a different station is a transfer pattern of its own,
+// and enumerating those is what this algorithm is for.
+}  // namespace
+
+bidir_lb_raptor::journey_key bidir_lb_raptor::key_of(journey const& j) {
+  auto k = bidir_lb_raptor::journey_key{};
+  k.reserve(1U + 5U * j.legs_.size());
+  k.push_back(j.transfers_);
+  for (auto const& l : j.legs_) {
+    if (auto const* const ree =
+            std::get_if<journey::run_enter_exit>(&l.uses_)) {
+      k.push_back(to_idx(ree->r_.t_.t_idx_));
+      k.push_back(to_idx(ree->r_.t_.day_));
+      k.push_back(to_idx(ree->r_.rt_));
+      k.push_back(to_idx(l.from_));
+      k.push_back(to_idx(l.to_));
+    }
+  }
+  return k;
+}
+
+namespace {
+
+// where the first realization of every pattern sets off from: the query's own
+// anchor. The search window plays no part any more - the number of journeys
+// asked for does.
+unixtime_t anchor(query const& q) {
+  return std::visit(
+      utl::overloaded{[](unixtime_t const t) { return t; },
+                      [](interval<unixtime_t> const i) { return i.from_; }},
+      q.start_time_);
+}
+
+}  // namespace
+
+// door to door, in travel order
+duration_t bidir_lb_raptor::span(journey const& j) {
+  return j.legs_.empty()
+             ? duration_t{0}
+             : duration_t{j.legs_.back().arr_time_ - j.legs_.front().dep_time_};
+}
+
+// everything that is not a transport: access, transfer and egress walks
+duration_t bidir_lb_raptor::walk_time(journey const& j) {
+  auto d = duration_t{0};
+  for (auto const& l : j.legs_) {
+    if (!std::holds_alternative<journey::run_enter_exit>(l.uses_)) {
+      d += (l.arr_time_ - l.dep_time_);
+    }
+  }
+  return d;
+}
 
 template <direction SearchDir>
 bool bidir_lb_raptor::reconstruct(timetable const& tt,
@@ -29,10 +94,10 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
       [&](location_idx_t const x, unsigned const k,
           std::uint16_t const time) -> std::optional<location_idx_t> {
     trace_lb("[find_in_prev_round][{}] location={}, round={}, time={}",
-          kFwd ? "fwd" : "bwd", tt.get_default_name(x), k, time);
+             kFwd ? "fwd" : "bwd", tt.get_default_name(x), k, time);
 
     for (auto const r : tt.location_lb_routes_[q.prf_idx_][x]) {
-      auto const& seq = tt.lb_route_root_seq_[q.prf_idx_][r];
+      auto const& seq = tt.lb_route_complex_seq_[q.prf_idx_][r];
 
       for (auto i = 0U; i != seq.size(); ++i) {
         auto const in = kFwd ? seq.size() - i - 1U : i;
@@ -69,7 +134,7 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
 
   if (round_times[k_start][l] == kUnreachable) {
     trace_lb("[reconstruct][{}][k={}] {} not reached, nothing to reconstruct",
-          kFwd ? "fwd" : "bwd", k_start, tt.get_default_name(l));
+             kFwd ? "fwd" : "bwd", k_start, tt.get_default_name(l));
     return false;
   }
 
@@ -77,7 +142,7 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
   for (auto k = k_start; k != 0U; --k) {
     if (is_terminal.test(to_idx(cur))) {
       trace_lb("[reconstruct][{}][k={}] reached terminal {}, terminating",
-            kFwd ? "fwd" : "bwd", k, tt.get_default_name(cur));
+               kFwd ? "fwd" : "bwd", k, tt.get_default_name(cur));
       return true;
     }
 
@@ -107,7 +172,7 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
              kFwd ? tt.locations_.footpaths_in_[q.prf_idx_][y]
                   : tt.locations_.footpaths_out_[q.prf_idx_][y]) {
           found = find_in_prev_round(
-              tt.locations_.get_root_idx(fp.target()), k,
+              tt.get_complex_idx(fp.target()), k,
               time - adjusted_transfer_time(q.transfer_time_settings_,
                                             fp.duration())
                          .count());
@@ -151,8 +216,8 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
     }
 
     trace_lb("[reconstruct][{}][k={}][cur={}] adding {} to pattern",
-          kFwd ? "fwd" : "bwd", k, tt.get_default_name(cur),
-          tt.get_default_name(*prev));
+             kFwd ? "fwd" : "bwd", k, tt.get_default_name(cur),
+             tt.get_default_name(*prev));
     current_pattern_.emplace_back(*prev);
     cur = *prev;
   }
@@ -161,21 +226,8 @@ bool bidir_lb_raptor::reconstruct(timetable const& tt,
 }
 
 template <direction SearchDir>
-void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
-                                             rt_timetable const* rtt,
-                                             query const& q,
-                                             unsigned const k,
-                                             bool const arrive_by) {
+void bidir_lb_raptor::collect_meetpoints(unsigned const k) {
   static constexpr auto kFwd = SearchDir == direction::kForward;
-
-  auto const to_array = [&](auto const& v) {
-    auto a = std::array<location_idx_t, kMaxTransfers + 2U>{};
-    utl::fill(a, location_idx_t::invalid());
-    for (auto const [i, e] : utl::enumerate(v)) {
-      a[i] = e;
-    }
-    return a;
-  };
 
   // Round in which the label at `x` was created: `run()` copies round k-1 into
   // round k, so a carried-forward label costs fewer transports than `k_start`
@@ -191,7 +243,6 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
 
   auto const bwd_k_start = kFwd ? k - 1U : k;
 
-  scored_meetpoints_.clear();
   for (auto const m : meetpoints_) {
     // A meetpoint may be the start or the destination itself - that is how
     // patterns without any transfer (a single transport from start to
@@ -200,8 +251,8 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
     // and the other half is built as usual. Only a meetpoint that is start
     // *and* destination is degenerate.
     if (is_start_.test(to_idx(m)) && is_dest_.test(to_idx(m))) {
-      trace_lb("[meetpoints_to_patterns][{}][k={}] skipping start == destination",
-            kFwd ? "fwd" : "bwd", k);
+      trace_lb("[collect_meetpoints][{}][k={}] skipping start == destination",
+               kFwd ? "fwd" : "bwd", k);
       continue;
     }
 
@@ -216,95 +267,166 @@ void bidir_lb_raptor::meetpoints_to_patterns(timetable const& tt,
     // the ranking.
     auto const n_transports = effective_round(fwd_round_times_, m, k) +
                               effective_round(bwd_round_times_, m, bwd_k_start);
-    scored_meetpoints_.emplace_back(scored_meetpoint{
-        .l_ = m,
-        .transfers_ = static_cast<std::uint8_t>(
-            n_transports == 0U ? 0U : n_transports - 1U),
-        .travel_time_lb_ =
-            static_cast<std::uint32_t>(fwd_t) + static_cast<std::uint32_t>(bwd_t)});
+    scored_meetpoints_.emplace_back(
+        scored_meetpoint{.l_ = m,
+                         .transfers_ = static_cast<std::uint8_t>(
+                             n_transports == 0U ? 0U : n_transports - 1U),
+                         .travel_time_lb_ = static_cast<std::uint32_t>(fwd_t) +
+                                            static_cast<std::uint32_t>(bwd_t),
+                         .fwd_k_ = k,
+                         .bwd_k_ = bwd_k_start});
   }
+}
 
-  // Rank by (transfers, travel time) and keep only the best ones - everything
-  // below the cut is never reconstructed.
-  if (scored_meetpoints_.size() > max_patterns_per_round_) {
+void bidir_lb_raptor::build_patterns(timetable const& tt,
+                                     rt_timetable const* rtt,
+                                     query const& q,
+                                     bool const arrive_by) {
+  auto const to_array = [&](auto const& v) {
+    auto a = bidir_lb_raptor::pattern_t{};
+    utl::fill(a, location_idx_t::invalid());
+    for (auto const [i, e] : utl::enumerate(v)) {
+      a[i] = e;
+    }
+    return a;
+  };
+
+  // Two pointless detours a reconstructed pattern can contain, both cut here:
+  //
+  //  - it comes back to a station it already visited. Staying there instead
+  //    cannot arrive later - the onward transport is boardable from that same
+  //    station, and it is reached earlier.
+  //  - it runs *through* a terminal. The passenger could have got off there
+  //    (or set off from there), which again arrives earlier with fewer
+  //    transfers.
+  //
+  // Cutting is always safe: what remains is the same journey with a piece
+  // dropped, so it is realizable by construction. `patterns_` then absorbs the
+  // result if the cut pattern was already seen.
+  auto const simplify_pattern = [&]() {
+    auto cut = false;
+
+    for (auto i = std::size_t{0U}; i + 1U < current_pattern_.size(); ++i) {
+      auto const same =
+          std::find(std::next(begin(current_pattern_),
+                              static_cast<std::ptrdiff_t>(i + 1U)),
+                    end(current_pattern_), current_pattern_[i]);
+      if (same != end(current_pattern_)) {
+        current_pattern_.erase(std::next(begin(current_pattern_),
+                                         static_cast<std::ptrdiff_t>(i + 1U)),
+                               std::next(same));
+        cut = true;
+      }
+    }
+
+    auto const n = current_pattern_.size();
+    auto first = std::size_t{0U}, last = n - 1U;
+    for (auto i = std::size_t{1U}; i + 1U != n; ++i) {
+      auto const l = to_idx(current_pattern_[i]);
+      if (is_start_.test(l)) {
+        first = i;
+      }
+      if (is_dest_.test(l) && last == n - 1U) {
+        last = i;
+      }
+    }
+    if (first != 0U || last != n - 1U) {
+      current_pattern_ = std::vector<location_idx_t>{
+          std::next(begin(current_pattern_),
+                    static_cast<std::ptrdiff_t>(first)),
+          std::next(begin(current_pattern_),
+                    static_cast<std::ptrdiff_t>(last) + 1)};
+      cut = true;
+    }
+
+    if (cut) {
+      ++stats_.passthrough_patterns_;
+    }
+  };
+
+  // One budget for the whole query: rank every meetpoint any round found by
+  // (transfers, travel time) and reconstruct the best ones. Everything below
+  // the cut is never reconstructed.
+  if (scored_meetpoints_.size() > max_patterns_) {
     std::partial_sort(begin(scored_meetpoints_),
-                      begin(scored_meetpoints_) + max_patterns_per_round_,
+                      begin(scored_meetpoints_) + max_patterns_,
                       end(scored_meetpoints_));
-    stats_.pruned_meetpoints_ +=
-        scored_meetpoints_.size() - max_patterns_per_round_;
-    scored_meetpoints_.resize(max_patterns_per_round_);
+    stats_.pruned_meetpoints_ += scored_meetpoints_.size() - max_patterns_;
+    scored_meetpoints_.resize(max_patterns_);
   } else {
     std::sort(begin(scored_meetpoints_), end(scored_meetpoints_));
   }
 
-  for (auto const& [m, transfers, travel_time_lb] : scored_meetpoints_) {
-    trace_lb("[meetpoints_to_patterns][{}][k={}] meetpoint: {} ({} transfers, {})",
-          kFwd ? "fwd" : "bwd", k, tt.get_default_name(m), transfers,
-          travel_time_lb);
+  for (auto const& sm : scored_meetpoints_) {
+    auto const m = sm.l_;
+    trace_lb("[build_patterns] meetpoint: {} ({} transfers, {})",
+             tt.get_default_name(m), sm.transfers_, sm.travel_time_lb_);
 
     ++stats_.pattern_reconstructions_;
     current_pattern_.clear();
-    auto complete = reconstruct<direction::kForward>(tt, q, m, k);
+    auto complete = reconstruct<direction::kForward>(tt, q, m, sm.fwd_k_);
     std::ranges::reverse(current_pattern_);
     current_pattern_.emplace_back(m);
     complete =
-        reconstruct<direction::kBackward>(tt, q, m, bwd_k_start) && complete;
+        reconstruct<direction::kBackward>(tt, q, m, sm.bwd_k_) && complete;
 
     if (!complete) {
       ++stats_.truncated_patterns_;
-      trace_lb("[meetpoints_to_patterns][{}][k={}] truncated pattern: {}",
-            kFwd ? "fwd" : "bwd", k,
-            utl::to_vec(current_pattern_,
-                        [&](auto const l) { return tt.get_default_name(l); }));
+      trace_lb("[build_patterns] truncated pattern: {}",
+               utl::to_vec(current_pattern_, [&](auto const l) {
+                 return tt.get_default_name(l);
+               }));
       continue;
     }
 
     // Patterns repeat across meetpoints and rounds; realizing one is by far
     // the most expensive step, so skip it for a pattern already seen.
+    simplify_pattern();
+
     if (!patterns_.emplace(to_array(current_pattern_)).second) {
       ++stats_.pattern_repetitions_;
-      trace_lb("[meetpoints_to_patterns][{}][k={}] pattern repetition: {}",
-            kFwd ? "fwd" : "bwd", k,
-            utl::to_vec(current_pattern_,
-                        [&](auto const l) { return tt.get_default_name(l); }));
+      trace_lb("[build_patterns] pattern repetition: {}",
+               utl::to_vec(current_pattern_, [&](auto const l) {
+                 return tt.get_default_name(l);
+               }));
       continue;
     }
 
-    trace_lb("[meetpoints_to_patterns][{}][k={}] new pattern: {}",
-          kFwd ? "fwd" : "bwd", k,
-          utl::to_vec(current_pattern_,
-                      [&](auto const l) { return tt.get_default_name(l); }));
+    trace_lb("[build_patterns] new pattern: {}",
+             utl::to_vec(current_pattern_,
+                         [&](auto const l) { return tt.get_default_name(l); }));
 
-    // An interval query asks for every departure in the interval, an ontrip
-    // query for the single earliest/latest one.
-    auto const n_before = journeys_.size();
-    if (auto const* const iv =
-            std::get_if<interval<unixtime_t>>(&q.start_time_);
-        iv != nullptr) {
-      if (arrive_by) {
-        pattern_to_journeys<direction::kBackward>(
-            tt, rtt, q, current_pattern_, *iv, journeys_);
-      } else {
-        pattern_to_journeys<direction::kForward>(
-            tt, rtt, q, current_pattern_, *iv, journeys_);
-      }
-    } else {
-      auto j = arrive_by ? pattern_to_journey<direction::kBackward>(
-                               tt, rtt, q, current_pattern_)
-                         : pattern_to_journey<direction::kForward>(
-                               tt, rtt, q, current_pattern_);
+    // One journey per pattern for now - the earliest (kFwd) / latest (kBwd)
+    // one at the query's anchor. `execute` realizes the next departures
+    // afterwards, as often as `min_connection_count_` needs.
+    new_journeys_.clear();
+    {
+      auto j = arrive_by ? pattern_to_journey_at<direction::kBackward>(
+                               tt, rtt, q, current_pattern_, anchor(q))
+                         : pattern_to_journey_at<direction::kForward>(
+                               tt, rtt, q, current_pattern_, anchor(q));
       if (j.has_value()) {
-        journeys_.emplace_back(std::move(*j));
+        new_journeys_.emplace_back(std::move(*j));
       }
     }
 
-    if (journeys_.size() == n_before) {
+    if (new_journeys_.empty()) {
       ++stats_.unrealizable_patterns_;
-      trace_lb("[meetpoints_to_patterns][{}][k={}] pattern not realizable",
-            kFwd ? "fwd" : "bwd", k);
+      trace_lb("[build_patterns] pattern not realizable");
     } else {
-      trace_lb("[meetpoints_to_patterns][{}][k={}] {} journeys", kFwd ? "fwd" : "bwd",
-            k, journeys_.size() - n_before);
+      trace_lb("[build_patterns] {} journeys", new_journeys_.size());
+    }
+
+    if (!new_journeys_.empty()) {
+      auto const step = arrive_by ? duration_t{-1} : duration_t{1};
+      realizable_.push_back(
+          realizable{.pattern_ = current_pattern_,
+                     .next_anchor_ = new_journeys_.front().start_time_ + step});
+    }
+
+    for (auto& j : new_journeys_) {
+      pattern_of_.emplace(key_of(j), realizable_.size() - 1U);
+      add_journey(std::move(j));
     }
   }
 }
@@ -314,9 +436,9 @@ template bool bidir_lb_raptor::reconstruct<direction::kForward>(
 template bool bidir_lb_raptor::reconstruct<direction::kBackward>(
     timetable const&, query const&, location_idx_t, unsigned);
 
-template void bidir_lb_raptor::meetpoints_to_patterns<direction::kForward>(
-    timetable const&, rt_timetable const*, query const&, unsigned, bool);
-template void bidir_lb_raptor::meetpoints_to_patterns<direction::kBackward>(
-    timetable const&, rt_timetable const*, query const&, unsigned, bool);
+template void bidir_lb_raptor::collect_meetpoints<direction::kForward>(
+    unsigned);
+template void bidir_lb_raptor::collect_meetpoints<direction::kBackward>(
+    unsigned);
 
 }  // namespace nigiri::routing

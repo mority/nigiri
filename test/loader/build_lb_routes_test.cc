@@ -66,13 +66,16 @@ TEST(loader, build_lb_routes) {
     auto const l = tt.find(location_id{id, source_idx_t{}}).value();
     ASSERT_EQ(tt.location_lb_routes_[kDefaultProfile][l].size(), 1U);
     auto const r = tt.location_lb_routes_[kDefaultProfile][l][0];
-    ASSERT_EQ(tt.lb_route_root_seq_[kDefaultProfile][r].size(), 3U);
-    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][0]),
-              "A");
-    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][1]),
-              "B");
-    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][2]),
-              "C");
+    ASSERT_EQ(tt.lb_route_complex_seq_[kDefaultProfile][r].size(), 3U);
+    EXPECT_EQ(
+        tt.get_default_name(tt.lb_route_complex_seq_[kDefaultProfile][r][0]),
+        "A");
+    EXPECT_EQ(
+        tt.get_default_name(tt.lb_route_complex_seq_[kDefaultProfile][r][1]),
+        "B");
+    EXPECT_EQ(
+        tt.get_default_name(tt.lb_route_complex_seq_[kDefaultProfile][r][2]),
+        "C");
     ASSERT_EQ(tt.lb_route_times_[kDefaultProfile][r].size(), 3U);
     EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][r][0], duration_t{10});
     EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][r][1], duration_t{30});
@@ -83,11 +86,13 @@ TEST(loader, build_lb_routes) {
     auto const l = tt.find(location_id{id, source_idx_t{}}).value();
     ASSERT_EQ(tt.location_lb_routes_[kDefaultProfile][l].size(), 1U);
     auto const r = tt.location_lb_routes_[kDefaultProfile][l][0];
-    ASSERT_EQ(tt.lb_route_root_seq_[kDefaultProfile][r].size(), 2U);
-    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][0]),
-              "X");
-    EXPECT_EQ(tt.get_default_name(tt.lb_route_root_seq_[kDefaultProfile][r][1]),
-              "Y");
+    ASSERT_EQ(tt.lb_route_complex_seq_[kDefaultProfile][r].size(), 2U);
+    EXPECT_EQ(
+        tt.get_default_name(tt.lb_route_complex_seq_[kDefaultProfile][r][0]),
+        "X");
+    EXPECT_EQ(
+        tt.get_default_name(tt.lb_route_complex_seq_[kDefaultProfile][r][1]),
+        "Y");
     ASSERT_EQ(tt.lb_route_times_[kDefaultProfile][r].size(), 1U);
     EXPECT_EQ(tt.lb_route_times_[kDefaultProfile][r][0], duration_t{60});
   }
