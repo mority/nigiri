@@ -872,6 +872,7 @@ private:
         for_each_footpath<
             SearchDir>(fps, to_unix(tmp_time), [&](footpath const fp) {
           ++stats_.n_footpaths_visited_;
+          ++stats_.n_td_footpaths_visited_;
 
           auto const target = to_idx(fp.target());
 
@@ -1032,6 +1033,7 @@ private:
         if (fp_start_time == kInvalid) {
           return;
         }
+        ++stats_.n_td_offsets_evaluated_;
         auto const fp =
             get_td_duration<SearchDir>(it->second, to_unix(fp_start_time));
         if (fp.has_value()) {
@@ -1040,6 +1042,7 @@ private:
 
           if (is_better_loose(end_time, time_at_dest_[k]) &&
               is_better(end_time, best_[kIntermodalTarget][Vias])) {
+            ++stats_.n_td_offsets_updated_;
             round_times_[k][kIntermodalTarget][Vias] = end_time;
             best_[kIntermodalTarget][Vias] = end_time;
             update_time_at_dest(k, end_time);

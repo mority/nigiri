@@ -21,6 +21,9 @@ struct raptor_stats {
          fp_update_prevented_by_lower_bound_},
         {"route_update_prevented_by_lower_bound",
          route_update_prevented_by_lower_bound_},
+        {"n_td_offsets_evaluated", n_td_offsets_evaluated_},
+        {"n_td_offsets_updated", n_td_offsets_updated_},
+        {"n_td_footpaths_visited", n_td_footpaths_visited_},
     };
   }
 
@@ -38,6 +41,9 @@ struct raptor_stats {
         o.fp_update_prevented_by_lower_bound_;
     copy.route_update_prevented_by_lower_bound_ +=
         o.route_update_prevented_by_lower_bound_;
+    copy.n_td_offsets_evaluated_ += o.n_td_offsets_evaluated_;
+    copy.n_td_offsets_updated_ += o.n_td_offsets_updated_;
+    copy.n_td_footpaths_visited_ += o.n_td_footpaths_visited_;
     return copy;
   }
 
@@ -49,6 +55,15 @@ struct raptor_stats {
   std::uint64_t n_earliest_arrival_updated_by_footpath_{0ULL};
   std::uint64_t fp_update_prevented_by_lower_bound_{0ULL};
   std::uint64_t route_update_prevented_by_lower_bound_{0ULL};
+
+  // Time-dependent offsets on the last mile: how often the search read a
+  // sequence, and how often that improved the arrival at the destination.
+  // The GPU implementation does not maintain these.
+  std::uint64_t n_td_offsets_evaluated_{0ULL};
+  std::uint64_t n_td_offsets_updated_{0ULL};
+  // Time-dependent footpaths relaxed in the transfer phase; a subset of
+  // n_footpaths_visited_, which counts static and time-dependent alike.
+  std::uint64_t n_td_footpaths_visited_{0ULL};
 };
 
 }  // namespace nigiri::routing
