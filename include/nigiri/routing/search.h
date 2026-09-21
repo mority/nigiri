@@ -55,6 +55,7 @@ struct search_stats {
          search_interval_reduction_by_early_termination_.count()},
         {"n_execute_fwd", n_execute_fwd_},
         {"n_execute_bwd", n_execute_bwd_},
+        {"n_td_starts_evaluated", n_td_starts_evaluated_},
     };
   }
 
@@ -66,6 +67,9 @@ struct search_stats {
   std::chrono::minutes search_interval_reduction_by_early_termination_{0LL};
   std::uint64_t n_execute_fwd_{0ULL};
   std::uint64_t n_execute_bwd_{0ULL};
+  // Time-dependent offsets read while generating start labels. The per-round
+  // counterpart on the last mile is raptor_stats::n_td_offsets_evaluated_.
+  std::uint64_t n_td_starts_evaluated_{0ULL};
 };
 
 struct routing_result {
@@ -404,7 +408,7 @@ private:
     get_starts(SearchDir, tt_, rtt_, start_interval, q_.start_, q_.td_start_,
                q_.via_stops_, q_.max_start_offset_, q_.start_match_mode_,
                q_.use_start_footpaths_, state_.starts_, add_ontrip, q_.prf_idx_,
-               q_.transfer_time_settings_);
+               q_.transfer_time_settings_, &stats_.n_td_starts_evaluated_);
     std::sort(
         begin(state_.starts_), end(state_.starts_),
         [&](start const& a, start const& b) { return kFwd ? b < a : a < b; });

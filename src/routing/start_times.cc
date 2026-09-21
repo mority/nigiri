@@ -18,10 +18,14 @@ using location_offset_t = std::variant<duration_t, std::span<td_offset const>>;
 duration_t get_duration(direction const search_dir,
                         unixtime_t const t,
                         location_offset_t const o,
-                        bool const invert = true) {
+                        bool const invert = true,
+                        std::uint64_t* const n_td_evaluated = nullptr) {
   return std::visit(
       utl::overloaded{[](duration_t const x) { return x; },
                       [&](std::span<td_offset const> td) {
+                        if (n_td_evaluated != nullptr) {
+                          ++*n_td_evaluated;
+                        }
                         auto duration = get_td_duration(
                             invert ? flip(search_dir) : search_dir, td, t);
                         return duration.has_value() ? duration->first
@@ -46,7 +50,8 @@ void add_start_times_at_stop(direction const search_dir,
                              interval<unixtime_t> const& iv_at_start,
                              interval<unixtime_t> const& iv_at_stop,
                              location_offset_t const offset,
-                             std::vector<start>& starts) {
+                             std::vector<start>& starts,
+                             std::uint64_t* const n_td_evaluated) {
   auto const is_better_or_eq = [&](auto a, auto b) {
     return search_dir == direction::kForward ? a <= b : a >= b;
   };
@@ -80,7 +85,8 @@ void add_start_times_at_stop(direction const search_dir,
       if (traffic_days.test(to_idx(day - day_offset)) &&
           iv_at_stop.contains(tt.to_unixtime(day, stop_time_mam))) {
         auto const ev_time = tt.to_unixtime(day, stop_time_mam);
-        auto const d = get_duration(search_dir, ev_time, offset);
+        auto const d =
+            get_duration(search_dir, ev_time, offset, true, n_td_evaluated);
         if (d == footpath::kMaxDuration) {
           trace_start("        {} => infeasible\n", ev_time);
           continue;
@@ -129,7 +135,8 @@ void add_starts_in_interval(direction const search_dir,
                             duration_t const max_start_offset,
                             profile_idx_t const p,
                             std::vector<start>& starts,
-                            bool const add_ontrip) {
+                            bool const add_ontrip,
+                            std::uint64_t* const n_td_evaluated) {
   trace_start(
       "    add_starts_in_interval(interval={}, stop={}): {} "
       "routes\n",
@@ -169,7 +176,7 @@ void add_starts_in_interval(direction const search_dir,
           search_dir == direction::kForward
               ? interval{iv.from_, iv.to_ + max_start_offset}
               : interval{iv.from_ - max_start_offset, iv.to_},
-          location_offset, starts);
+          location_offset, starts, n_td_evaluated);
     }
   }
 
@@ -196,7 +203,8 @@ void add_starts_in_interval(direction const search_dir,
             rt_t, static_cast<stop_idx_t>(i),
             (search_dir == direction::kForward ? event_type::kDep
                                                : event_type::kArr));
-        auto const d = get_duration(search_dir, ev_time, location_offset);
+        auto const d = get_duration(search_dir, ev_time, location_offset,
+                                    true, n_td_evaluated);
         auto const time_at_start =
             search_dir == direction::kForward ? ev_time - d : ev_time + d;
 
@@ -226,7 +234,8 @@ void add_starts_in_interval(direction const search_dir,
     auto const time_at_start =
         search_dir == direction::kForward ? iv.to_ : iv.from_ - 1_minutes;
     auto const d =
-        get_duration(search_dir, time_at_start, location_offset, false);
+        get_duration(search_dir, time_at_start, location_offset, false,
+                     n_td_evaluated);
     if (d != footpath::kMaxDuration) {
       starts.emplace_back(
           start{.time_at_start_ = time_at_start,
@@ -252,7 +261,8 @@ void get_starts(
     std::vector<start>& starts,
     bool const add_ontrip,
     profile_idx_t const prf_idx,
-    transfer_time_settings const& tts) {
+    transfer_time_settings const& tts,
+    std::uint64_t* const n_td_evaluated) {
   auto shortest_start = hash_map<location_idx_t, duration_t>{};
   auto const update = [&](location_idx_t const l, duration_t const offset) {
     auto const d =
@@ -286,7 +296,7 @@ void get_starts(
                                  add_starts_in_interval(
                                      search_dir, tt, rtt, interval, l, o,
                                      max_start_offset, prf_idx, starts,
-                                     add_ontrip);
+                                     add_ontrip, n_td_evaluated);
                                },
                                [&](unixtime_t const t) {
                                  starts.emplace_back(
@@ -304,10 +314,11 @@ void get_starts(
               add_starts_in_interval(search_dir, tt, rtt, interval, stop,
                                      location_offset_t{std::span{offsets}},
                                      max_start_offset, prf_idx, starts,
-                                     add_ontrip);
+                                     add_ontrip, n_td_evaluated);
             },
             [&](unixtime_t const t) {
-              auto const d = get_duration(search_dir, t, offsets, false);
+              auto const d = get_duration(search_dir, t, offsets, false,
+                                          n_td_evaluated);
               if (d != footpath::kMaxDuration) {
                 starts.emplace_back(start{.time_at_start_ = t,
                                           .time_at_stop_ = fwd ? t + d : t - d,

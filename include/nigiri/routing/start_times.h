@@ -37,7 +37,10 @@ void get_starts(
     std::vector<start>&,
     bool add_ontrip,
     profile_idx_t,
-    transfer_time_settings const&);
+    transfer_time_settings const&,
+    // counts how often a time-dependent offset sequence was read while
+    // generating the start labels (evaluation instrumentation, optional)
+    std::uint64_t* n_td_evaluated = nullptr);
 
 void collect_destinations(timetable const&,
                           std::vector<offset> const& destinations,
