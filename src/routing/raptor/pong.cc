@@ -252,7 +252,8 @@ routing_result pong(timetable const& tt,
     get_starts(SearchDir, tt, rtt, start_time, q.start_, q.td_start_,
                q.via_stops_, q.max_start_offset_, q.start_match_mode_,
                q.use_start_footpaths_, starts, false, q.prf_idx_,
-               q.transfer_time_settings_);
+               q.transfer_time_settings_,
+               &result.search_stats_.n_td_starts_evaluated_);
     ping.reset_arrivals();
     ping.next_start_time();
     for (auto const& s : starts) {
@@ -307,7 +308,8 @@ routing_result pong(timetable const& tt,
                  q.td_start_, q.via_stops_, q.max_start_offset_,
                  q.start_match_mode_,
                  q.start_match_mode_ != location_match_mode::kIntermodal,
-                 starts, false, q.prf_idx_, q.transfer_time_settings_);
+                 starts, false, q.prf_idx_, q.transfer_time_settings_,
+                 &result.search_stats_.n_td_starts_evaluated_);
       po.next_start_time();
       for (auto const& s : starts) {
         trace_pong("---- PONG START: {} at time_at_start={} time_at_stop={}",
