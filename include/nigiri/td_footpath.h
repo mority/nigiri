@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdlib>
+
 #include <span>
 
 #include "cista/reflection/comparable.h"
@@ -24,10 +26,94 @@ struct td_footpath {
   duration_t duration_;
 };
 
+// Exhaustive evaluation of alpha_tilde, kept as a test oracle. The fast path
+// below returns on the first non-superseded entry, which is only valid on a
+// sequence satisfying (N1); this one checks every window and keeps the best, so
+// tests can assert the two agree. Not used in production.
+template <direction SearchDir, typename Collection>
+std::optional<std::pair<duration_t, typename Collection::value_type>>
+get_td_duration_scan(Collection const& c, unixtime_t const t) {
+  using namespace std::chrono_literals;
+  auto best =
+      std::optional<std::pair<duration_t, typename Collection::value_type>>{};
+
+  // An entry is valid only on [valid_from_i, valid_from_{i+1}); a kMaxDuration
+  // entry closes the window. The normalized fast path can exploit that no later
+  // entry beats an earlier one and return on the first hit. Here we must check
+  // every window and keep the best.
+  if constexpr (SearchDir == direction::kForward) {
+    auto best_arr = unixtime_t::max();
+    for (auto i = cbegin(c); i != cend(c); ++i) {
+      if (i->valid_from_ - t > routing::kMaxTravelTime) {
+        break;
+      }
+      if (i->valid_from_ >= best_arr) {
+        break;  // departs no earlier than the best arrival: cannot improve
+      }
+      if (i->duration_ == footpath::kMaxDuration) {
+        continue;
+      }
+      auto const next = (i + 1) == cend(c) ? unixtime_t::max() : (i + 1)->valid_from_;
+      if (next <= t) {
+        continue;  // window already over at t
+      }
+      auto const dep = std::max(i->valid_from_, t);
+      if (dep >= next) {
+        continue;  // no time left inside the window
+      }
+      auto const arr = dep + i->duration_;
+      if (arr < best_arr) {
+        best_arr = arr;
+        best = std::pair{arr - t, *i};
+      }
+    }
+  } else /* kBackward */ {
+    // Latest departure that still meets the arrival deadline t.
+    // Entry e is valid on [tau_e, tau_{e+1}); inside that window the latest
+    // usable departure is
+    //     dep_e = min(tau_{e+1} - 1, t - l_e),
+    // admissible only if dep_e >= tau_e. The answer is the maximum over
+    // entries, and the returned duration is t - dep (waiting at the
+    // destination counts toward it).
+    auto best_dep = unixtime_t::min();
+    for (auto i = cbegin(c); i != cend(c); ++i) {
+      if (i->duration_ == footpath::kMaxDuration) {
+        continue;
+      }
+      auto const next =
+          (i + 1) == cend(c) ? unixtime_t::max() : (i + 1)->valid_from_;
+      auto latest = t - i->duration_;
+      if (next != unixtime_t::max()) {
+        latest = std::min(latest, unixtime_t{next - 1min});
+      }
+      if (latest < i->valid_from_) {
+        continue;  // window admits no feasible departure
+      }
+      if (t - latest > routing::kMaxTravelTime) {
+        continue;  // too far back to be useful
+      }
+      if (latest > best_dep) {
+        best_dep = latest;
+        best = std::pair{t - latest, *i};
+      }
+    }
+  }
+  return best;
+}
+
 template <direction SearchDir, typename Collection>
 std::optional<std::pair<duration_t, typename Collection::value_type>>
 get_td_duration(Collection const& c, unixtime_t const t) {
   using namespace std::chrono_literals;
+
+#ifdef NIGIRI_TD_EXHAUSTIVE_LOOKUP
+  // Measurement variant: evaluate alpha_tilde exhaustively instead of relying
+  // on (N1). Correct on a lossless sequence even without FIFO repair, so it
+  // pairs with MOTIS_TD_NO_FIFO_REPAIR=1 to measure the alternative design --
+  // cheaper construction, more expensive evaluation. Compile-time so neither
+  // arm carries a branch for the other.
+  return get_td_duration_scan<SearchDir>(c, t);
+#else
 
   if constexpr (SearchDir == direction::kForward) {
     for (auto i = cbegin(c); i != cend(c); ++i) {
@@ -66,6 +152,7 @@ get_td_duration(Collection const& c, unixtime_t const t) {
   }
 
   return std::nullopt;
+#endif
 }
 
 template <typename Collection>
