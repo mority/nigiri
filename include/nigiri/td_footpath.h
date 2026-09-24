@@ -20,6 +20,23 @@ namespace nigiri {
 
 constexpr auto const kNull = unixtime_t{0_minutes};
 
+// Default for the optional per-entry counter of the lookup functions below.
+// Compiles to nothing; td-replay passes a counting functor instead.
+struct td_no_count {
+  void operator()() const noexcept {}
+};
+
+#ifdef NIGIRI_TD_TRACE
+// Measurement builds only: called once per get_td_duration with the address of
+// the sequence's first entry, so a recorder can tell which stop was evaluated.
+using td_trace_fn = void (*)(void* ctx,
+                             void const* first,
+                             direction,
+                             unixtime_t);
+inline thread_local td_trace_fn td_trace_hook = nullptr;
+inline thread_local void* td_trace_ctx = nullptr;
+#endif
+
 struct td_footpath {
   CISTA_FRIEND_COMPARABLE(td_footpath)
   location_idx_t target_;
@@ -31,9 +48,9 @@ struct td_footpath {
 // below returns on the first non-superseded entry, which is only valid on a
 // sequence satisfying (N1); this one checks every window and keeps the best, so
 // tests can assert the two agree. Not used in production.
-template <direction SearchDir, typename It>
+template <direction SearchDir, typename It, typename Count = td_no_count>
 std::optional<std::pair<duration_t, typename std::iterator_traits<It>::value_type>>
-scan_range(It const b, It const e, unixtime_t const t) {
+scan_range(It const b, It const e, unixtime_t const t, Count&& count = {}) {
   using namespace std::chrono_literals;
   using V = typename std::iterator_traits<It>::value_type;
   auto best = std::optional<std::pair<duration_t, V>>{};
@@ -47,6 +64,7 @@ scan_range(It const b, It const e, unixtime_t const t) {
   if constexpr (SearchDir == direction::kForward) {
     auto best_arr = unixtime_t::max();
     for (auto i = cbegin(); i != cend(); ++i) {
+      count();
       if (i->valid_from_ - t > routing::kMaxTravelTime) {
         break;
       }
@@ -80,6 +98,7 @@ scan_range(It const b, It const e, unixtime_t const t) {
     // destination counts toward it).
     auto best_dep = unixtime_t::min();
     for (auto i = cbegin(); i != cend(); ++i) {
+      count();
       if (i->duration_ == footpath::kMaxDuration) {
         continue;
       }
@@ -104,10 +123,13 @@ scan_range(It const b, It const e, unixtime_t const t) {
   return best;
 }
 
-template <direction SearchDir, typename Collection>
+template <direction SearchDir, typename Collection, typename Count = td_no_count>
 std::optional<std::pair<duration_t, typename Collection::value_type>>
-get_td_duration_scan(Collection const& c, unixtime_t const t) {
-  return scan_range<SearchDir>(cbegin(c), cend(c), t);
+get_td_duration_scan(Collection const& c,
+                     unixtime_t const t,
+                     Count&& count = {}) {
+  return scan_range<SearchDir>(cbegin(c), cend(c), t,
+                               std::forward<Count>(count));
 }
 
 // Design D (NIGIRI_TD_RAW_WINDOW_LOOKUP): evaluate the producers' windows
@@ -126,14 +148,17 @@ get_td_duration_scan(Collection const& c, unixtime_t const t) {
 // which is the losslessness equation itself, and needs no ordering assumption:
 // every offer is independent, so overlapping windows from competing providers
 // are handled without merging them first. Pairs with MOTIS_TD_RAW=1.
-template <direction SearchDir, typename Collection>
+template <direction SearchDir, typename Collection, typename Count = td_no_count>
 std::optional<std::pair<duration_t, typename Collection::value_type>>
-get_td_duration_raw_windows(Collection const& c, unixtime_t const t) {
+get_td_duration_raw_windows(Collection const& c,
+                            unixtime_t const t,
+                            Count&& count = {}) {
   using namespace std::chrono_literals;
   auto best =
       std::optional<std::pair<duration_t, typename Collection::value_type>>{};
   auto const b = cbegin(c), e = cend(c);
   for (auto i = b; i != e; ++i) {
+    count();
     if (i->duration_ == footpath::kMaxDuration) {
       continue;  // terminator: belongs to the offer that opened before it
     }
@@ -175,24 +200,17 @@ get_td_duration_raw_windows(Collection const& c, unixtime_t const t) {
   return best;
 }
 
-template <direction SearchDir, typename Collection>
+// Design A: first-hit lookup, valid only on a normalized sequence (N1).
+template <direction SearchDir, typename Collection, typename Count = td_no_count>
 std::optional<std::pair<duration_t, typename Collection::value_type>>
-get_td_duration(Collection const& c, unixtime_t const t) {
+get_td_duration_first(Collection const& c,
+                      unixtime_t const t,
+                      Count&& count = {}) {
   using namespace std::chrono_literals;
-
-#ifdef NIGIRI_TD_RAW_WINDOW_LOOKUP
-  return get_td_duration_raw_windows<SearchDir>(c, t);
-#elif defined(NIGIRI_TD_EXHAUSTIVE_LOOKUP)
-  // Measurement variant: evaluate alpha_tilde exhaustively instead of relying
-  // on (N1). Correct on a lossless sequence even without FIFO repair, so it
-  // pairs with MOTIS_TD_NO_FIFO_REPAIR=1 to measure the alternative design --
-  // cheaper construction, more expensive evaluation. Compile-time so neither
-  // arm carries a branch for the other.
-  return get_td_duration_scan<SearchDir>(c, t);
-#else
 
   if constexpr (SearchDir == direction::kForward) {
     for (auto i = cbegin(c); i != cend(c); ++i) {
+      count();
       if (i->duration_ == footpath::kMaxDuration ||
           (i->valid_from_ < t && (i + 1) != cend(c) &&
            (i + 1)->valid_from_ <= t)) {
@@ -208,6 +226,7 @@ get_td_duration(Collection const& c, unixtime_t const t) {
 
   } else /* (SearchDir == direction::kBackward) */ {
     for (auto i = crbegin(c); i != crend(c); ++i) {
+      count();
       if (i->duration_ == footpath::kMaxDuration ||
           i->valid_from_ + i->duration_ > t) {
         continue;
@@ -228,6 +247,27 @@ get_td_duration(Collection const& c, unixtime_t const t) {
   }
 
   return std::nullopt;
+}
+
+template <direction SearchDir, typename Collection>
+std::optional<std::pair<duration_t, typename Collection::value_type>>
+get_td_duration(Collection const& c, unixtime_t const t) {
+#ifdef NIGIRI_TD_TRACE
+  if (td_trace_hook != nullptr && cbegin(c) != cend(c)) {
+    td_trace_hook(td_trace_ctx, &*cbegin(c), SearchDir, t);
+  }
+#endif
+#ifdef NIGIRI_TD_RAW_WINDOW_LOOKUP
+  return get_td_duration_raw_windows<SearchDir>(c, t);
+#elif defined(NIGIRI_TD_EXHAUSTIVE_LOOKUP)
+  // Measurement variant: evaluate alpha_tilde exhaustively instead of relying
+  // on (N1). Correct on a lossless sequence even without FIFO repair, so it
+  // pairs with MOTIS_TD_NO_FIFO_REPAIR=1 to measure the alternative design --
+  // cheaper construction, more expensive evaluation. Compile-time so neither
+  // arm carries a branch for the other.
+  return get_td_duration_scan<SearchDir>(c, t);
+#else
+  return get_td_duration_first<SearchDir>(c, t);
 #endif
 }
 
