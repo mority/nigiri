@@ -44,10 +44,8 @@ struct td_footpath {
   duration_t duration_;
 };
 
-// Exhaustive evaluation of alpha_tilde, kept as a test oracle. The fast path
-// below returns on the first non-superseded entry, which is only valid on a
-// sequence satisfying (N1); this one checks every window and keeps the best, so
-// tests can assert the two agree. Not used in production.
+// Exhaustive evaluation of alpha_tilde over a sorted step function, kept as a
+// test oracle and for td-replay. Not used in production.
 template <direction SearchDir, typename It, typename Count = td_no_count>
 std::optional<std::pair<duration_t, typename std::iterator_traits<It>::value_type>>
 scan_range(It const b, It const e, unixtime_t const t, Count&& count = {}) {
@@ -132,7 +130,7 @@ get_td_duration_scan(Collection const& c,
                                std::forward<Count>(count));
 }
 
-// Design D (NIGIRI_TD_RAW_WINDOW_LOOKUP): evaluate the producers' windows
+// Default lookup (get_td_duration): evaluate the producers' windows
 // directly, with no step function in between.
 //
 // GTFS-Flex delivers per stop_times row a pickup/drop-off window and a
@@ -147,7 +145,13 @@ get_td_duration_scan(Collection const& c,
 //
 // which is the losslessness equation itself, and needs no ordering assumption:
 // every offer is independent, so overlapping windows from competing providers
-// are handled without merging them first. Pairs with MOTIS_TD_RAW=1.
+// are handled without merging them first. The result is FIFO by construction
+// (a minimum of non-decreasing arrival functions), so no normalization or FIFO
+// repair is needed.
+//
+// Each finite entry is read as valid until the next element. On a sorted step
+// function (td footpaths, or a sequence that was normalized anyway) that is
+// exactly the step semantics, so this lookup is correct for those as well.
 template <direction SearchDir, typename Collection, typename Count = td_no_count>
 std::optional<std::pair<duration_t, typename Collection::value_type>>
 get_td_duration_raw_windows(Collection const& c,
@@ -200,7 +204,8 @@ get_td_duration_raw_windows(Collection const& c,
   return best;
 }
 
-// Design A: first-hit lookup, valid only on a normalized sequence (N1).
+// First-hit lookup, valid only on a normalized sequence (N1). Was the default
+// before the raw-window lookup; kept for td-replay and tests.
 template <direction SearchDir, typename Collection, typename Count = td_no_count>
 std::optional<std::pair<duration_t, typename Collection::value_type>>
 get_td_duration_first(Collection const& c,
@@ -257,18 +262,7 @@ get_td_duration(Collection const& c, unixtime_t const t) {
     td_trace_hook(td_trace_ctx, &*cbegin(c), SearchDir, t);
   }
 #endif
-#ifdef NIGIRI_TD_RAW_WINDOW_LOOKUP
   return get_td_duration_raw_windows<SearchDir>(c, t);
-#elif defined(NIGIRI_TD_EXHAUSTIVE_LOOKUP)
-  // Measurement variant: evaluate alpha_tilde exhaustively instead of relying
-  // on (N1). Correct on a lossless sequence even without FIFO repair, so it
-  // pairs with MOTIS_TD_NO_FIFO_REPAIR=1 to measure the alternative design --
-  // cheaper construction, more expensive evaluation. Compile-time so neither
-  // arm carries a branch for the other.
-  return get_td_duration_scan<SearchDir>(c, t);
-#else
-  return get_td_duration_first<SearchDir>(c, t);
-#endif
 }
 
 template <typename Collection>
