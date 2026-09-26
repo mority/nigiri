@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <chrono>
 #include <span>
 
 #include "nigiri/common/delta_t.h"
@@ -1034,8 +1035,11 @@ private:
           return;
         }
         ++stats_.n_td_offsets_evaluated_;
+        auto const td_t0 = std::chrono::steady_clock::now();
         auto const fp =
             get_td_duration<SearchDir>(it->second, to_unix(fp_start_time));
+        stats_.td_offsets_eval_ns_ += static_cast<std::uint64_t>(
+            (std::chrono::steady_clock::now() - td_t0).count());
         if (fp.has_value()) {
           auto const& [duration, _] = *fp;
           auto const end_time = clamp(fp_start_time + dir(duration.count()));

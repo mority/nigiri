@@ -40,7 +40,10 @@ void get_starts(
     transfer_time_settings const&,
     // counts how often a time-dependent offset sequence was read while
     // generating the start labels (evaluation instrumentation, optional)
-    std::uint64_t* n_td_evaluated = nullptr);
+    std::uint64_t* n_td_evaluated = nullptr,
+    // accumulates the time spent in those reads (steady_clock, two reads per
+    // evaluation, so an upper bound of the lookup itself), nanoseconds
+    std::uint64_t* td_eval_ns = nullptr);
 
 void collect_destinations(timetable const&,
                           std::vector<offset> const& destinations,

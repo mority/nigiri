@@ -23,6 +23,7 @@ struct raptor_stats {
          route_update_prevented_by_lower_bound_},
         {"n_td_offsets_evaluated", n_td_offsets_evaluated_},
         {"n_td_offsets_updated", n_td_offsets_updated_},
+        {"td_offsets_eval_ns", td_offsets_eval_ns_},
         {"n_td_footpaths_visited", n_td_footpaths_visited_},
     };
   }
@@ -43,6 +44,7 @@ struct raptor_stats {
         o.route_update_prevented_by_lower_bound_;
     copy.n_td_offsets_evaluated_ += o.n_td_offsets_evaluated_;
     copy.n_td_offsets_updated_ += o.n_td_offsets_updated_;
+    copy.td_offsets_eval_ns_ += o.td_offsets_eval_ns_;
     copy.n_td_footpaths_visited_ += o.n_td_footpaths_visited_;
     return copy;
   }
@@ -61,6 +63,9 @@ struct raptor_stats {
   // The GPU implementation does not maintain these.
   std::uint64_t n_td_offsets_evaluated_{0ULL};
   std::uint64_t n_td_offsets_updated_{0ULL};
+  // Time spent in those reads, nanoseconds. Two steady_clock reads per
+  // evaluation are included, so this is an upper bound of the lookup itself.
+  std::uint64_t td_offsets_eval_ns_{0ULL};
   // Time-dependent footpaths relaxed in the transfer phase; a subset of
   // n_footpaths_visited_, which counts static and time-dependent alike.
   std::uint64_t n_td_footpaths_visited_{0ULL};
