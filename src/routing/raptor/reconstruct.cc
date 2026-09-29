@@ -27,12 +27,17 @@ bool is_journey_start(timetable const& tt,
   });
 }
 
+// Thrown instead of utl::fail (which logs) when looking for alternatives:
+// running out of combinations is the regular end, not an error.
+struct no_journey {};
+
 template <direction SearchDir, via_offset_t Vias>
 std::optional<journey::leg> find_start_footpath(timetable const& tt,
                                                 query const& q,
                                                 journey const& j,
                                                 raptor_state const& state,
-                                                date::sys_days const base) {
+                                                date::sys_days const base,
+                                                bool const quiet = false) {
   trace_rc_find_start_footpath;
 
   constexpr auto const kFwd = SearchDir == direction::kForward;
@@ -156,8 +161,23 @@ std::optional<journey::leg> find_start_footpath(timetable const& tt,
     }
   }
 
+  if (quiet) {
+    throw no_journey{};
+  }
   throw utl::fail("no valid journey start found");
 }
+
+// Reconstruction takes the first fitting (footpath, transport, entry stop)
+// for each transit leg, starting with the last leg of the search.
+// choices::skip_[i] = number of fitting combinations to pass over for the
+// i-th transit leg reconstructed -> a different journey with the same
+// criteria.
+struct choices {
+  static constexpr auto const kStart = kMaxTransfers + 2U;
+
+  std::array<std::uint16_t, kMaxTransfers + 2U> skip_{};
+  unsigned depth_{0U};  // leg in progress, kStart = start of the journey
+};
 
 template <direction SearchDir, via_offset_t Vias>
 void reconstruct_journey_with_vias(timetable const& tt,
@@ -166,7 +186,8 @@ void reconstruct_journey_with_vias(timetable const& tt,
                                    raptor_state const& raptor_state,
                                    journey& j,
                                    date::sys_days const base,
-                                   day_idx_t const base_day_idx) {
+                                   day_idx_t const base_day_idx,
+                                   choices* const c = nullptr) {
   constexpr auto const kFwd = SearchDir == direction::kForward;
   auto const dir = [&]<typename T>(T const a) {
     return static_cast<T>((kFwd ? 1 : -1) * a);
@@ -183,6 +204,65 @@ void reconstruct_journey_with_vias(timetable const& tt,
   auto const round_times = raptor_state.get_round_times<Vias>();
 
   auto v = static_cast<via_offset_t>(q.via_stops_.size());
+  auto skip = 0U;
+
+  // Extra slot: follow the times of the labels, not the best times of the
+  // stops. For journeys from the extra slot, and for all journeys when
+  // looking for alternatives: the later label of a stop where a trip is
+  // entered is a way to this trip as well.
+  constexpr auto const kInvalid = kInvalidDelta<SearchDir>;
+  auto const extra_slot =
+      raptor_state.has_extra_slot() && (j.slot_ != 0U || c != nullptr);
+  auto label_time = unix_to_delta(base, j.dest_time_);  // label in progress
+  auto entry_time = kInvalid;  // label the transport leg starts from
+  auto const get_label_time = [&](unsigned const k, location_idx_t const l) {
+    return extra_slot ? label_time : round_times[k][to_idx(l)][v];
+  };
+  // A label takes the earliest trip it can get.
+  auto const takes = [&](delta_t const label, rt::run const& r,
+                         stop_idx_t const stop_idx, location_idx_t) {
+    if (!r.is_scheduled()) {
+      return false;
+    }
+    // = raptor::get_earliest_transport without the bound
+    auto const route = tt.transport_route_[r.t_.t_idx_];
+    auto const [day_at_stop, mam_at_stop] = split_day_mam(base_day_idx, label);
+    auto const event_times = tt.event_times_at_stop(
+        route, stop_idx, kFwd ? event_type::kDep : event_type::kArr);
+    auto const n = static_cast<int>(event_times.size());
+    auto const n_days = kMaxTravelTime / std::chrono::days{1} + 1;
+    for (auto i = 0; i != n_days; ++i) {
+      auto const day = kFwd ? day_at_stop + i : day_at_stop - i;
+      if (!tt.is_route_active(route, day)) {
+        continue;
+      }
+      for (auto e = 0; e != n; ++e) {
+        auto const t_offset = static_cast<std::size_t>(kFwd ? e : n - 1 - e);
+        auto const ev = event_times[t_offset];
+        if (i == 0 && !is_better_or_eq(mam_at_stop.count(), ev.mam())) {
+          continue;
+        }
+        auto const t = tt.route_transport_ranges_[route][t_offset];
+        auto const start_day = static_cast<day_idx_t>(
+            static_cast<int>(to_idx(day)) - ev.days());
+        if (!tt.is_transport_active(t, start_day)) {
+          continue;
+        }
+        return transport{t, start_day} == r.t_;
+      }
+    }
+    return false;
+  };
+
+  auto const is_blocked = [&](location_idx_t const l) {
+    return raptor_state.blocked_locations_.size() == tt.n_locations() &&
+           raptor_state.blocked_locations_.test(to_idx(l));
+  };
+
+  auto const is_route_blocked = [&](route_idx_t const r) {
+    return raptor_state.blocked_routes_.size() == tt.n_routes() &&
+           raptor_state.blocked_routes_.test(to_idx(r));
+  };
 
   auto const find_start_in_prev_round =
       [&](unsigned const k, rt::run const& r, stop_idx_t const finish_stop_idx,
@@ -250,7 +330,7 @@ void reconstruct_journey_with_vias(timetable const& tt,
         }
 
         if ((kFwd && !stp.in_allowed(is_wheelchair)) ||
-            (!kFwd && !stp.out_allowed(is_wheelchair))) {
+            (!kFwd && !stp.out_allowed(is_wheelchair)) || is_blocked(l)) {
           ride_through(l);
           continue;
         }
@@ -263,6 +343,35 @@ void reconstruct_journey_with_vias(timetable const& tt,
             continue;
           }
 
+          if (extra_slot) {
+            auto const best = round_times[k - 1][to_idx(l)][s];
+            auto const d = raptor_state.round_delta(k - 1U, to_idx(l));
+            auto const later =
+                d == 0U || best == kInvalid
+                    ? kInvalid
+                    : static_cast<delta_t>(best + dir(static_cast<int>(d)));
+            for (auto const label : {best, later}) {
+              if (label == kInvalid || !is_better_or_eq(label, event_time) ||
+                  !takes(label, r, stop_idx, l)) {
+                continue;
+              }
+              if (skip != 0U) {
+                --skip;
+                continue;
+              }
+              entry_time = label;
+              return journey::leg{
+                  SearchDir,
+                  fr[stop_idx].get_location_idx(),
+                  fr[finish_stop_idx].get_location_idx(),
+                  delta_to_unix(base, event_time),
+                  fr[finish_stop_idx].time(kFwd ? event_type::kArr
+                                                : event_type::kDep),
+                  journey::run_enter_exit{r, stop_idx, finish_stop_idx}};
+            }
+            continue;
+          }
+
           auto const round_time = round_times[k - 1][to_idx(l)][s];
           if (is_better_or_eq(round_time, event_time) ||
               // special case: first stop with meta stations
@@ -270,6 +379,10 @@ void reconstruct_journey_with_vias(timetable const& tt,
                q.start_match_mode_ == location_match_mode::kEquivalent &&
                is_journey_start(tt, q, l) &&
                start_matches(round_time, event_time))) {
+            if (skip != 0U) {
+              --skip;
+              continue;
+            }
             trace_rc_transport_entry_found;
             v = s;
             return journey::leg{
@@ -378,6 +491,10 @@ void reconstruct_journey_with_vias(timetable const& tt,
           bool const is_td_footpath) -> std::optional<journey::leg> {
     trace_reconstruct(" time={}\n", delta_to_unix(base, time));
 
+    if (is_blocked(l)) {
+      return std::nullopt;
+    }
+
     if (rtt != nullptr) {
       for (auto const& rt_t : rtt->location_rt_transports_[l]) {
         if (!is_allowed(q.allowed_claszes_,
@@ -454,7 +571,8 @@ void reconstruct_journey_with_vias(timetable const& tt,
     }
 
     for (auto const& r : tt.location_routes_[l]) {
-      if (!is_allowed(q.allowed_claszes_, tt.route_clasz_[r])) {
+      if (!is_allowed(q.allowed_claszes_, tt.route_clasz_[r]) ||
+          is_route_blocked(r)) {
         continue;
       }
 
@@ -660,7 +778,7 @@ void reconstruct_journey_with_vias(timetable const& tt,
     }
 
     auto ret = std::optional<std::pair<journey::leg, journey::leg>>{};
-    auto const curr_time = round_times[k][to_idx(l)][v];
+    auto const curr_time = get_label_time(k, l);
     for_each_meta(tt, location_match_mode::kIntermodal, dest_offset.target_,
                   [&](location_idx_t const eq) {
                     auto intermodal_dest =
@@ -682,7 +800,7 @@ void reconstruct_journey_with_vias(timetable const& tt,
   auto const get_legs =
       [&](unsigned const k,
           location_idx_t const l) -> std::pair<journey::leg, journey::leg> {
-    auto const curr_time = round_times[k][to_idx(l)][v];
+    auto const curr_time = get_label_time(k, l);
     trace_reconstruct("get_legs: k={}, v={}, l={}, curr_time={}\n", k, v,
                       loc{tt, l}, delta_to_unix(base, curr_time));
 
@@ -735,6 +853,9 @@ void reconstruct_journey_with_vias(timetable const& tt,
           k, j.transfers_, v, loc{tt, l}, delta_to_unix(base, curr_time),
           j.start_time_, j.dest_time_);
 
+      if (c != nullptr) {
+        throw no_journey{};
+      }
       throw utl::fail(
           "intermodal destination reconstruction failed at k={}, t={}, v={}, "
           "stop={}, time={}",
@@ -791,6 +912,9 @@ void reconstruct_journey_with_vias(timetable const& tt,
       }
     }
 
+    if (c != nullptr) {
+      throw no_journey{};
+    }
     throw utl::fail(
         "reconstruction failed at k={}, t={}, v={}, stop={}, time={}", k,
         j.transfers_, v, loc{tt, l}, delta_to_unix(base, curr_time));
@@ -800,8 +924,13 @@ void reconstruct_journey_with_vias(timetable const& tt,
   for (auto i = 0U; i <= j.transfers_; ++i) {
     auto const k = j.transfers_ + 1 - i;
     trace_reconstruct("RECONSTRUCT WITH k={}\n", k);
+    if (c != nullptr) {
+      c->depth_ = i;
+      skip = c->skip_[i];
+    }
     auto [fp_leg, transport_leg] = get_legs(k, l);
     l = kFwd ? transport_leg.from_ : transport_leg.to_;
+    label_time = entry_time;
     // don't add a 0-minute footpath at the end (fwd) or beginning (bwd)
     if (i != 0 || fp_leg.from_ != fp_leg.to_ ||
         fp_leg.dep_time_ != fp_leg.arr_time_) {
@@ -810,8 +939,12 @@ void reconstruct_journey_with_vias(timetable const& tt,
     j.add(std::move(transport_leg));
   }
 
+  if (c != nullptr) {
+    c->depth_ = choices::kStart;
+  }
   auto init_fp =
-      find_start_footpath<SearchDir, Vias>(tt, q, j, raptor_state, base);
+      find_start_footpath<SearchDir, Vias>(tt, q, j, raptor_state, base,
+                                           c != nullptr);
   if (init_fp.has_value()) {
     j.add(std::move(*init_fp));
   }
@@ -900,6 +1033,226 @@ void reconstruct_journey(timetable const& tt,
   }
   std::unreachable();
 }
+
+template <direction SearchDir>
+alternatives_stats reconstruct_alternatives(
+    timetable const& tt,
+    rt_timetable const* rtt,
+    query const& q,
+    raptor_state const& raptor_state,
+    journey const& j,
+    unsigned const n,
+    std::vector<journey>& alternatives,
+    date::sys_days const base,
+    day_idx_t const base_day_idx) {
+  static_assert(kMaxVias == 2,
+                "reconstruct.cc needs to be adjusted for kMaxVias");
+  constexpr auto const kFwd = SearchDir == direction::kForward;
+  constexpr auto const kMaxAttemptsPerOption = 64U;
+
+  using trips_t = std::vector<rt::run>;
+  auto const get_trips = [](journey const& x) {
+    auto trips = trips_t{};
+    for (auto const& l : x.legs_) {
+      if (holds_alternative<journey::run_enter_exit>(l.uses_)) {
+        auto r = get<journey::run_enter_exit>(l.uses_).r_;
+        r.stop_range_ = {};
+        trips.push_back(r);
+      }
+    }
+    return trips;
+  };
+  auto const equal = [](trips_t const& a, trips_t const& b) {
+    return a.size() == b.size() &&
+           std::equal(begin(a), end(a), begin(b),
+                      [](rt::run const& x, rt::run const& y) {
+                        return x.t_ == y.t_ && x.rt_ == y.rt_;
+                      });
+  };
+
+  auto stats = alternatives_stats{};
+  auto known = std::vector<trips_t>{get_trips(j)};
+  auto const is_pretrip = !holds_alternative<unixtime_t>(q.start_time_);
+  auto const first_event = [](journey const& x) {
+    return kFwd ? x.legs_.front().dep_time_ : x.legs_.back().arr_time_;
+  };
+
+  enum class outcome { kNew, kKnown, kNoStart, kNoOption };
+
+  // Reconstructs with the given counters. kNoOption: c.depth_ = leg without
+  // a further fitting combination.
+  auto const attempt = [&](choices& c, location_idx_t const dest) {
+    ++stats.n_attempts_;
+    auto alt = journey{.legs_ = {},
+                       .start_time_ = j.start_time_,
+                       .dest_time_ = j.dest_time_,
+                       .dest_ = dest,
+                       .transfers_ = j.transfers_,
+                       .slot_ = j.slot_};
+    try {
+      switch (q.via_stops_.size()) {
+        case 0:
+          reconstruct_journey_with_vias<SearchDir, 0>(
+              tt, rtt, q, raptor_state, alt, base, base_day_idx, &c);
+          break;
+        case 1:
+          reconstruct_journey_with_vias<SearchDir, 1>(
+              tt, rtt, q, raptor_state, alt, base, base_day_idx, &c);
+          break;
+        case 2:
+          reconstruct_journey_with_vias<SearchDir, 2>(
+              tt, rtt, q, raptor_state, alt, base, base_day_idx, &c);
+          break;
+      }
+    } catch (no_journey const&) {
+      ++stats.n_failed_;
+      return c.depth_ == choices::kStart ? outcome::kNoStart
+                                         : outcome::kNoOption;
+    }
+
+    // journeys of a later start time belong to the result of that start time
+    if (is_pretrip && first_event(alt) != first_event(j)) {
+      ++stats.n_failed_;
+      return outcome::kNoStart;
+    }
+
+    auto trips = get_trips(alt);
+    if (utl::any_of(known,
+                    [&](trips_t const& x) { return equal(x, trips); })) {
+      ++stats.n_duplicates_;
+      return outcome::kKnown;
+    }
+    alt.alternative_ = static_cast<std::uint8_t>(known.size());
+    known.emplace_back(std::move(trips));
+    alternatives.emplace_back(std::move(alt));
+    return outcome::kNew;
+  };
+
+  auto const n_legs = static_cast<unsigned>(j.transfers_) + 1U;
+
+  // The destination can have several stops: all of them that are reached at
+  // the time of the journey, the one of the journey first.
+  auto dests = std::vector<location_idx_t>{j.dest_};
+  if (q.dest_match_mode_ != location_match_mode::kIntermodal &&
+      q.via_stops_.empty()) {
+    auto const round_times = raptor_state.get_round_times<0U>();
+    auto const time = unix_to_delta(base, j.dest_time_);
+    for (auto const& o : q.destination_) {
+      for_each_meta(tt, q.dest_match_mode_, o.target(),
+                    [&](location_idx_t const l) {
+                      auto const best = round_times[n_legs][to_idx(l)][0];
+                      auto const d = raptor_state.has_extra_slot()
+                                         ? raptor_state.round_delta(
+                                               n_legs, to_idx(l))
+                                         : std::uint8_t{0U};
+                      auto const reached =
+                          best != kInvalidDelta<SearchDir> &&
+                          (best == time ||
+                           (d != 0U &&
+                            best + (kFwd ? 1 : -1) * static_cast<int>(d) ==
+                                time));
+                      if (reached && utl::find(dests, l) == end(dests)) {
+                        dests.push_back(l);
+                      }
+                    });
+    }
+  }
+
+  if (q.alternatives_tree_) {
+    // All combinations of the first n fitting combinations of each leg,
+    // depth first, leg next to the start of the search first.
+    auto c = choices{};
+    // next combination at leg d, false = all combinations seen
+    auto const next = [&](unsigned d) {
+      while (true) {
+        std::fill(begin(c.skip_) + d + 1U, end(c.skip_), 0U);
+        if (++c.skip_[d] < n) {
+          return true;
+        }
+        c.skip_[d] = 0U;
+        if (d == 0U) {
+          return false;
+        }
+        --d;
+      }
+    };
+    // no further combination at leg d -> next one at the leg before
+    auto const leave = [&](unsigned const d) {
+      std::fill(begin(c.skip_) + d, end(c.skip_), 0U);
+      return d != 0U && next(d - 1U);
+    };
+
+    for (auto const dest : dests) {
+      c = choices{};
+      // the first combination at the stop of the journey is the journey
+      auto more = dest != j.dest_ || next(n_legs - 1U);
+      while (more) {
+        if (known.size() > kMaxAlternativesPerResult ||
+            stats.n_attempts_ >= kMaxAlternativeAttempts) {
+          ++stats.n_capped_;
+          return stats;
+        }
+        more = attempt(c, dest) == outcome::kNoOption ? leave(c.depth_)
+                                                      : next(n_legs - 1U);
+      }
+    }
+    return stats;
+  }
+
+  // One leg at a time, the leg next to the destination of the search first:
+  // pass over s = 1, 2, ... fitting combinations at this leg, take the first
+  // one at every other leg.
+  for (auto leg = 0U; leg != n_legs; ++leg) {
+    auto found = 1U;  // option taken by j
+    // other stops of the destination are options of the last leg
+    for (auto const dest : dests) {
+      if (dest != j.dest_ && leg != 0U) {
+        break;
+      }
+      for (auto s = dest == j.dest_ ? 1U : 0U; found < n; ++s) {
+        if (s == n * kMaxAttemptsPerOption) {
+          ++stats.n_capped_;
+          break;
+        }
+        auto c = choices{};
+        c.skip_[leg] = static_cast<std::uint16_t>(s);
+        auto const o = attempt(c, dest);
+        if (o == outcome::kNoOption && c.depth_ == leg) {
+          break;  // no further combination at this leg
+        }
+        if (o == outcome::kNew) {
+          ++found;
+          stats.min_skip_ = stats.min_skip_ == 0U
+                                ? s
+                                : std::min(stats.min_skip_, std::uint64_t{s});
+        }
+      }
+    }
+  }
+  return stats;
+}
+
+template alternatives_stats reconstruct_alternatives<direction::kForward>(
+    timetable const&,
+    rt_timetable const*,
+    query const&,
+    raptor_state const&,
+    journey const&,
+    unsigned,
+    std::vector<journey>&,
+    date::sys_days const,
+    day_idx_t const);
+
+template alternatives_stats reconstruct_alternatives<direction::kBackward>(
+    timetable const&,
+    rt_timetable const*,
+    query const&,
+    raptor_state const&,
+    journey const&,
+    unsigned,
+    std::vector<journey>&,
+    date::sys_days const,
+    day_idx_t const);
 
 template void reconstruct_journey<direction::kForward>(timetable const&,
                                                        rt_timetable const*,

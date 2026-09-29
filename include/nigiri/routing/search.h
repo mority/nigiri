@@ -327,8 +327,8 @@ struct search {
                                          state_.results_);
 
       utl::sort(state_.results_, [](journey const& a, journey const& b) {
-        return std::tuple{a.start_time_, a.transfers_} <
-               std::tuple{b.start_time_, b.transfers_};
+        return std::tuple{a.start_time_, a.transfers_, a.alternative_} <
+               std::tuple{b.start_time_, b.transfers_, b.alternative_};
       });
     }
 
@@ -380,11 +380,15 @@ private:
   unsigned n_results_in_interval() const {
     if (holds_alternative<interval<unixtime_t>>(q_.start_time_)) {
       auto count = utl::count_if(state_.results_, [&](journey const& j) {
-        return search_interval_.contains(j.start_time_);
+        return j.alternative_ == 0U &&
+               search_interval_.contains(j.start_time_);
       });
       return static_cast<unsigned>(count);
     } else {
-      return static_cast<unsigned>(state_.results_.size());
+      return static_cast<unsigned>(
+          utl::count_if(state_.results_, [&](journey const& j) {
+            return j.alternative_ == 0U;
+          }));
     }
   }
 
@@ -454,12 +458,25 @@ private:
                         state_.results_);
           kFwd ? ++stats_.n_execute_fwd_ : ++stats_.n_execute_bwd_;
 
+          // (index of the journey, its alternatives)
+          auto alternatives =
+              std::vector<std::pair<std::size_t, std::vector<journey>>>{};
           for (auto& j : state_.results_) {
             if (!j.is_reconstructed_ && !j.error_ &&
                 (is_ontrip() || search_interval_.contains(j.start_time_)) &&
                 j.travel_time() < fastest_direct_) {
               try {
                 algo_.reconstruct(q_, j);
+                if constexpr (requires(std::vector<journey>& v) {
+                                algo_.reconstruct_alternatives(q_, j, v);
+                              }) {
+                  if (q_.n_alternatives_ > 1U && j.is_reconstructed_) {
+                    auto& alt = alternatives.emplace_back(
+                        static_cast<std::size_t>(&j - &*begin(state_.results_)),
+                        std::vector<journey>{});
+                    algo_.reconstruct_alternatives(q_, j, alt.second);
+                  }
+                }
               } catch (std::exception const& e) {
                 j.error_ = true;
                 log(log_lvl::error, "search", "reconstruct failed: {}",
@@ -472,6 +489,16 @@ private:
                       fmt::format("reconstruct failed: {}", e.what())}});
               }
             }
+          }
+
+          // alternatives follow their journey
+          for (auto it = rbegin(alternatives); it != rend(alternatives);
+               ++it) {
+            auto& els = state_.results_.els_;
+            els.insert(std::next(begin(els),
+                                 static_cast<std::ptrdiff_t>(it->first + 1U)),
+                       std::make_move_iterator(begin(it->second)),
+                       std::make_move_iterator(end(it->second)));
           }
 
           if (q_.min_connection_count_ > 0 &&

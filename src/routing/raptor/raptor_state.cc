@@ -24,7 +24,22 @@ raptor_state& raptor_state::resize(unsigned const n_locations,
   prev_station_mark_.resize(n_locations);
   route_mark_.resize(n_routes);
   rt_transport_mark_.resize(n_rt_transports);
+  sb_top_.resize(n_locations);
+  sb_second_.resize(n_locations);
+  sb_evicted_.resize(n_locations);
   return *this;
+}
+
+void raptor_state::resize_extra_slot() {
+  tmp_delta_.resize(n_locations_);
+  best_delta_.resize(n_locations_);
+  round_delta_.resize(n_locations_ * (kMaxTransfers + 2U));
+}
+
+void raptor_state::clear_extra_slot() {
+  tmp_delta_.clear();
+  best_delta_.clear();
+  round_delta_.clear();
 }
 
 template <via_offset_t Vias>

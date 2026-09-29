@@ -25,8 +25,12 @@ enum class search_mode { kOneToOne, kOneToAll };
 template <direction SearchDir,
           bool Rt,
           via_offset_t Vias,
-          search_mode SearchMode>
+          search_mode SearchMode,
+          bool ExtraSlot = false>
 struct raptor {
+  static_assert(!ExtraSlot ||
+                (!Rt && Vias == 0U && SearchMode == search_mode::kOneToOne));
+
   using algo_state_t = raptor_state;
   using algo_stats_t = raptor_stats;
 
@@ -43,6 +47,20 @@ struct raptor {
     a.fill(kInvalid);
     return a;
   }();
+
+  // Second best statistics: count label times that are rejected only because
+  // a stop keeps a single label. Observes, does not change the search.
+  // compile with -DNIGIRI_SECOND_BEST_STATS to count
+#if defined(NIGIRI_SECOND_BEST_STATS)
+  static constexpr bool kSecondBestStats =
+      !ExtraSlot && Vias == 0U && SearchMode == search_mode::kOneToOne;
+#else
+  static constexpr bool kSecondBestStats = false;
+#endif
+  static constexpr auto const kMaxSlotDelta = 255;
+  static constexpr auto const kInvalidTop2 =
+      top2{.t_ = {kInvalid, kInvalid}, .k_ = {0U, 0U}};
+  enum class sb_rank : std::uint8_t { kFirst, kSecond, kWorse, kEqual };
 
   static bool is_better(auto a, auto b) { return kFwd ? a < b : a > b; }
   static bool is_better_or_eq(auto a, auto b) { return kFwd ? a <= b : a >= b; }
@@ -95,8 +113,18 @@ struct raptor {
         require_car_transport_{require_car_transport},
         no_compulsory_reservation_{no_compulsory_reservation},
         is_wheelchair_{is_wheelchair},
-        transfer_time_settings_{tts} {
+        transfer_time_settings_{tts},
+        block_routes_{n_routes_ != 0U &&
+                      state_.blocked_routes_.size() == n_routes_},
+        block_locations_{state_.blocked_locations_.size() == n_locations_} {
     assert(Vias == via_stops_.size());
+    if constexpr (ExtraSlot) {
+      utl::verify(td_dist_to_end_.empty(),
+                  "extra slot: td offsets not supported");
+      state_.resize_extra_slot();
+    } else {
+      state_.clear_extra_slot();
+    }
     reset_arrivals();
     if (!dist_to_end_.empty()) {
       // only used for intermodal queries (dist_to_dest != empty)
@@ -174,11 +202,24 @@ struct raptor {
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
     round_times_.reset(kInvalidArray);
+    if constexpr (ExtraSlot) {
+      utl::fill(state_.round_delta_, std::uint8_t{0U});
+      utl::fill(dest_round_best_, kInvalid);
+      utl::fill(dest_round_delta_, std::uint8_t{0U});
+    }
   }
 
   void next_start_time() {
+    if constexpr (kSecondBestStats) {
+      utl::fill(state_.sb_top_, kInvalidTop2);
+      dest_top_ = kInvalidTop2;
+    }
     utl::fill(best_, kInvalidArray);
     utl::fill(tmp_, kInvalidArray);
+    if constexpr (ExtraSlot) {
+      utl::fill(state_.best_delta_, std::uint8_t{0U});
+      utl::fill(state_.tmp_delta_, std::uint8_t{0U});
+    }
     utl::fill(state_.prev_station_mark_.blocks_, 0U);
     utl::fill(state_.station_mark_.blocks_, 0U);
     utl::fill(state_.route_mark_.blocks_, 0U);
@@ -209,6 +250,7 @@ struct raptor {
     auto const end_k = std::min(max_transfers, kMaxTransfers) + 2U;
 
     auto const d_worst_at_dest = unix_to_delta(base(), worst_time_at_dest);
+    worst_at_dest_ = d_worst_at_dest;
     for (auto& time_at_dest : time_at_dest_) {
       time_at_dest = get_best(d_worst_at_dest, time_at_dest);
     }
@@ -378,15 +420,28 @@ struct raptor {
       std::swap(state_.prev_station_mark_, state_.station_mark_);
       utl::fill(state_.station_mark_.blocks_, 0U);
 
-      update_transfers(k);
-      update_intermodal_footpaths(k);
-      update_footpaths(k);
-      update_td_offsets(k);
+      if constexpr (ExtraSlot) {
+        update_transfers_x(k);
+        update_intermodal_footpaths_x(k);
+        update_footpaths_x(k);
+      } else {
+        update_transfers(k);
+        update_intermodal_footpaths(k);
+        update_footpaths(k);
+        update_td_offsets(k);
+      }
 
       trace_print_state_after_round();
     }
 
     if constexpr (SearchMode == search_mode::kOneToAll) {
+      return;
+    }
+
+    sb_finish();
+
+    if constexpr (ExtraSlot) {
+      collect_x(start_time, end_k, results);
       return;
     }
 
@@ -422,6 +477,40 @@ struct raptor {
     reconstruct_journey<SearchDir>(tt_, rtt_, q, state_, j, base(), base_);
   }
 
+  void reconstruct_alternatives(query const& q,
+                                journey const& j,
+                                std::vector<journey>& alternatives) {
+    if constexpr (SearchMode == search_mode::kOneToAll) {
+      return;
+    }
+    auto const before = alternatives.size();
+    auto const t0 = std::chrono::steady_clock::now();
+    auto const s = routing::reconstruct_alternatives<SearchDir>(
+        tt_, rtt_, q, state_, j, q.n_alternatives_, alternatives, base(),
+        base_);
+    ++stats_.n_alt_results_;
+    stats_.n_alt_journeys_ += alternatives.size() - before;
+    stats_.n_alt_attempts_ += s.n_attempts_;
+    stats_.n_alt_failed_ += s.n_failed_;
+    stats_.n_alt_duplicates_ += s.n_duplicates_;
+    stats_.n_alt_capped_ += s.n_capped_;
+    if (s.min_skip_ == 1U) {
+      ++stats_.n_alt_min_skip_1_;
+    } else if (s.min_skip_ == 2U) {
+      ++stats_.n_alt_min_skip_2_;
+    } else if (s.min_skip_ == 3U) {
+      ++stats_.n_alt_min_skip_3_;
+    } else if (s.min_skip_ >= 4U && s.min_skip_ <= 7U) {
+      ++stats_.n_alt_min_skip_4_7_;
+    } else if (s.min_skip_ >= 8U) {
+      ++stats_.n_alt_min_skip_ge_8_;
+    }
+    stats_.n_alt_micros_ += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - t0)
+            .count());
+  }
+
 private:
   date::sys_days base() const {
     return tt_.internal_interval_days().from_ + as_int(base_) * date::days{1};
@@ -442,6 +531,157 @@ private:
       return lb_[i] != kUnreachable;
     } else {
       return true;
+    }
+  }
+
+  bool is_blocked(std::uint32_t const l) const {
+    return block_locations_ && state_.blocked_locations_.test(l);
+  }
+
+  static sb_rank sb_insert(top2& top, delta_t const x, unsigned const k) {
+    if (x == top.t_[0] || x == top.t_[1]) {
+      return sb_rank::kEqual;
+    }
+    if (is_better(x, top.t_[0])) {
+      top.t_[1] = top.t_[0];
+      top.k_[1] = top.k_[0];
+      top.t_[0] = x;
+      top.k_[0] = static_cast<std::uint8_t>(k);
+      return sb_rank::kFirst;
+    }
+    if (is_better(x, top.t_[1])) {
+      top.t_[1] = x;
+      top.k_[1] = static_cast<std::uint8_t>(k);
+      return sb_rank::kSecond;
+    }
+    return sb_rank::kWorse;
+  }
+
+  // labels of the search itself enter with round 0 = not from this round
+  void sb_sync_dest(delta_t const t) {
+    if (t != kInvalid && t != worst_at_dest_) {
+      sb_insert(dest_top_, t, 0U);
+    }
+  }
+
+  // pruning bound of a search with two labels per stop
+  delta_t sb_bound() const {
+    return dest_top_.t_[1] != kInvalid ? dest_top_.t_[1] : worst_at_dest_;
+  }
+
+  delta_t sb_label_time(std::uint32_t const l, delta_t const by_transport) {
+    return (!is_intermodal_dest() && is_dest_[l])
+               ? by_transport
+               : clamp(by_transport +
+                       dir(adjusted_transfer_time(
+                           transfer_time_settings_,
+                           tt_.locations_.transfer_time_[location_idx_t{l}]
+                               .count())));
+  }
+
+  // x_bound: time the search compares to the time at destination
+  // x_label: time the search would write as label at l
+  void observe(unsigned const k,
+               std::uint32_t const l,
+               delta_t const x_bound,
+               delta_t const x_label,
+               bool const is_dest) {
+    if constexpr (kSecondBestStats) {
+      if (x_label == kInvalid || bounds_last_k_ != 0U) {
+        return;
+      }
+      ++stats_.n_sb_candidates_;
+
+      sb_sync_dest(time_at_dest_[k]);
+      auto const passes = [&](delta_t const bound) {
+        return lb_reachable(l) && is_better_loose(x_bound, bound) &&
+               is_better_loose(x_bound + dir(get_lb(l)), bound);
+      };
+      auto const pruned = !passes(time_at_dest_[k]);
+      if (pruned && !passes(sb_bound())) {
+        return;
+      }
+      if (pruned) {
+        ++stats_.n_sb_bound_relaxed_;
+      }
+      if (is_dest) {
+        sb_insert(dest_top_, x_label, k);
+      }
+
+      auto& top = state_.sb_top_[l];
+      if (best_[l][Vias] != kInvalid) {
+        sb_insert(top, best_[l][Vias], 0U);
+      }
+      auto const evicts = top.t_[0] != kInvalid && top.k_[0] == k;
+      switch (sb_insert(top, x_label, k)) {
+        case sb_rank::kFirst:
+          if (evicts) {
+            ++stats_.n_sb_evicted_;
+            ++state_.sb_evicted_[l];
+          }
+          break;
+        case sb_rank::kSecond:
+          ++stats_.n_sb_second_;
+          ++state_.sb_second_[l];
+          break;
+        case sb_rank::kWorse: ++stats_.n_sb_worse_; break;
+        case sb_rank::kEqual: ++stats_.n_sb_equal_; break;
+      }
+    }
+  }
+
+  void observe_intermodal_dest(unsigned const k, delta_t const x) {
+    if constexpr (kSecondBestStats) {
+      if (x == kInvalid || bounds_last_k_ != 0U) {
+        return;
+      }
+      sb_sync_dest(time_at_dest_[k]);
+      if (is_better_loose(x, sb_bound())) {
+        sb_insert(dest_top_, x, k);
+      }
+    }
+  }
+
+  void sb_finish() {
+    if constexpr (kSecondBestStats) {
+      if (bounds_last_k_ != 0U) {
+        return;
+      }
+      ++stats_.n_sb_executes_;
+      sb_sync_dest(time_at_dest_.back());
+      if (dest_top_.t_[0] == kInvalid) {
+        return;
+      }
+      ++stats_.n_sb_dest_reached_;
+      if (dest_top_.t_[1] == kInvalid) {
+        return;
+      }
+      ++stats_.n_sb_dest_second_;
+      auto const delta = std::abs(dest_top_.t_[1] - dest_top_.t_[0]);
+      if (dest_top_.k_[0] != 0U && dest_top_.k_[1] != 0U) {
+        auto const le_15 = delta <= 15;
+        if (dest_top_.k_[1] == dest_top_.k_[0]) {
+          ++stats_.n_sb_dest_same_round_;
+          stats_.n_sb_dest_same_round_le_15_ += le_15;
+        } else if (dest_top_.k_[1] > dest_top_.k_[0]) {
+          ++stats_.n_sb_dest_more_transfers_;
+          stats_.n_sb_dest_more_transfers_le_15_ += le_15;
+        } else {
+          ++stats_.n_sb_dest_fewer_transfers_;
+          stats_.n_sb_dest_fewer_transfers_le_15_ += le_15;
+        }
+      }
+      if (delta <= 5) {
+        ++stats_.n_sb_dest_delta_le_5_;
+      } else if (delta <= 15) {
+        ++stats_.n_sb_dest_delta_le_15_;
+      } else if (delta <= 30) {
+        ++stats_.n_sb_dest_delta_le_30_;
+      } else if (delta <= 60) {
+        ++stats_.n_sb_dest_delta_le_60_;
+      } else {
+        ++stats_.n_sb_dest_delta_gt_60_;
+      }
     }
   }
 
@@ -497,6 +737,10 @@ private:
     auto any_marked = false;
     state_.route_mark_.for_each_set_bit([&](auto const r_idx) {
       auto const r = route_idx_t{r_idx};
+
+      if (block_routes_ && state_.blocked_routes_.test(r_idx)) {
+        return;
+      }
 
       if constexpr (WithClaszFilter) {
         if (!is_allowed(allowed_claszes_, tt_.route_clasz_[r])) {
@@ -787,6 +1031,10 @@ private:
                                                     fp.duration().count()) +
                              stay.count()));
 
+          // walking from destination to destination is no alternative
+          observe(k, target, fp_target_time, fp_target_time,
+                  !is_intermodal_dest() && is_dest_[target] && !is_dest_[i]);
+
           if (bounds_last_k_ == 0U &&
               is_better(fp_target_time, best_[target][target_v])) {
             round_times_[k][target][target_v] =
@@ -892,6 +1140,9 @@ private:
 
           auto const fp_target_time =
               clamp(tmp_time + dir(fp.duration().count() + stay.count()));
+
+          observe(k, target, fp_target_time, fp_target_time,
+                  !is_intermodal_dest() && is_dest_[target] && !is_dest_[i]);
 
           if (bounds_last_k_ == 0U &&
               is_better(fp_target_time, best_[target][target_v])) {
@@ -1007,6 +1258,7 @@ private:
         }
 
         auto const end_time = clamp(tmp_time + dir(dist_to_end_[i]));
+        observe_intermodal_dest(k, end_time);
 
         trace_upd(
             "┊ ├k={}, INTERMODAL FOOTPATH: ({}, tmp={}) --{}--> "
@@ -1037,6 +1289,7 @@ private:
         if (fp.has_value()) {
           auto const& [duration, _] = *fp;
           auto const end_time = clamp(fp_start_time + dir(duration.count()));
+          observe_intermodal_dest(k, end_time);
 
           if (is_better_loose(end_time, time_at_dest_[k]) &&
               is_better(end_time, best_[kIntermodalTarget][Vias])) {
@@ -1121,9 +1374,13 @@ private:
             rt_t, stop_idx, kFwd ? event_type::kArr : event_type::kDep);
         for (auto j = 0U; j != Vias + 1; ++j) {
           auto const v = Vias - j;
-          if (et[v] && stp.can_finish<SearchDir>(is_wheelchair_)) {
+          if (et[v] && stp.can_finish<SearchDir>(is_wheelchair_) &&
+              !is_blocked(l_idx)) {
             auto current_best = get_best(round_times_[k - 1][l_idx][v],
                                          tmp_[l_idx][v], best_[l_idx][v]);
+
+            observe(k, l_idx, by_transport, sb_label_time(l_idx, by_transport),
+                    !is_intermodal_dest() && is_dest_[l_idx]);
 
             if (is_better_loose(by_transport, time_at_dest_[k]) &&
                 lb_reachable(l_idx) &&
@@ -1158,7 +1415,7 @@ private:
       }
 
       if (is_last || !(stp.can_start<SearchDir>(is_wheelchair_)) ||
-          !state_.prev_station_mark_[l_idx]) {
+          !state_.prev_station_mark_[l_idx] || is_blocked(l_idx)) {
         continue;
       }
 
@@ -1179,6 +1436,12 @@ private:
             bool WithSectionWheelchairFilter,
             bool WithSectionReservationNotRequiredFilter>
   bool update_route(unsigned const k, route_idx_t const r) {
+    if constexpr (ExtraSlot) {
+      return update_route_x<WithSectionBikeFilter, WithSectionCarFilter,
+                            WithSectionWheelchairFilter,
+                            WithSectionReservationNotRequiredFilter>(k, r);
+    }
+
     auto const stop_seq = tt_.route_location_seq_[r];
     bool any_marked = false;
 
@@ -1249,7 +1512,8 @@ private:
           if (!ride.is_valid()) {
             continue;
           }
-          if (!stp.can_finish<SearchDir>(is_wheelchair_)) {
+          if (!stp.can_finish<SearchDir>(is_wheelchair_) ||
+              is_blocked(l_idx)) {
             trace(
                 "┊ │k={} cs={}    *** NO UPD: in_allowed={}, "
                 "out_allowed={}, label_allowed={}\n",
@@ -1267,6 +1531,8 @@ private:
 
           assert(by_transport != std::numeric_limits<delta_t>::min() &&
                  by_transport != std::numeric_limits<delta_t>::max());
+          observe(k, l_idx, by_transport, sb_label_time(l_idx, by_transport),
+                  !is_intermodal_dest() && is_dest_[l_idx]);
           if (is_better_loose(by_transport, time_at_dest_[k]) &&
               lb_reachable(l_idx) &&
               is_better_loose(by_transport + dir(get_lb(l_idx)),
@@ -1302,7 +1568,7 @@ private:
       }
 
       if (is_last || !stp.can_start<SearchDir>(is_wheelchair_) ||
-          !state_.prev_station_mark_[l_idx]) {
+          !state_.prev_station_mark_[l_idx] || is_blocked(l_idx)) {
         continue;
       }
 
@@ -1348,12 +1614,353 @@ private:
     return any_marked;
   }
 
+  // ===========
+  // EXTRA SLOT
+  // -----------
+  // A label is a pair (time, delta): best time and, if delta != 0, one later
+  // time = time +/- delta minutes. Round k keeps a later time x at a stop if
+  //   - round k wrote the best time b of the stop and b < x <= b + 255
+  //   - x is earlier than the best time of all rounds < k
+  //   - x is earlier than the later time kept so far
+  // Equal times are one time.
+
+  enum class slot : std::uint8_t { kNone, kBest, kSecond };
+
+  static delta_t second(delta_t const t, std::uint8_t const d) {
+    return d == 0U ? kInvalid : clamp(t + dir(static_cast<int>(d)));
+  }
+
+  static slot insert(delta_t& t, std::uint8_t& d, delta_t const x) {
+    if (x == kInvalid || x == t) {
+      return slot::kNone;
+    }
+    if (is_better(x, t)) {
+      auto const diff = t == kInvalid ? kMaxSlotDelta + 1 : std::abs(t - x);
+      d = diff <= kMaxSlotDelta ? static_cast<std::uint8_t>(diff) : 0U;
+      t = x;
+      return slot::kBest;
+    }
+    auto const diff = std::abs(x - t);
+    if (diff > kMaxSlotDelta || (d != 0U && diff >= d)) {
+      return slot::kNone;
+    }
+    d = static_cast<std::uint8_t>(diff);
+    return slot::kSecond;
+  }
+
+  // Latest useful arrival at the destination in round k.
+  delta_t dest_bound_x(unsigned const k) const {
+    auto bound = time_at_dest_[k - 1U];
+    if (dest_round_best_[k] != kInvalid) {
+      bound = get_best(
+          bound, dest_round_delta_[k] != 0U
+                     ? second(dest_round_best_[k], dest_round_delta_[k])
+                     : clamp(dest_round_best_[k] + dir(kMaxSlotDelta)));
+    }
+    return bound;
+  }
+
+  bool prune_x(std::uint32_t const l,
+               delta_t const x,
+               delta_t const bound) const {
+    return !lb_reachable(l) || !is_better_loose(x, bound) ||
+           !is_better_loose(x + dir(get_lb(l)), bound);
+  }
+
+  // x = time of a label at l in round k (transfer time / footpath included)
+  // dest: l is destination and x did not get there by a footpath from
+  //       another destination
+  bool insert_label_x(unsigned const k,
+                      std::uint32_t const l,
+                      delta_t const x,
+                      bool const is_dest,
+                      bool const from_dest) {
+    // Labels at the destination end here. All other labels are continued
+    // in the next rounds -> bound of the next round.
+    if (prune_x(l, x, is_dest ? dest_bound_x(k) : time_at_dest_[k])) {
+      return false;
+    }
+
+    auto& best = best_[l][0];
+    auto& best_d = state_.best_delta_[l];
+    auto& round = round_times_[k][l][0];
+    auto& round_d = state_.round_delta(k, l);
+
+    if (is_better(x, best)) {
+      insert(best, best_d, x);
+      insert(round, round_d, x);
+      ++stats_.n_earliest_arrival_updated_by_footpath_;
+    } else {
+      // extra slot only behind a best time of this round
+      if (x == best || round == kInvalid || (is_dest && from_dest)) {
+        return false;
+      }
+      if (insert(best, best_d, x) != slot::kSecond) {
+        ++stats_.n_slot_rejects_;
+        return false;
+      }
+      round_d = best_d;
+      ++stats_.n_slot_labels_;
+    }
+
+    state_.station_mark_.set(l, true);
+    if (is_dest && !from_dest) {
+      update_time_at_dest(k, x);
+      insert(dest_round_best_[k], dest_round_delta_[k], x);
+    }
+    return true;
+  }
+
+  // times reached by transit at stop i in this round
+  std::array<delta_t, 2> tmp_x(std::uint32_t const i) const {
+    return {tmp_[i][0], second(tmp_[i][0], state_.tmp_delta_[i])};
+  }
+
+  bool is_dest_x(std::uint32_t const l) const {
+    return is_intermodal_dest() ? l == kIntermodalTarget : is_dest_[l];
+  }
+
+  void update_transfers_x(unsigned const k) {
+    state_.prev_station_mark_.for_each_set_bit([&](auto&& i) {
+      auto const is_dest = is_dest_x(i);
+      auto const transfer_time =
+          (!is_intermodal_dest() && is_dest)
+              ? 0
+              : dir(adjusted_transfer_time(
+                    transfer_time_settings_,
+                    tt_.locations_.transfer_time_[location_idx_t{i}].count()));
+      for (auto const t : tmp_x(i)) {
+        if (t != kInvalid) {
+          insert_label_x(k, i, clamp(t + transfer_time), is_dest, false);
+        }
+      }
+    });
+  }
+
+  void update_footpaths_x(unsigned const k) {
+    state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+      auto const l_idx = location_idx_t{i};
+      auto const& fps = kFwd ? tt_.locations_.footpaths_out_[prf_idx_][l_idx]
+                             : tt_.locations_.footpaths_in_[prf_idx_][l_idx];
+      auto const from_dest = is_dest_x(i);
+      for (auto const& fp : fps) {
+        ++stats_.n_footpaths_visited_;
+        auto const target = to_idx(fp.target());
+        auto const duration = dir(adjusted_transfer_time(
+            transfer_time_settings_, fp.duration().count()));
+        for (auto const t : tmp_x(i)) {
+          if (t != kInvalid) {
+            insert_label_x(k, target, clamp(t + duration), is_dest_x(target),
+                           from_dest);
+          }
+        }
+      }
+    });
+  }
+
+  void update_intermodal_footpaths_x(unsigned const k) {
+    if (dist_to_end_.empty()) {
+      return;
+    }
+
+    state_.prev_station_mark_.for_each_set_bit([&](auto const i) {
+      if (!end_reachable_.test(i) || dist_to_end_[i] == kUnreachable) {
+        return;
+      }
+      for (auto const t : tmp_x(i)) {
+        if (t == kInvalid) {
+          continue;
+        }
+        auto const x = clamp(t + dir(dist_to_end_[i]));
+        if (!is_better_loose(x, dest_bound_x(k))) {
+          continue;
+        }
+        auto& best = best_[kIntermodalTarget][0];
+        auto& best_d = state_.best_delta_[kIntermodalTarget];
+        auto& round = round_times_[k][kIntermodalTarget][0];
+        auto& round_d = state_.round_delta(k, kIntermodalTarget);
+        if (is_better(x, best)) {
+          insert(best, best_d, x);
+          insert(round, round_d, x);
+        } else if (x == best || round == kInvalid ||
+                   insert(best, best_d, x) != slot::kSecond) {
+          continue;
+        } else {
+          round_d = best_d;
+          ++stats_.n_slot_labels_;
+        }
+        update_time_at_dest(k, x);
+        insert(dest_round_best_[k], dest_round_delta_[k], x);
+      }
+    });
+  }
+
+  template <bool WithSectionBikeFilter,
+            bool WithSectionCarFilter,
+            bool WithSectionWheelchairFilter,
+            bool WithSectionReservationNotRequiredFilter>
+  bool update_route_x(unsigned const k, route_idx_t const r) {
+    auto const stop_seq = tt_.route_location_seq_[r];
+    auto const n_stops = stop_seq.size();
+    auto const bound = dest_bound_x(k);
+    auto any_marked = false;
+
+    // trips in use, earlier one first: no trip of a route overtakes another
+    // one, further trips arrive third everywhere
+    auto et = std::array<transport, 2>{};
+
+    for (auto i = 0U; i != n_stops; ++i) {
+      auto const stop_idx =
+          static_cast<stop_idx_t>(kFwd ? i : n_stops - i - 1U);
+      auto const stp = stop{stop_seq[stop_idx]};
+      auto const l_idx = cista::to_idx(stp.location_idx());
+      auto const is_first = i == 0U;
+      auto const is_last = i == n_stops - 1U;
+
+      auto const apply_filter = [&](route_flag const f) {
+        if (!is_first && !tt_.route_flags_per_section_[f][r][kFwd ? stop_idx - 1
+                                                                  : stop_idx]) {
+          et = {};
+        }
+      };
+
+      if constexpr (WithSectionBikeFilter) {
+        apply_filter(route_flag::kBikesAllowed);
+      }
+      if constexpr (WithSectionCarFilter) {
+        apply_filter(route_flag::kCarsAllowed);
+      }
+      if constexpr (WithSectionWheelchairFilter) {
+        apply_filter(route_flag::kWheelchairAccessible);
+      }
+      if constexpr (WithSectionReservationNotRequiredFilter) {
+        apply_filter(route_flag::kReservationNotRequired);
+      }
+
+      if (stp.can_finish<SearchDir>(is_wheelchair_) && !is_blocked(l_idx)) {
+        for (auto const& ride : et) {
+          if (!ride.is_valid()) {
+            continue;
+          }
+          auto const by_transport = time_at_stop(
+              r, ride, stop_idx, kFwd ? event_type::kArr : event_type::kDep);
+          if (!prune_x(l_idx, by_transport, bound)) {
+            ++stats_.n_earliest_arrival_updated_by_route_;
+            insert(tmp_[l_idx][0], state_.tmp_delta_[l_idx], by_transport);
+            state_.station_mark_.set(l_idx, true);
+            any_marked = true;
+          }
+        }
+      }
+
+      if (is_last || !stp.can_start<SearchDir>(is_wheelchair_) ||
+          !state_.prev_station_mark_[l_idx] || is_blocked(l_idx)) {
+        continue;
+      }
+
+      if (!lb_reachable(l_idx)) {
+        break;
+      }
+
+      auto const dep = [&](transport const t) {
+        return time_at_stop(r, t, stop_idx,
+                            kFwd ? event_type::kDep : event_type::kArr);
+      };
+
+      auto const prev = round_times_[k - 1U][l_idx][0];
+      auto caught = kInvalid;  // departure of the trip the best label takes
+      for (auto const label :
+           {prev, second(prev, state_.round_delta(k - 1U, l_idx))}) {
+        if (label == kInvalid ||
+            // takes the trip of the best label
+            (caught != kInvalid && is_better_or_eq(label, caught)) ||
+            // too late for every trip that would be of use
+            (et[1].is_valid() && !is_better_or_eq(label, dep(et[1])))) {
+          break;
+        }
+
+        auto const [day, mam] = split(label);
+        auto const t = get_earliest_transport(k, r, stop_idx, day, mam,
+                                              stp.location_idx(), bound);
+        if (!t.is_valid()) {
+          break;
+        }
+        caught = dep(t);
+
+        if (t == et[0] || t == et[1]) {
+          continue;
+        }
+        if (!et[0].is_valid() || is_better(dep(t), dep(et[0]))) {
+          et[1] = et[0];
+          et[0] = t;
+        } else if (!et[1].is_valid() || is_better(dep(t), dep(et[1]))) {
+          et[1] = t;
+        }
+      }
+    }
+    return any_marked;
+  }
+
+  void collect_x(unixtime_t const start_time,
+                 unsigned const end_k,
+                 pareto_set<journey>& results) {
+    auto const find_dest = [&](unsigned const k, delta_t const t) {
+      auto dest = location_idx_t::invalid();
+      is_dest_.for_each_set_bit([&](auto const i) {
+        if (dest == location_idx_t::invalid() &&
+            (round_times_[k][i][0] == t ||
+             second(round_times_[k][i][0], state_.round_delta(k, i)) == t)) {
+          dest = location_idx_t{i};
+        }
+      });
+      return dest;
+    };
+
+    auto best_so_far = kInvalid;  // rounds < k
+    for (auto k = 1U; k != end_k; ++k) {
+      auto const best = dest_round_best_[k];
+      if (best == kInvalid || !is_better(best, best_so_far)) {
+        continue;
+      }
+
+      results.add(journey{.legs_ = {},
+                          .start_time_ = start_time,
+                          .dest_time_ = delta_to_unix(base(), best),
+                          .dest_ = find_dest(k, best),
+                          .transfers_ = static_cast<std::uint8_t>(k - 1)});
+
+      auto const x = second(best, dest_round_delta_[k]);
+      if (x != kInvalid && is_better(x, best_so_far)) {
+        ++stats_.n_slot_journeys_;
+        results.add_not_optimal(
+            journey{.legs_ = {},
+                    .start_time_ = start_time,
+                    .dest_time_ = delta_to_unix(base(), x),
+                    .dest_ = find_dest(k, x),
+                    .transfers_ = static_cast<std::uint8_t>(k - 1),
+                    .slot_ = 1U});
+      }
+      best_so_far = best;
+    }
+  }
+
   transport get_earliest_transport(unsigned const k,
                                    route_idx_t const r,
                                    stop_idx_t const stop_idx,
                                    day_idx_t const day_at_stop,
                                    minutes_after_midnight_t const mam_at_stop,
                                    location_idx_t const l) {
+    return get_earliest_transport(k, r, stop_idx, day_at_stop, mam_at_stop, l,
+                                  time_at_dest_[k]);
+  }
+
+  transport get_earliest_transport([[maybe_unused]] unsigned const k,
+                                   route_idx_t const r,
+                                   stop_idx_t const stop_idx,
+                                   day_idx_t const day_at_stop,
+                                   minutes_after_midnight_t const mam_at_stop,
+                                   location_idx_t const l,
+                                   delta_t const bound) {
     ++stats_.n_earliest_trip_calls_;
 
     auto const event_times = tt_.event_times_at_stop(
@@ -1392,7 +1999,7 @@ private:
         auto const ev_mam = ev.mam();
 
         if (!is_better_loose(to_delta(day, ev_mam) + dir(get_lb(to_idx(l))),
-                             time_at_dest_[k])) {
+                             bound)) {
           trace(
               "┊ │k={}      => name={}, dbg={}, day={}={}, best_mam={}, "
               "transport_mam={}, transport_time={} => TIME AT DEST {} IS "
@@ -1521,8 +2128,13 @@ private:
   std::vector<std::uint16_t> const& lb_;
   std::vector<via_stop> const& via_stops_;
   std::array<delta_t, kMaxTransfers + 2> time_at_dest_;
+  // extra slot: best and later arrival at the destination in exactly round k
+  std::array<delta_t, kMaxTransfers + 2> dest_round_best_;
+  std::array<std::uint8_t, kMaxTransfers + 2> dest_round_delta_;
   day_idx_t base_;
   raptor_stats stats_;
+  top2 dest_top_{kInvalidTop2};
+  delta_t worst_at_dest_{kInvalid};
   flat_matrix_view<std::array<delta_t, Vias + 1U> const> bounds_;
   unsigned bounds_last_k_{0U};
   profile_idx_t prf_idx_{0U};
@@ -1532,6 +2144,8 @@ private:
   bool no_compulsory_reservation_;
   bool is_wheelchair_;
   transfer_time_settings transfer_time_settings_;
+  bool block_routes_;
+  bool block_locations_;
 };
 
 }  // namespace nigiri::routing

@@ -29,6 +29,22 @@ routing_result raptor_search_with_vias(
     AlgoState& r_state,
     query q,
     std::optional<std::chrono::seconds> const timeout) {
+  if (q.extra_slot_) {
+    if constexpr (Vias == 0U && std::is_same_v<AlgoState, raptor_state>) {
+      utl::verify(rtt == nullptr && q.td_dest_.empty() &&
+                      holds_alternative<unixtime_t>(q.start_time_),
+                  "extra slot: single start time, no real-time, no td "
+                  "offsets at the destination");
+      using algo_t =
+          raptor<SearchDir, false, 0U, search_mode::kOneToOne, true>;
+      return search<SearchDir, algo_t>{tt,      rtt,          s_state,
+                                       r_state, std::move(q), timeout}
+          .execute();
+    } else {
+      throw utl::fail("extra slot: no via stops, no gpu");
+    }
+  }
+
   if (rtt == nullptr) {
     using algo_t = std::conditional_t<
         std::is_same_v<AlgoState, gpu::gpu_raptor_state>,

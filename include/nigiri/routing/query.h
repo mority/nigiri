@@ -137,6 +137,33 @@ struct query {
   double fastest_direct_factor_{1.0};
   bool slow_direct_{false};
   double fastest_slow_direct_factor_{2.0};
+
+  // Number of options to reconstruct for each transit leg of a result (start
+  // time, destination time, transfers): the journey itself plus, for each of
+  // its transit legs, up to n - 1 journeys that take another option at this
+  // leg (other trip and / or other stop to enter it). Such a journey shares
+  // the legs between this leg and the destination of the search with the
+  // journey, the legs towards the start follow from the option taken and
+  // usually differ as well. Journeys of one result differ in their sequence
+  // of trips. 1 = one journey for each result.
+  std::uint8_t n_alternatives_{1U};
+
+  // false: one leg takes another option at a time.
+  // true: traversal of the labels of the search, starting with the label of
+  // the result at the destination. An edge leads from a label in round k to
+  // a label in round k - 1 that could have written it (footpath, trip, stop
+  // to enter the trip). n edges are followed for each label,
+  // kUnlimitedAlternatives = all of them. One journey for each path, paths
+  // with the same sequence of trips are one journey. At most
+  // kMaxAlternativesPerResult journeys for each result.
+  bool alternatives_tree_{false};
+
+  // Earliest arrival query (single start time, no vias, no real-time) that
+  // keeps one extra arrival time for each stop and number of transfers, at
+  // most 255 minutes after the best one and earlier than everything
+  // reached with fewer transfers. Journeys that end in the extra slot have
+  // journey::slot_ = 1.
+  bool extra_slot_{false};
 };
 
 }  // namespace nigiri::routing

@@ -27,6 +27,7 @@ void sanitize_query(query& q) {
   if (q.max_travel_time_.count() < 0 || q.max_travel_time_ > kMaxTravelTime) {
     q.max_travel_time_ = kMaxTravelTime;
   }
+  q.n_alternatives_ = std::max(q.n_alternatives_, std::uint8_t{1U});
 }
 
 void sanitize_via_stops(timetable const& tt, query& q) {

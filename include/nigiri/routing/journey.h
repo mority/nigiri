@@ -113,6 +113,14 @@ struct journey {
   std::uint8_t transfers_{0U};
   bool error_{false};
   bool is_reconstructed_{false};
+
+  // 0 = first journey reconstructed for its start time, destination time and
+  // transfers, i > 0 = i-th alternative with the same criteria
+  // (see query::n_alternatives_)
+  std::uint8_t alternative_{0U};
+
+  // 1 = arrival time from the extra slot (see query::extra_slot_)
+  std::uint8_t slot_{0U};
 };
 
 }  // namespace nigiri::routing
