@@ -245,6 +245,8 @@ struct raptor {
         break;
       }
 
+      ++stats_.n_rounds_;
+
       std::swap(state_.prev_station_mark_, state_.station_mark_);
       utl::fill(state_.station_mark_.blocks_, 0U);
 
