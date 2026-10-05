@@ -58,6 +58,10 @@ struct search_stats {
         {"n_execute_bwd", n_execute_bwd_},
         {"n_proof_iterations", n_proof_iterations_},
         {"proof_time_us", proof_time_us_},
+        {"ping_time_us", ping_time_us_},
+        {"pong_time_us", pong_time_us_},
+        {"n_rounds_ping", n_rounds_ping_},
+        {"n_rounds_pong", n_rounds_pong_},
     };
   }
 
@@ -75,6 +79,13 @@ struct search_stats {
   // duration
   std::uint64_t n_proof_iterations_{0ULL};
   std::uint64_t proof_time_us_{0ULL};
+  // Pong only: time in the searches in query direction (ping) and against it
+  // (pong, incl. reconstructing the matched journey), and RAPTOR rounds per
+  // direction (together the n_rounds of the algorithm stats)
+  std::uint64_t ping_time_us_{0ULL};
+  std::uint64_t pong_time_us_{0ULL};
+  std::uint64_t n_rounds_ping_{0ULL};
+  std::uint64_t n_rounds_pong_{0ULL};
 };
 
 struct routing_result {

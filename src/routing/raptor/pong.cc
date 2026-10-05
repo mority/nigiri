@@ -286,8 +286,13 @@ routing_result pong(timetable const& tt,
         (kFwd ? 1 : -1) *
             std::min(q.max_travel_time_ + kMinLookAhead, kMaxTravelTime);
     auto ping_results = pareto_set<journey>{};
+    auto const ping_start = std::chrono::steady_clock::now();
     ping.execute(start_time, q.max_transfers_, worst_time_at_dest,
                  ping_results);
+    result.search_stats_.ping_time_us_ += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - ping_start)
+            .count());
     kFwd ? ++result.search_stats_.n_execute_fwd_
          : ++result.search_stats_.n_execute_bwd_;
     if (ping_results.empty()) {
@@ -368,7 +373,12 @@ routing_result pong(timetable const& tt,
       if constexpr (kPruneWithPingBounds) {
         pong.set_bounds(ping_j.transfers_ + 1U);
       }
+      auto const pong_start = std::chrono::steady_clock::now();
       run_pong(pong, ping_j);
+      result.search_stats_.pong_time_us_ += static_cast<std::uint64_t>(
+          std::chrono::duration_cast<std::chrono::microseconds>(
+              std::chrono::steady_clock::now() - pong_start)
+              .count());
     }
     q.flip_dir();
 
@@ -428,6 +438,8 @@ routing_result pong(timetable const& tt,
   result.interval_ = {kFwd ? search_interval.from_ : start_time + duration_t{1},
                       kFwd ? start_time : search_interval.to_};
   result.algo_stats_ = (ping.get_stats() + pong.get_stats()).to_map();
+  result.search_stats_.n_rounds_ping_ = ping.get_stats().n_rounds_;
+  result.search_stats_.n_rounds_pong_ = pong.get_stats().n_rounds_;
   result.search_stats_.execute_time_ =
       std::chrono::duration_cast<std::chrono::milliseconds>(
           (std::chrono::steady_clock::now() - processing_start_time));

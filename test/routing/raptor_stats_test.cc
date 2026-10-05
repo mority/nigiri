@@ -115,6 +115,16 @@ TEST(routing, raptor_stats_rounds_pong) {
       tt, nullptr, s_state, r_state,
       make_query(tt, unixtime_t{monday + 5h}), direction::kForward);
   expect_rounds(r);
+
+  // the per-direction split adds up and stays within the search time
+  EXPECT_EQ(r.algo_stats_.at("n_rounds"),
+            r.search_stats_.n_rounds_ping_ + r.search_stats_.n_rounds_pong_);
+  EXPECT_GE(r.search_stats_.n_rounds_ping_, 2U);
+  EXPECT_GE(r.search_stats_.n_rounds_pong_, 2U);
+  EXPECT_LE((r.search_stats_.ping_time_us_ + r.search_stats_.pong_time_us_) /
+                1000U,
+            static_cast<std::uint64_t>(r.search_stats_.execute_time_.count()) +
+                1U);
 }
 
 namespace {
