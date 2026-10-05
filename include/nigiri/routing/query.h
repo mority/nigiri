@@ -3,6 +3,7 @@
 #include <cinttypes>
 #include <limits>
 #include <optional>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -137,6 +138,12 @@ struct query {
   double fastest_direct_factor_{1.0};
   bool slow_direct_{false};
   double fastest_slow_direct_factor_{2.0};
+
+  // Duration of the direct connection per transport mode. A journey whose
+  // first or last offset, or both together if they use the same mode, take at
+  // least as long as the direct connection with that mode is not reported and
+  // does not count towards min_connection_count_ (see direct_filter.h).
+  std::vector<std::pair<transport_mode_t, duration_t>> direct_durations_{};
 };
 
 }  // namespace nigiri::routing

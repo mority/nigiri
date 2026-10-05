@@ -14,6 +14,7 @@
 
 #include "nigiri/location_match_mode.h"
 #include "nigiri/routing/direct.h"
+#include "nigiri/routing/direct_filter.h"
 #include "nigiri/routing/get_earliest_transport.h"
 #include "nigiri/routing/gpu/raptor.h"
 #include "nigiri/routing/leg_alternatives.h"
@@ -233,7 +234,7 @@ routing_result pong(timetable const& tt,
   };
   auto const get_result_count = [&](bool const include_too_slow) {
     return utl::count_if(*result.journeys_, [&](journey const& j) {
-      return is_validated(j) &&
+      return is_validated(j) && !is_not_better_than_direct(q, j) &&
              (include_too_slow || (j.travel_time() < fastest_direct &&
                                    j.travel_time() <= q.max_travel_time_));
     });
@@ -384,13 +385,16 @@ routing_result pong(timetable const& tt,
     auto const erase = !j.is_reconstructed_ || !is_validated(j) ||
                        is_out_of_interval ||
                        j.travel_time() >= fastest_direct ||
-                       j.travel_time() > q.max_travel_time_;
+                       j.travel_time() > q.max_travel_time_ ||
+                       is_not_better_than_direct(q, j);
     if (erase) {
       trace_pong(
           "ERASE not_reconstructed={}, not_validated={}, "
-          "slower_than_direct={}, slower_than_query_max_travel_time={} {}",
+          "slower_than_direct={}, slower_than_query_max_travel_time={}, "
+          "offsets_not_better_than_direct={} {}",
           j.legs_.empty(), !is_validated(j), j.travel_time() >= fastest_direct,
-          j.travel_time() > q.max_travel_time_, to_tuple(j));
+          j.travel_time() > q.max_travel_time_,
+          is_not_better_than_direct(q, j), to_tuple(j));
     }
     return erase;
   });

@@ -12,6 +12,7 @@
 #include "nigiri/logging.h"
 #include "nigiri/routing/dijkstra.h"
 #include "nigiri/routing/direct.h"
+#include "nigiri/routing/direct_filter.h"
 #include "nigiri/routing/get_fastest_direct.h"
 #include "nigiri/routing/interval_estimate.h"
 #include "nigiri/routing/journey.h"
@@ -320,7 +321,8 @@ struct search {
       utl::erase_if(state_.results_, [&](journey const& j) {
         return !search_interval_.contains(j.start_time_) ||
                j.travel_time() >= fastest_direct_ ||
-               j.travel_time() > q_.max_travel_time_;
+               j.travel_time() > q_.max_travel_time_ ||
+               is_not_better_than_direct(q_, j);
       });
 
       enrich_with_slow_direct<SearchDir>(tt_, rtt_, q_, search_interval_,
@@ -380,11 +382,15 @@ private:
   unsigned n_results_in_interval() const {
     if (holds_alternative<interval<unixtime_t>>(q_.start_time_)) {
       auto count = utl::count_if(state_.results_, [&](journey const& j) {
-        return search_interval_.contains(j.start_time_);
+        return search_interval_.contains(j.start_time_) &&
+               !is_not_better_than_direct(q_, j);
       });
       return static_cast<unsigned>(count);
     } else {
-      return static_cast<unsigned>(state_.results_.size());
+      return static_cast<unsigned>(
+          utl::count_if(state_.results_, [&](journey const& j) {
+            return !is_not_better_than_direct(q_, j);
+          }));
     }
   }
 
