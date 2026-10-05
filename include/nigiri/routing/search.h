@@ -56,6 +56,8 @@ struct search_stats {
          search_interval_reduction_by_early_termination_.count()},
         {"n_execute_fwd", n_execute_fwd_},
         {"n_execute_bwd", n_execute_bwd_},
+        {"n_proof_iterations", n_proof_iterations_},
+        {"proof_time_us", proof_time_us_},
     };
   }
 
@@ -67,6 +69,12 @@ struct search_stats {
   std::chrono::minutes search_interval_reduction_by_early_termination_{0LL};
   std::uint64_t n_execute_fwd_{0ULL};
   std::uint64_t n_execute_bwd_{0ULL};
+  // Pong only: iterations that started inside a non-empty search interval
+  // but found no journey departing (forward) / arriving (backward) inside
+  // it, i.e. iterations that only prove the interval exhausted; and their
+  // duration
+  std::uint64_t n_proof_iterations_{0ULL};
+  std::uint64_t proof_time_us_{0ULL};
 };
 
 struct routing_result {

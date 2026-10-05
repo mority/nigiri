@@ -250,6 +250,20 @@ routing_result pong(timetable const& tt,
           get_result_count(true) + get_result_count(false) <
               2 * q.min_connection_count_) &&
          tt.external_interval().contains(start_time) && !is_timeout_reached()) {
+    // An iteration that starts inside a non-empty interval but finds nothing
+    // inside it only proves the interval exhausted (fixed-window queries).
+    auto const iteration_start = std::chrono::steady_clock::now();
+    auto const inside_interval = is_better(start_time, end_time);
+    auto const count_proof = [&]() {
+      if (inside_interval) {
+        ++result.search_stats_.n_proof_iterations_;
+        result.search_stats_.proof_time_us_ += static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - iteration_start)
+                .count());
+      }
+    };
+
     // ----
     // PING
     // ----
@@ -281,6 +295,7 @@ routing_result pong(timetable const& tt,
           "EMPTY PING RESULTS -> QUIT (max_transfers={}, "
           "worst_time_at_dest={})",
           q.max_transfers_, worst_time_at_dest);
+      count_proof();
       break;
     }
     utl::erase_if(ping_results, [&](journey const& x) {
@@ -292,6 +307,7 @@ routing_result pong(timetable const& tt,
     });
     if (ping_results.empty()) {
       trace_pong("ALL PING RESULTS FILTERED -> QUIT");
+      count_proof();
       break;
     }
     utl::sort(ping_results, [](journey const& a, journey const& b) {
@@ -372,6 +388,12 @@ routing_result pong(timetable const& tt,
         "AFTER {} [next={}]:\n\t{}", start_time, next,
         fmt::join(s_state.results_.els_ | std::views::transform(to_tuple),
                   "\n\t"));
+
+    if (utl::all_of(ping_results, [&](journey const& j) {
+          return !is_better(j.start_time_, end_time);
+        })) {
+      count_proof();
+    }
 
     start_time = next;
   }

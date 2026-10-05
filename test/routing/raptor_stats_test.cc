@@ -116,3 +116,53 @@ TEST(routing, raptor_stats_rounds_pong) {
       make_query(tt, unixtime_t{monday + 5h}), direction::kForward);
   expect_rounds(r);
 }
+
+namespace {
+
+routing::routing_result pong_window(timetable const& tt,
+                                    routing::search_state& s_state,
+                                    routing::raptor_state& r_state,
+                                    routing::start_time_t const start_time,
+                                    unsigned const min_connection_count) {
+  auto q = make_query(tt, start_time);
+  q.min_connection_count_ = min_connection_count;
+  return routing::pong_search(tt, nullptr, s_state, r_state, std::move(q),
+                              direction::kForward);
+}
+
+}  // namespace
+
+// Journeys S0 -> S2 depart 06:00 and 08:00 UTC on Monday 2026-06-01.
+TEST(routing, pong_proof_iterations) {
+  auto const tt = get_tt();
+  auto s_state = routing::search_state{};
+  auto r_state = routing::raptor_state{};
+  auto const t = [](auto const d) {
+    return unixtime_t{sys_days{2026_y / June / 01}} + d;
+  };
+
+  // (a) window end between the two departures: the second iteration only
+  // finds the 08:00 journey after the window end -> one proof iteration
+  auto const a = pong_window(tt, s_state, r_state,
+                             interval<unixtime_t>{t(5h), t(7h + 30min)}, 0U);
+  EXPECT_EQ(1U, a.search_stats_.n_proof_iterations_);
+
+  // (b) window end aligned with the first journey (+1 min, as the oracle):
+  // nothing left to prove
+  auto const b = pong_window(tt, s_state, r_state,
+                             interval<unixtime_t>{t(5h), t(6h + 1min)}, 0U);
+  EXPECT_EQ(0U, b.search_stats_.n_proof_iterations_);
+
+  // (c) count-driven, empty interval: never a proof iteration
+  auto const c = pong_window(tt, s_state, r_state, t(5h), 2U);
+  EXPECT_EQ(2U, c.journeys_->size());
+  EXPECT_EQ(0U, c.search_stats_.n_proof_iterations_);
+  EXPECT_EQ(0U, c.search_stats_.proof_time_us_);
+
+  // (d) window after the last journey of the week: the only iteration finds
+  // nothing -> one proof iteration
+  auto const d = pong_window(tt, s_state, r_state,
+                             interval<unixtime_t>{t(9h), t(10h)}, 0U);
+  EXPECT_EQ(0U, d.journeys_->size());
+  EXPECT_EQ(1U, d.search_stats_.n_proof_iterations_);
+}
