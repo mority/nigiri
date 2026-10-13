@@ -144,6 +144,14 @@ struct query {
   // least as long as the direct connection with that mode is not reported and
   // does not count towards min_connection_count_ (see direct_filter.h).
   std::vector<std::pair<transport_mode_t, duration_t>> direct_durations_{};
+
+  // Bound on the time at the destination of the search. Forward search: a
+  // journey arriving after the bound; backward search: a journey departing
+  // before the bound is neither reported nor counted towards
+  // min_connection_count_. Used by the reversed range search (reversed.h),
+  // whose backward scan over arrival events must only report journeys
+  // departing at or after the earliest departure time of the original query.
+  std::optional<unixtime_t> dest_time_bound_{};
 };
 
 }  // namespace nigiri::routing

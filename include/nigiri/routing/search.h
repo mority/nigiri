@@ -341,7 +341,7 @@ struct search {
         return !search_interval_.contains(j.start_time_) ||
                j.travel_time() >= fastest_direct_ ||
                j.travel_time() > q_.max_travel_time_ ||
-               is_not_better_than_direct(q_, j);
+               is_not_better_than_direct(q_, j) || is_outside_dest_bound(j);
       });
 
       enrich_with_slow_direct<SearchDir>(tt_, rtt_, q_, search_interval_,
@@ -402,15 +402,22 @@ private:
     if (holds_alternative<interval<unixtime_t>>(q_.start_time_)) {
       auto count = utl::count_if(state_.results_, [&](journey const& j) {
         return search_interval_.contains(j.start_time_) &&
-               !is_not_better_than_direct(q_, j);
+               !is_not_better_than_direct(q_, j) && !is_outside_dest_bound(j);
       });
       return static_cast<unsigned>(count);
     } else {
       return static_cast<unsigned>(
           utl::count_if(state_.results_, [&](journey const& j) {
-            return !is_not_better_than_direct(q_, j);
+            return !is_not_better_than_direct(q_, j) &&
+                   !is_outside_dest_bound(j);
           }));
     }
+  }
+
+  bool is_outside_dest_bound(journey const& j) const {
+    return q_.dest_time_bound_.has_value() &&
+           (kFwd ? j.dest_time_ > *q_.dest_time_bound_
+                 : j.dest_time_ < *q_.dest_time_bound_);
   }
 
   bool max_interval_reached() const {
@@ -482,7 +489,8 @@ private:
           for (auto& j : state_.results_) {
             if (!j.is_reconstructed_ && !j.error_ &&
                 (is_ontrip() || search_interval_.contains(j.start_time_)) &&
-                j.travel_time() < fastest_direct_) {
+                j.travel_time() < fastest_direct_ &&
+                !is_outside_dest_bound(j)) {
               try {
                 algo_.reconstruct(q_, j);
               } catch (std::exception const& e) {
