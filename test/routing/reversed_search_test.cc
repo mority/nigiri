@@ -1,6 +1,8 @@
 #include "gtest/gtest.h"
 
+#include <optional>
 #include <set>
+#include <string>
 #include <tuple>
 
 #include "nigiri/loader/dir.h"
@@ -25,8 +27,7 @@ namespace {
 // A --R1--> C hourly (2 h, 0 transfers) plus one early trip 09:30 -> 11:30,
 // A --R2--> B --R3--> C hourly (dep xx:15, arr (xx+1):20, 1 transfer).
 // Neither family dominates the other, so the profile interleaves them.
-mem_dir test_files() {
-  return mem_dir::read(R"(
+constexpr auto const kTestFiles = R"(
 # agency.txt
 agency_id,agency_name,agency_url,agency_timezone
 DB,Deutsche Bahn,https://deutschebahn.com,Etc/UTC
@@ -109,7 +110,19 @@ T3_14,14:50:00,14:50:00,B,1,0,0
 T3_14,15:20:00,15:20:00,C,2,0,0
 T3_15,15:50:00,15:50:00,B,1,0,0
 T3_15,16:20:00,16:20:00,C,2,0,0
-)");
+)";
+
+// A footpath A -> C of 3 h: a direct connection slower than every train.
+constexpr auto const kWalkAC = R"(
+# transfers.txt
+from_stop_id,to_stop_id,transfer_type,min_transfer_time
+A,C,2,10800
+C,A,2,10800
+)";
+
+mem_dir test_files(bool const walk = false) {
+  return mem_dir::read(walk ? std::string{kTestFiles} + kWalkAC
+                            : std::string{kTestFiles});
 }
 
 // Same stops, but direct trains only every two hours (12:00, 14:00, 16:00)
@@ -213,12 +226,14 @@ std::string str(std::set<jkey_t> const& s) {
 }
 
 struct fixture {
-  explicit fixture(bool const sparse_direct = false) {
+  explicit fixture(bool const sparse_direct = false,
+                   bool const walk = false) {
     tt_.date_range_ = {sys_days{2024_y / June / 18},
                        sys_days{2024_y / June / 20}};
     register_special_stations(tt_);
     load_timetable({}, source_idx_t{0},
-                   sparse_direct ? sparse_direct_files() : test_files(), tt_);
+                   sparse_direct ? sparse_direct_files() : test_files(walk),
+                   tt_);
     finalize(tt_);
     a_ = tt_.find(location_id{"A", source_idx_t{0}}).value();
     c_ = tt_.find(location_id{"C", source_idx_t{0}}).value();
@@ -237,11 +252,14 @@ struct fixture {
         .min_connection_count_ = 0U};
   }
 
-  // The first n journeys leaving A at or after 10:00, open end: what motis
-  // sends for numItineraries=n, searchWindow=0.
-  routing::query first_n_query(unsigned const n) const {
+  // The first n journeys leaving A at or after t (10:00), open end: what
+  // motis sends for numItineraries=n, searchWindow=0.
+  routing::query first_n_query(unsigned const n,
+                               std::optional<unixtime_t> const t =
+                                   std::nullopt) const {
+    auto const from = t.value_or(day_ + 10h);
     return routing::query{
-        .start_time_ = interval<unixtime_t>{day_ + 10h, day_ + 10h},
+        .start_time_ = interval<unixtime_t>{from, from},
         .start_match_mode_ = routing::location_match_mode::kIntermodal,
         .dest_match_mode_ = routing::location_match_mode::kIntermodal,
         .use_start_footpaths_ = false,
@@ -463,4 +481,27 @@ TEST(routing, reversed_search_departure_order_arrive_by) {
                               {f.day_ + 12h + 10min, f.day_ + 13h + 23min, 1U}}),
             by_arr)
       << str(by_arr);
+}
+
+// A gap longer than the direct connection: at 06:00 the next train leaves at
+// 09:30, the walk A -> C takes 3 h. Pong's ping looks ahead a day beyond the
+// query's travel time limit, not only the direct connection's duration; the
+// seed search and the fills must do the same, else the first journeys of
+// the day are never found (nigiri's search driver bounds by the direct
+// connection, which is right for its fixed-interval question only).
+TEST(routing, reversed_search_gap_longer_than_direct) {
+  auto f = fixture{false, true};
+  using routing::reversed_order;
+  auto const expected =
+      std::set<jkey_t>{{f.day_ + 9h + 25min, f.day_ + 11h + 33min, 0U},
+                       {f.day_ + 9h + 55min, f.day_ + 12h + 3min, 0U},
+                       {f.day_ + 10h + 10min, f.day_ + 11h + 23min, 1U}};
+  for (auto const o : {reversed_order::kArrival, reversed_order::kDeparture}) {
+    auto const got = keys(test::search_reversed(
+        f.tt_, nullptr, f.first_n_query(3U, f.day_ + 6h), direction::kForward,
+        o));
+    EXPECT_EQ(expected, got)
+        << (o == reversed_order::kArrival ? "arrival" : "departure") << "\n"
+        << str(got);
+  }
 }

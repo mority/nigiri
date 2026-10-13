@@ -103,6 +103,80 @@ void finalize_results(timetable const& tt,
 
 constexpr auto const kLookAheadFactor = 1.5;  // Halm 2019: rrdep 1.5
 
+// What a RAPTOR object needs besides the query: destination and via bitvecs,
+// lower bounds from one Dijkstra. `dir` is the direction the object searches
+// in, `q` the query for that direction; both must outlive the objects made
+// from it. Several objects (on different states) can share one environment.
+template <typename Algo>
+struct algo_env {
+  algo_env(timetable const& tt,
+           rt_timetable const* rtt,
+           query const& q,
+           direction const dir)
+      : q_{q} {
+    collect_destinations(tt, q.destination_, q.dest_match_mode_, is_dest_,
+                         dist_to_dest_);
+    for (auto const [i, via] : utl::enumerate(q.via_stops_)) {
+      collect_via_destinations(tt, via.location_, is_via_[i]);
+    }
+    auto const fwd = dir == direction::kForward;
+    dijkstra(tt, q,
+             (fwd ? tt.fwd_search_lb_graph_[q.prf_idx_]
+                  : tt.bwd_search_lb_graph_[q.prf_idx_]),
+             (rtt == nullptr ? nullptr
+                             : &(fwd ? rtt->fwd_search_lb_graph_has_edges_
+                                     : rtt->bwd_search_lb_graph_has_edges_)),
+             (rtt == nullptr ? nullptr
+                             : &(fwd ? rtt->fwd_search_lb_graph_
+                                     : rtt->bwd_search_lb_graph_)),
+             lb_);
+  }
+
+  Algo make(timetable const& tt,
+            rt_timetable const* rtt,
+            raptor_state& state,
+            day_idx_t const base_day) {
+    return Algo{tt,
+                rtt,
+                state,
+                is_dest_,
+                is_via_,
+                dist_to_dest_,
+                q_.td_dest_,
+                lb_,
+                q_.via_stops_,
+                base_day,
+                q_.allowed_claszes_,
+                q_.require_bike_transport_,
+                q_.require_car_transport_,
+                q_.prf_idx_ == 2U,
+                q_.no_compulsory_reservation_,
+                q_.transfer_time_settings_,
+                q_.prf_idx_};
+  }
+
+  query const& q_;
+  bitvec is_dest_;
+  std::vector<std::uint16_t> dist_to_dest_;
+  std::array<bitvec, kMaxVias> is_via_;
+  std::vector<std::uint16_t> lb_;
+};
+
+// The arrival bound of a search from t that asks "what departs after t?":
+// Pong's ping rule. Bounding by the direct connection instead (as the search
+// driver does for its fixed interval) would make a gap in service longer than
+// the direct connection look like the end of service.
+inline duration_t look_ahead(query const& q) {
+  return std::min(q.max_travel_time_ + kMinLookAhead, kMaxTravelTime);
+}
+
+inline day_idx_t base_day_of(timetable const& tt, unixtime_t const t) {
+  return day_idx_t{std::chrono::duration_cast<date::days>(
+                       std::chrono::round<std::chrono::days>(t) -
+                       tt.internal_interval().from_)
+                       .count()};
+}
+
 template <direction SearchDir, bool Rt, via_offset_t Vias>
 routing_result reversed(timetable const& tt,
                         rt_timetable const* rtt,
@@ -167,21 +241,38 @@ routing_result reversed(timetable const& tt,
   };
 
   // ====
-  // 1. One search in query direction from the bound: forward the earliest
-  //    arrival, backward the latest departure. This is where the scan starts.
+  // 1. One search in query direction from the bound, Pong's first ping:
+  //    forward the earliest arrivals, backward the latest departures, per
+  //    transfer count. The earliest of them is where the scan starts. A
+  //    journey slower than the direct connection still marks that start,
+  //    hence the raw RAPTOR with Pong's look-ahead, not the search driver.
   // ----
-  auto ea_q = q;
-  ea_q.start_time_ = bound;
-  ea_q.min_connection_count_ = 0U;
-  ea_q.extend_interval_earlier_ = false;
-  ea_q.extend_interval_later_ = false;
-  auto const ea =
-      search<SearchDir, ea_algo_t>{tt, rtt, s_state, r_state, ea_q, timeout}
-          .execute();
-  add_stats(ea);
+  auto const lb_start = std::chrono::steady_clock::now();
+  auto ea_env = algo_env<ea_algo_t>{tt, rtt, q, SearchDir};
+  auto ea_algo = ea_env.make(tt, rtt, r_state, base_day_of(tt, bound));
+  stats.lb_time_ = static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::steady_clock::now() - lb_start)
+          .count());
+  auto starts = std::vector<start>{};
+  get_starts(SearchDir, tt, rtt, bound, q.start_, q.td_start_, q.via_stops_,
+             q.max_start_offset_, q.start_match_mode_, q.use_start_footpaths_,
+             starts, false, q.prf_idx_, q.transfer_time_settings_);
+  ea_algo.reset_arrivals();
+  ea_algo.next_start_time();
+  for (auto const& st : starts) {
+    ea_algo.add_start(st.stop_, st.time_at_stop_);
+  }
+  auto ea = pareto_set<journey>{};
+  ea_algo.execute(bound, q.max_transfers_,
+                  kFwd ? bound + look_ahead(q) : bound - look_ahead(q), ea);
+  kFwd ? ++stats.n_execute_fwd_ : ++stats.n_execute_bwd_;
+  for (auto const& [k, v] : ea_algo.get_stats().to_map()) {
+    algo_stats[k] += v;
+  }
 
   auto first = std::optional<unixtime_t>{};
-  for (auto const& j : *ea.journeys_) {
+  for (auto const& j : ea) {
     first = first.has_value()
                 ? (kFwd ? std::min(*first, j.dest_time_)
                         : std::max(*first, j.dest_time_))
@@ -313,101 +404,28 @@ routing_result reversed_dep(timetable const& tt,
   auto stats = search_stats{};
   auto const fastest_direct = get_fastest_direct(tt, q, SearchDir);
   stats.fastest_direct_ = static_cast<std::uint64_t>(fastest_direct.count());
-  auto const base_day =
-      day_idx_t{std::chrono::duration_cast<date::days>(
-                    std::chrono::round<std::chrono::days>(bound) -
-                    tt.internal_interval().from_)
-                    .count()};
-
-  auto fwd_is_dest = bitvec{};
-  auto fwd_dist_to_dest = std::vector<std::uint16_t>{};
-  auto fwd_is_via = std::array<bitvec, kMaxVias>{};
-  collect_destinations(tt, q.destination_, q.dest_match_mode_, fwd_is_dest,
-                       fwd_dist_to_dest);
-  for (auto const [i, via] : utl::enumerate(q.via_stops_)) {
-    collect_via_destinations(tt, via.location_, fwd_is_via[i]);
-  }
-  auto const lb_start = std::chrono::steady_clock::now();
-  auto fwd_lb = std::vector<std::uint16_t>{};
-  dijkstra(tt, q,
-           (kFwd ? tt.fwd_search_lb_graph_[q.prf_idx_]
-                 : tt.bwd_search_lb_graph_[q.prf_idx_]),
-           (rtt == nullptr ? nullptr
-                           : &(kFwd ? rtt->fwd_search_lb_graph_has_edges_
-                                    : rtt->bwd_search_lb_graph_has_edges_)),
-           (rtt == nullptr ? nullptr
-                           : &(kFwd ? rtt->fwd_search_lb_graph_
-                                    : rtt->bwd_search_lb_graph_)),
-           fwd_lb);
-  auto fwd = fwd_algo_t{tt,
-                        rtt,
-                        fill_state,
-                        fwd_is_dest,
-                        fwd_is_via,
-                        fwd_dist_to_dest,
-                        q.td_dest_,
-                        fwd_lb,
-                        q.via_stops_,
-                        base_day,
-                        q.allowed_claszes_,
-                        q.require_bike_transport_,
-                        q.require_car_transport_,
-                        q.prf_idx_ == 2U,
-                        q.no_compulsory_reservation_,
-                        q.transfer_time_settings_,
-                        q.prf_idx_};
+  auto const base_day = base_day_of(tt, bound);
 
   auto bq = q;  // the query against the search direction
   bq.flip_dir();
   bq.use_start_footpaths_ =
       bq.start_match_mode_ != location_match_mode::kIntermodal;
-  auto bwd_is_dest = bitvec{};
-  auto bwd_dist_to_dest = std::vector<std::uint16_t>{};
-  auto bwd_is_via = std::array<bitvec, kMaxVias>{};
-  collect_destinations(tt, bq.destination_, bq.dest_match_mode_, bwd_is_dest,
-                       bwd_dist_to_dest);
-  for (auto const [i, via] : utl::enumerate(bq.via_stops_)) {
-    collect_via_destinations(tt, via.location_, bwd_is_via[i]);
-  }
-  auto bwd_lb = std::vector<std::uint16_t>{};
-  dijkstra(tt, bq,
-           (kFwd ? tt.bwd_search_lb_graph_[bq.prf_idx_]
-                 : tt.fwd_search_lb_graph_[bq.prf_idx_]),
-           (rtt == nullptr ? nullptr
-                           : &(kFwd ? rtt->bwd_search_lb_graph_has_edges_
-                                    : rtt->fwd_search_lb_graph_has_edges_)),
-           (rtt == nullptr ? nullptr
-                           : &(kFwd ? rtt->bwd_search_lb_graph_
-                                    : rtt->fwd_search_lb_graph_)),
-           bwd_lb);
+  auto const lb_start = std::chrono::steady_clock::now();
+  auto fwd_env = algo_env<fwd_algo_t>{tt, rtt, q, SearchDir};
+  auto bwd_env = algo_env<bwd_algo_t>{tt, rtt, bq, kScanDir};
   stats.lb_time_ = static_cast<std::uint64_t>(
       std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::steady_clock::now() - lb_start)
           .count());
-  auto const make_bwd = [&](raptor_state& state) {
-    return bwd_algo_t{tt,
-                      rtt,
-                      state,
-                      bwd_is_dest,
-                      bwd_is_via,
-                      bwd_dist_to_dest,
-                      bq.td_dest_,
-                      bwd_lb,
-                      bq.via_stops_,
-                      base_day,
-                      bq.allowed_claszes_,
-                      bq.require_bike_transport_,
-                      bq.require_car_transport_,
-                      bq.prf_idx_ == 2U,
-                      bq.no_compulsory_reservation_,
-                      bq.transfer_time_settings_,
-                      bq.prf_idx_};
-  };
-  auto bwd = make_bwd(fill_state);
+  auto fwd = fwd_env.make(tt, rtt, fill_state, base_day);
+  auto bwd = bwd_env.make(tt, rtt, fill_state, base_day);
   auto scan_state = raptor_state{};
-  auto scan = make_bwd(scan_state);
+  auto scan = bwd_env.make(tt, rtt, scan_state, base_day);
 
+  // The scan's backward runs need only journeys faster than the direct
+  // connection; the fills ask what departs after t and look further ahead.
   auto const max_tt = std::min(fastest_direct, q.max_travel_time_) + duration_t{1};
+  auto const fill_tt = look_ahead(q);
   auto starts = std::vector<start>{};
   auto const reconstruct = [&](auto& algo, query const& rq, journey& j) {
     try {
@@ -478,7 +496,7 @@ routing_result reversed_dep(timetable const& tt,
       fwd.add_start(st.stop_, st.time_at_stop_);
     }
     auto ea = pareto_set<journey>{};
-    fwd.execute(t, q.max_transfers_, t + step(max_tt.count()), ea);
+    fwd.execute(t, q.max_transfers_, t + step(fill_tt.count()), ea);
     kFwd ? ++stats.n_execute_fwd_ : ++stats.n_execute_bwd_;
 
     auto found = std::array<std::optional<unixtime_t>, kMaxTransfers + 1U>{};
@@ -629,7 +647,6 @@ routing_result reversed_dep(timetable const& tt,
   }
   scan_until([&]() { return all.size() >= m; });
 
-  auto n_reported = 0U;
   auto last_reported = std::optional<unixtime_t>{};
   while (!is_timeout_reached()) {
     auto const* cand_ptr = next_candidate();
@@ -652,7 +669,10 @@ routing_result reversed_dep(timetable const& tt,
       continue;
     }
     auto const cand = *cand_ptr;  // a fill or scan reallocates `all`
-    if (n_reported >= n && cand.start_time_ != *last_reported) {
+    // Count what the page holds, not what was reported: a reported journey
+    // can later be evicted by a dominating one (found by a fill from a
+    // later time, or arriving later with fewer transfers).
+    if (s_state.results_.size() >= n && cand.start_time_ != *last_reported) {
       break;
     }
     // Which transfer counts could still hide a journey departing before the
@@ -680,7 +700,6 @@ routing_result reversed_dep(timetable const& tt,
     reported.emplace_back(key(cand));
     last_reported = cand.start_time_;
     if (reportable(cand)) {
-      ++n_reported;
       s_state.results_.add(journey{cand});
     }
   }
