@@ -38,6 +38,28 @@ namespace nigiri::routing {
 // pong_search: in the orientation of the query, sorted by start time.
 // The reported interval starts at the query interval and ends one minute
 // after the latest start time of the reported journeys.
+//
+// Order of the reported journeys (Halm 2019, Section 3.1.2 and 4.2):
+//
+//   kArrival    the n earliest arriving journeys after the query time
+//               (Halm's rr_arr). What the scan produces by itself.
+//   kDeparture  the n earliest departing journeys after the query time, the
+//               same question Pong and the forward range query answer
+//               (Halm's rr_dep). The scan runs ahead by a look-ahead pool of
+//               lf * n journeys; the merge takes the earliest departing known
+//               journey and, for every transfer count whose frontier (the
+//               latest departure up to which all journeys with that count
+//               are known) lies before it, fills the gap with one forward
+//               search from the frontier plus one backward search per
+//               journey found, i.e. one Pong iteration. Within one transfer
+//               count the profile has the same order by departure and by
+//               arrival, so a fill advances the frontier to the departure it
+//               found. The scan's own completeness is used as in Halm: a
+//               journey arriving inside the scanned range needs checks only
+//               for fewer transfers. Ties in departure time are reported
+//               together, so a page may hold more than n journeys.
+enum class reversed_order : std::uint8_t { kArrival, kDeparture };
+
 template <typename AlgoState>
 routing_result reversed_search(
     timetable const&,
@@ -46,6 +68,7 @@ routing_result reversed_search(
     AlgoState&,
     query,
     direction search_dir,
-    std::optional<std::chrono::seconds> timeout = std::nullopt);
+    std::optional<std::chrono::seconds> timeout = std::nullopt,
+    reversed_order = reversed_order::kArrival);
 
 }  // namespace nigiri::routing

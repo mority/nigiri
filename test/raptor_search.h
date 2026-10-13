@@ -1,6 +1,7 @@
 #include "nigiri/routing/journey.h"
 
 #include "nigiri/routing/pareto_set.h"
+#include "nigiri/routing/raptor/reversed.h"
 
 namespace nigiri {
 struct timetable;
@@ -56,10 +57,12 @@ pareto_set<routing::journey> search_pong(timetable const&,
                                          routing::query,
                                          direction = direction::kForward);
 
-pareto_set<routing::journey> search_reversed(timetable const&,
-                                             rt_timetable const*,
-                                             routing::query,
-                                             direction = direction::kForward);
+pareto_set<routing::journey> search_reversed(
+    timetable const&,
+    rt_timetable const*,
+    routing::query,
+    direction = direction::kForward,
+    routing::reversed_order = routing::reversed_order::kArrival);
 
 pareto_set<routing::journey> raptor_intermodal_search(
     timetable const&,

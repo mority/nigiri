@@ -173,11 +173,12 @@ pareto_set<routing::journey> raptor_intermodal_search(
 pareto_set<routing::journey> search_reversed(timetable const& tt,
                                              rt_timetable const* rtt,
                                              routing::query q,
-                                             direction const search_dir) {
+                                             direction const search_dir,
+                                             routing::reversed_order const o) {
   auto search_state = routing::search_state{};
   auto algo_state = routing::raptor_state{};
   return *(routing::reversed_search(tt, rtt, search_state, algo_state, q,
-                                    search_dir)
+                                    search_dir, std::nullopt, o)
                .journeys_);
 }
 
