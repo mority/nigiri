@@ -1201,3 +1201,82 @@ TEST(tb_query, intermodal_abc) {
   EXPECT_EQ(std::string_view{intermodal_abc_journeys},
             results_str(results, tt));
 }
+// R (RA -> RB -> SD) departs RA every minute from 00:00 to 71:59, so its
+// route has 4 320 transports, three per minute of the day. S0 -> RA -> SD
+// (1 transfer) boards R at 23:17, S0 -> M -> RB -> SD (2 transfers) at 05:32.
+// With 12 bits for the transport offset in reached, reaching the 23:17
+// transport (offset > 4 096) at RA pruned the 05:32 one at RB.
+mem_dir many_transports_files() {
+  auto s = std::string{R"(
+# agency.txt
+agency_id,agency_name,agency_url,agency_timezone
+DTA,Demo Transit Authority,,Europe/London
+
+# stops.txt
+stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+S0,S0,,,,,,
+M,M,,,,,,
+RA,RA,,,,,,
+RB,RB,,,,,,
+SD,SD,,,,,,
+
+# calendar.txt
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+MON,1,0,0,0,0,0,0,20210301,20210307
+
+# routes.txt
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+P,DTA,P,P,,3
+R,DTA,R,R,,3
+
+# trips.txt
+route_id,service_id,trip_id,trip_headsign,block_id
+P,MON,P1,P1,
+P,MON,P2,P2,
+P,MON,P3,P3,
+)"};
+  auto constexpr kTrips = 3U * 1440U;
+  for (auto i = 0U; i != kTrips; ++i) {
+    s += fmt::format("R,MON,R{0},R{0},\n", i);
+  }
+  s += R"(
+# stop_times.txt
+trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+P1,23:00:00,23:00:00,S0,0,0,0
+P1,23:15:00,23:15:00,RA,1,0,0
+P2,05:00:00,05:00:00,S0,0,0,0
+P2,05:10:00,05:10:00,M,1,0,0
+P3,05:15:00,05:15:00,M,0,0,0
+P3,05:30:00,05:30:00,RB,1,0,0
+)";
+  auto const hhmm = [](unsigned const m) {
+    return fmt::format("{:02}:{:02}:00", m / 60U, m % 60U);
+  };
+  for (auto i = 0U; i != kTrips; ++i) {
+    s += fmt::format(
+        "R{0},{1},{1},RA,0,0,0\nR{0},{2},{2},RB,1,0,0\nR{0},{3},{3},SD,2,0,0\n",
+        i, hhmm(i), hhmm(i + 5U), hhmm(i + 10U));
+  }
+  return mem_dir::read(s);
+}
+
+TEST(tb_query, many_transports) {
+  auto const tt = load_gtfs(many_transports_files);
+  auto max_transports = 0U;
+  for (auto r = route_idx_t{0U}; r != tt.n_routes(); ++r) {
+    max_transports =
+        std::max(max_transports, tt.route_transport_ranges_[r].size());
+  }
+  ASSERT_GT(max_transports, 4096U);
+
+  auto const tbd = tb::preprocess(tt, profile_idx_t{0});
+  auto const results = tripbased_search(
+      tt, tbd, "S0", "SD", unixtime_t{sys_days{March / 1 / 2021} + 5h});
+  ASSERT_NE(0U, results.size());
+  auto earliest = results.begin()->dest_time_;
+  for (auto const& j : results) {
+    earliest = std::min(earliest, j.dest_time_);
+  }
+  EXPECT_EQ(unixtime_t{sys_days{March / 1 / 2021} + 5h + 37min}, earliest)
+      << results_str(results, tt);
+}

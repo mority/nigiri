@@ -52,7 +52,7 @@ struct queue {
 
     auto const route = transfer.get_route();
     auto const transport_offset =
-        static_cast<std::uint16_t>(transfer.transport_offset_);
+        static_cast<std::uint32_t>(transfer.transport_offset_);
     auto const to_segment_offset =
         static_cast<stop_idx_t>(transfer.to_segment_offset_);
     auto const min_segment_offset =
@@ -89,8 +89,8 @@ struct queue {
                        query_day_offset_t const query_day_offset,
                        [[maybe_unused]] day_idx_t const day,
                        std::uint64_t& max_pareto_set_size) {
-    auto const transport_offset = static_cast<std::uint16_t>(
-        to_idx(t - r_.tt_.route_transport_ranges_[r].from_));
+    auto const transport_offset =
+        to_idx(t - r_.tt_.route_transport_ranges_[r].from_);
     auto const min_segment_offset =
         r_.query(r, transport_offset, query_day_offset, 0U);
     auto const segment_offset =

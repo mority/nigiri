@@ -13,20 +13,24 @@ namespace nigiri::routing::tb {
 
 using query_day_offset_t = std::uint16_t;
 
-using transport_t = std::uint16_t;
+// query day << transfer::kTransportOffsetBits | transport offset in the route
+using transport_t = std::uint32_t;
 
-inline transport_t to_transport(std::uint16_t const transport_offset,
+inline transport_t to_transport(std::uint32_t const transport_offset,
                                 query_day_offset_t const query_day_offset) {
-  assert((0xF000 & transport_offset) == 0);
-  assert((0xFFF0 & query_day_offset) == 0);
-  return static_cast<std::uint16_t>(query_day_offset << 12U) | transport_offset;
+  assert(transport_offset < 1U << transfer::kTransportOffsetBits);
+  assert(query_day_offset < kTBMaxDayOffset);
+  return (transport_t{query_day_offset} << transfer::kTransportOffsetBits) |
+         transport_offset;
 }
 
-inline std::uint16_t get_transport_offset(transport_t const x) {
-  return x & 0x0FFF;
+inline std::uint32_t get_transport_offset(transport_t const x) {
+  return x & ((1U << transfer::kTransportOffsetBits) - 1U);
 }
 
-inline std::uint16_t get_query_day(transport_t const x) { return x >> 12U; }
+inline std::uint16_t get_query_day(transport_t const x) {
+  return static_cast<std::uint16_t>(x >> transfer::kTransportOffsetBits);
+}
 
 struct entry {
   inline bool dominates(entry const& o) const {
@@ -35,9 +39,11 @@ struct entry {
   }
 
   transport_t transport_;
-  std::uint16_t segment_offset_ : 12;
-  std::uint16_t k_ : 4;
+  std::uint16_t segment_offset_;
+  std::uint8_t k_;
 };
+
+static_assert(sizeof(entry) == 8);
 
 struct reached {
   explicit reached(timetable const& tt, tb_data const& tbd)
@@ -54,7 +60,7 @@ struct reached {
   }
 
   void update(route_idx_t const r,
-              std::uint16_t const transport_offset,
+              std::uint32_t const transport_offset,
               std::uint16_t const segment_offset,
               query_day_offset_t const query_day_offset,
               std::uint8_t const k,
@@ -76,7 +82,7 @@ struct reached {
   }
 
   std::uint16_t query(route_idx_t const r,
-                      std::uint16_t const transport_offset,
+                      std::uint32_t const transport_offset,
                       query_day_offset_t const query_day_offset,
                       std::uint8_t const k) {
     auto const transport = to_transport(transport_offset, query_day_offset);
