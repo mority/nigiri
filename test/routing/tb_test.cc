@@ -705,6 +705,114 @@ TEST(tb_preprocess, unnecessary_transfer_2) {
   // EXPECT_EQ(0, t.day_offset_);
 }
 
+mem_dir profile_footpath_files() {
+  return mem_dir::read(R"(
+# agency.txt
+agency_id,agency_name,agency_url,agency_timezone
+DTA,Demo Transit Authority,,Europe/London
+
+# stops.txt
+stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+S0,S0,,49.0,8.0,,,
+S1,S1,,49.1,8.0,,,
+S2,S2,,49.2,8.0,,,
+X,X,,49.3,8.0,,,
+Y,Y,,49.3,8.001,,,
+
+# transfers.txt
+from_stop_id,to_stop_id,transfer_type,min_transfer_time
+X,Y,2,300
+Y,X,2,300
+
+# calendar.txt
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+MON,1,0,0,0,0,0,0,20210301,20210307
+
+# routes.txt
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+R0,DTA,R0,R0,"S0 -> S1 -> S2",2
+R1,DTA,R1,R1,"S2 -> X",2
+R2,DTA,R2,R2,"S1 -> Y",2
+
+# trips.txt
+route_id,service_id,trip_id,trip_headsign,block_id
+R0,MON,R0_MON,R0_MON,0
+R1,MON,R1_MON,R1_MON,1
+R2,MON,R2_MON,R2_MON,2
+
+# stop_times.txt
+trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+R0_MON,00:00:00,00:00:00,S0,0,0,0
+R0_MON,01:00:00,01:00:00,S1,1,0,0
+R0_MON,02:00:00,02:00:00,S2,2,0,0
+R1_MON,02:10:00,02:10:00,S2,0,0,0
+R1_MON,03:00:00,03:00:00,X,1,0,0
+R2_MON,01:10:00,01:10:00,S1,0,0,0
+R2_MON,03:30:00,03:30:00,Y,1,0,0
+)");
+}
+
+// Profile 1 walks X <-> Y in 60 min instead of 5 min. Then reaching Y via
+// R1 + walk (04:00) is slower than R2 (03:30), so the transfer R0 -> R2 at S1
+// is needed. The reduction has to use the footpaths of the profile it
+// preprocesses for.
+TEST(tb_preprocess, profile_footpaths) {
+  auto tt = load_gtfs(profile_footpath_files);
+  auto const loc = [&](std::string_view id) {
+    return tt.locations_.location_id_to_idx_.at({id, source_idx_t{0}});
+  };
+  auto const x = loc("X");
+  auto const y = loc("Y");
+
+  auto const slow = profile_idx_t{1U};
+  for (auto const dir :
+       {&tt.locations_.footpaths_out_, &tt.locations_.footpaths_in_}) {
+    auto& fps = *dir;
+    for (auto l = location_idx_t{0U}; l != tt.n_locations(); ++l) {
+      auto v = std::vector<footpath>{};
+      for (auto const fp : fps[kDefaultProfile][l]) {
+        auto const xy =
+            (l == x && fp.target() == y) || (l == y && fp.target() == x);
+        v.emplace_back(fp.target(), xy ? 60_minutes : fp.duration());
+      }
+      fps[slow].emplace_back(v);
+    }
+  }
+  ASSERT_EQ(1U, tt.locations_.footpaths_out_[kDefaultProfile][x].size());
+  ASSERT_LT(tt.locations_.footpaths_out_[kDefaultProfile][x][0].duration(),
+            30_minutes);
+
+  auto const first_stop_route = [&](std::string_view id) {
+    for (auto r = route_idx_t{0U}; r != tt.n_routes(); ++r) {
+      if (stop{tt.route_location_seq_[r][0]}.location_idx() == loc(id)) {
+        return r;
+      }
+    }
+    throw std::runtime_error{"route not found"};
+  };
+  auto const r0 = first_stop_route("S0");
+  auto const r1 = first_stop_route("S2");
+  auto const r2 = first_stop_route("S1");
+  auto const t0 = tt.route_transport_ranges_[r0].from_;
+
+  auto const routes_at = [&](tb::tb_data const& tbd, stop_idx_t const i) {
+    auto routes = std::vector<route_idx_t>{};
+    for (auto const t :
+         tbd.segment_transfers_[tbd.transport_first_segment_[t0] + i - 1U]) {
+      routes.push_back(t.route_);
+    }
+    return routes;
+  };
+
+  auto const fast = tb::preprocess(tt, kDefaultProfile);
+  EXPECT_EQ(std::vector<route_idx_t>{}, routes_at(fast, 1U));
+  EXPECT_EQ(std::vector<route_idx_t>{r1}, routes_at(fast, 2U));
+
+  auto const slow_tbd = tb::preprocess(tt, slow);
+  EXPECT_EQ(std::vector<route_idx_t>{r2}, routes_at(slow_tbd, 1U));
+  EXPECT_EQ(std::vector<route_idx_t>{r1}, routes_at(slow_tbd, 2U));
+}
+
 mem_dir early_train_files() {
   return mem_dir::read(R"(
 # agency.txt

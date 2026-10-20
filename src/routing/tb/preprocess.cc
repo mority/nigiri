@@ -469,8 +469,7 @@ void preprocess_transport(timetable const& tt,
             u_arr_rel_t_first_dep + tt.locations_.transfer_time_[u_stp].count(),
             transfer->bf_, &improvement);
 
-        for (auto const& fp_r :
-             tt.locations_.footpaths_out_[profile_idx_t{0U}][u_stp]) {
+        for (auto const& fp_r : tt.locations_.footpaths_out_[prf_idx][u_stp]) {
           auto const eta = static_cast<std::uint16_t>(u_arr_rel_t_first_dep +
                                                       fp_r.duration_);
           s.rr_arr_.update(fp_r.target(), eta, transfer->bf_, &improvement);
