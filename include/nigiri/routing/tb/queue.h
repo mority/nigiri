@@ -62,16 +62,18 @@ struct queue {
       tb_queue_dbg(
           "  already reached: transfer.route={}, transfer.to_segment={} >= "
           "{}=min_segment, reached_segments={}",
-          route, transfer.to_segment_, min_segment_offset,
+          route, r_.tbd_.to_segment(r_.tt_, transfer), min_segment_offset,
           r_.to_str(base_, route));
       return false;
     }
 
     tb_queue_dbg("    enqueue");
+    auto const transport_first_segment =
+        r_.tbd_.transport_first_segment_
+            [r_.tt_.route_transport_ranges_[route].from_ + transport_offset];
     q_.push_back(queue_entry{
-        .segment_range_ = {transfer.to_segment_, transfer.to_segment_ -
-                                                     to_segment_offset +
-                                                     min_segment_offset},
+        .segment_range_ = {transport_first_segment + to_segment_offset,
+                           transport_first_segment + min_segment_offset},
         .parent_ = parent,
         .transport_query_day_offset_ = static_cast<queue_idx_t>(day_offset)});
     r_.update(route, transport_offset, to_segment_offset,

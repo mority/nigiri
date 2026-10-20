@@ -179,7 +179,8 @@ TEST(tb_preprocess, same_day_transfer) {
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_EQ(1U, tbd.segment_transfers_[s].size());
   auto const t = tbd.segment_transfers_[s][0];
-  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}], t.to_segment_);
+  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}],
+            tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{1U}, t.to_transport_);
   EXPECT_EQ(bitfield{"100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(0, t.day_offset_);
@@ -254,7 +255,8 @@ TEST(tb_preprocess, next_day_transfer) {
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
   auto const t = tbd.segment_transfers_[s][0];
-  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}], t.to_segment_);
+  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}],
+            tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{1U}, t.to_transport_);
   EXPECT_EQ(bitfield{"100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(1, t.day_offset_);
@@ -302,7 +304,8 @@ TEST(tb_preprocess, long_transfer) {
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
   auto const t = tbd.segment_transfers_[s][0];
-  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}], t.to_segment_);
+  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}],
+            tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{1U}, t.to_transport_);
   EXPECT_EQ(bitfield{"100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(3, t.day_offset_);
@@ -349,7 +352,8 @@ TEST(tb_preprocess, weekday_transfer) {
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
   auto const t = tbd.segment_transfers_[s][0];
-  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}], t.to_segment_);
+  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}],
+            tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{1U}, t.to_transport_);
   EXPECT_EQ(bitfield{"0111100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(1, t.day_offset_);
@@ -396,7 +400,8 @@ TEST(tb_preprocess, daily_transfer) {
   auto const s = tbd.transport_first_segment_[transport_idx_t{0U}];
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
   auto const t = tbd.segment_transfers_[s][0];
-  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}], t.to_segment_);
+  EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}],
+            tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{1U}, t.to_transport_);
   EXPECT_EQ(bitfield{"111111100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(0, t.day_offset_);
@@ -453,7 +458,7 @@ TEST(tb_preprocess, earlier_stop_transfer) {
   ASSERT_TRUE(tbd.segment_transfers_[s].size() == 1U);
   auto const t = tbd.segment_transfers_[s][0];
   EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}] + 1U,
-            t.to_segment_);
+            tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{1U}, t.to_transport_);
   EXPECT_EQ(bitfield{"100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(0, t.day_offset_);
@@ -545,7 +550,7 @@ TEST(tb_preprocess, earlier_transport_transfer) {
   ASSERT_EQ(1U, tbd.segment_transfers_[s].size());
   auto const t = tbd.segment_transfers_[s][0];
   EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{0U}] + 4U,
-            t.to_segment_);
+            tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{0U}, t.to_transport_);
   EXPECT_EQ(bitfield{"100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(0, t.day_offset_);
@@ -598,7 +603,7 @@ TEST(tb_preprocess, uturn_transfer) {
   }
   ASSERT_EQ(1U, tbd.segment_transfers_[tb::segment_idx_t{0U}].size());
   auto const t = tbd.segment_transfers_[tb::segment_idx_t{0U}][0];
-  EXPECT_EQ(tb::segment_idx_t{3U}, t.to_segment_);
+  EXPECT_EQ(tb::segment_idx_t{3U}, tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{1U}, t.to_transport_);
   EXPECT_EQ(bitfield{"100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(0, t.day_offset_);
@@ -699,7 +704,7 @@ TEST(tb_preprocess, unnecessary_transfer_2) {
   ASSERT_EQ(1U, tbd.segment_transfers_[s].size());
   auto const t = tbd.segment_transfers_[s][0];
   EXPECT_EQ(tbd.transport_first_segment_[transport_idx_t{1U}] + 2U,
-            t.to_segment_);
+            tbd.to_segment(tt, t));
   // EXPECT_EQ(transport_idx_t{1U}, t.to_transport_);
   EXPECT_EQ(bitfield{"100000"}, tbd.bitfields_[t.traffic_days_]);
   // EXPECT_EQ(0, t.day_offset_);

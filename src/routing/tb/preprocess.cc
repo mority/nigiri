@@ -591,9 +591,6 @@ tb_data preprocess(timetable const& tt, profile_idx_t const prf_idx) {
                    std::span{begin(transport_segments), segments.size()})) {
             auto dst = d.segment_transfers_.add_back_sized(src.size());
             for (auto const [to, from] : utl::zip(dst, src)) {
-              to.to_segment_ =
-                  d.transport_first_segment_[from.transport_idx_to_] +
-                  from.stop_idx_to_;
               to.traffic_days_ = get_or_create_bf(from.bf_);
               to.set_route(tt.transport_route_[from.transport_idx_to_]);
               to.transport_offset_ =

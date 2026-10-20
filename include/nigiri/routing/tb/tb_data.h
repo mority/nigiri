@@ -17,6 +17,8 @@ using segment_idx_t = cista::strong<std::uint32_t, struct _segment_idx>;
 
 using tb_bitfield_idx_t = cista::strong<std::uint32_t, struct _tb_bitfield_idx>;
 
+// 12 bytes: without packing, the uint64_t bit-fields would align it to 8
+#pragma pack(push, 4)
 struct transfer {
   static constexpr auto const kRouteBits = 24U;
   static constexpr auto const kTransportOffsetBits = 20U;
@@ -51,7 +53,6 @@ struct transfer {
     return h.combine(cista::hash("tb_data::transfer::v2"));
   }
 
-  segment_idx_t to_segment_;
   tb_bitfield_idx_t traffic_days_;
   std::uint64_t transport_offset_ : kTransportOffsetBits;
   std::uint64_t to_segment_offset_ : 16;
@@ -66,13 +67,17 @@ private:
   //   - (+1) does the transfer itself cross midnight
   std::uint64_t day_offset_ : 4;
 };
+#pragma pack(pop)
 
-static_assert(sizeof(transfer) == 16);
+static_assert(sizeof(transfer) == 12);
 
 struct tb_data {
   interval<segment_idx_t> get_segment_range(transport_idx_t const t) const {
     return {transport_first_segment_[t], transport_first_segment_[t + 1]};
   }
+
+  // the segment at which the transfer boards its target transport
+  segment_idx_t to_segment(timetable const&, transfer const&) const;
 
   void print(std::ostream&, timetable const&) const;
 

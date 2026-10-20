@@ -216,11 +216,12 @@ void query_engine<UseLowerBounds>::seg_transfers(queue_idx_t const q,
              state_.tbd_.segment_transfers_[s].size());
     auto const day = to_idx(base_ + qe.transport_query_day_offset_);
     if (state_.tbd_.bitfields_[transfer.traffic_days_].test(day)) {
-      tb_debug("  -> enqueue transfer to {}", seg(transfer.to_segment_, qe));
+      tb_debug("  -> enqueue transfer to {}",
+               seg(state_.tbd_.to_segment(tt_, transfer), qe));
       state_.q_n_.enqueue(transfer, q, k + 1, stats_.max_pareto_set_size_);
     } else {
       tb_debug("  transfer {} - {} not active on {}", seg(s, qe),
-               seg(transfer.to_segment_, day_idx_t{day}),
+               seg(state_.tbd_.to_segment(tt_, transfer), day_idx_t{day}),
                tt_.to_unixtime(day_idx_t{day}));
     }
   }
@@ -290,7 +291,7 @@ void query_engine<UseLowerBounds>::reconstruct(query const& q,
                                        segment_idx_t const to) {
     for (auto const segment : get_full_segment_range(state_.q_n_[x])) {
       for (auto const transfer : state_.tbd_.segment_transfers_[segment]) {
-        if (transfer.to_segment_ == to) {
+        if (state_.tbd_.to_segment(tt_, transfer) == to) {
           return segment;
         }
       }
