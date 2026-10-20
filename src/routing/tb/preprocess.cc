@@ -452,15 +452,18 @@ void preprocess_transport(timetable const& tt,
       auto const route_u = tt.transport_route_[transfer->transport_idx_to_];
       for (auto stop_idx = static_cast<stop_idx_t>(transfer->stop_idx_to_ + 1U);
            stop_idx != tt.route_location_seq_[route_u].size(); ++stop_idx) {
+        // skip where exiting is not allowed
+        auto const u_stop = stop{tt.route_location_seq_[route_u][stop_idx]};
+        if (!u_stop.out_allowed()) {
+          continue;
+        }
+        auto const u_stp = u_stop.location_idx();
+
         auto const u_arr_rel_t_first_dep =
             static_cast<std::uint16_t>(transfer->day_offset_ * 1440 +
                                        tt.event_mam(transfer->transport_idx_to_,
                                                     stop_idx, event_type::kArr)
                                            .count());
-
-        // locations after p_u_j
-        auto const u_stp =
-            stop{tt.route_location_seq_[route_u][stop_idx]}.location_idx();
 
         s.rr_arr_.update(u_stp, u_arr_rel_t_first_dep, transfer->bf_,
                          &improvement);

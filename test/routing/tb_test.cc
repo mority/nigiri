@@ -813,6 +813,77 @@ TEST(tb_preprocess, profile_footpaths) {
   EXPECT_EQ(std::vector<route_idx_t>{r1}, routes_at(slow_tbd, 2U));
 }
 
+// T: SA 09:00 -> SB 10:00 -> SE 10:05; U: SB 10:10 -> SC 10:30; P: SE 10:10 ->
+// SC 10:20 (no drop-off) -> SD 10:40. The transfer reduction processes T's
+// transfer to P at SE first; P passes SC earlier than U, but nobody can get off
+// there, so T's transfer to U at SB is needed (SA -> SC).
+mem_dir no_alighting_files() {
+  return mem_dir::read(R"(
+# agency.txt
+agency_id,agency_name,agency_url,agency_timezone
+DTA,Demo Transit Authority,,Europe/London
+
+# stops.txt
+stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+SA,SA,,,,,,
+SB,SB,,,,,,
+SC,SC,,,,,,
+SD,SD,,,,,,
+SE,SE,,,,,,
+
+# calendar.txt
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+MON,1,0,0,0,0,0,0,20210301,20210307
+
+# routes.txt
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+RT,DTA,RT,RT,"SA -> SE",3
+RP,DTA,RP,RP,"SE -> SD",3
+RU,DTA,RU,RU,"SB -> SC",3
+
+# trips.txt
+route_id,service_id,trip_id,trip_headsign,block_id
+RT,MON,T,T,
+RP,MON,P,P,
+RU,MON,U,U,
+
+# stop_times.txt
+trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+T,09:00:00,09:00:00,SA,0,0,0
+T,10:00:00,10:00:00,SB,1,0,0
+T,10:05:00,10:05:00,SE,2,0,0
+P,10:10:00,10:10:00,SE,0,0,0
+P,10:20:00,10:20:00,SC,1,0,1
+P,10:40:00,10:40:00,SD,2,0,0
+U,10:10:00,10:10:00,SB,0,0,0
+U,10:30:00,10:30:00,SC,1,0,0
+)");
+}
+
+TEST(tb_preprocess, no_alighting_transfer) {
+  auto const tt = load_gtfs(no_alighting_files);
+  auto const tbd = tb::preprocess(tt, profile_idx_t{0});
+  auto const first_stop = [&](transport_idx_t const t) {
+    auto const l = stop{tt.route_location_seq_[tt.transport_route_[t]].front()}
+                       .location_idx();
+    return std::string{tt.get_default_name(l)};
+  };
+  auto t = transport_idx_t::invalid(), u = transport_idx_t::invalid();
+  for (auto x = transport_idx_t{0U}; x != tt.transport_traffic_days_.size();
+       ++x) {
+    if (first_stop(x) == "SA") {
+      t = x;
+    } else if (first_stop(x) == "SB") {
+      u = x;
+    }
+  }
+  ASSERT_NE(transport_idx_t::invalid(), t);
+  ASSERT_NE(transport_idx_t::invalid(), u);
+  auto const s = tbd.transport_first_segment_[t];  // SA -> SB
+  ASSERT_EQ(1U, tbd.segment_transfers_[s].size());
+  EXPECT_EQ(tt.transport_route_[u], tbd.segment_transfers_[s][0].route_);
+}
+
 mem_dir early_train_files() {
   return mem_dir::read(R"(
 # agency.txt
