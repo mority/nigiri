@@ -799,7 +799,7 @@ TEST(tb_preprocess, profile_footpaths) {
     auto routes = std::vector<route_idx_t>{};
     for (auto const t :
          tbd.segment_transfers_[tbd.transport_first_segment_[t0] + i - 1U]) {
-      routes.push_back(tbd.transfer_layout_.route(t));
+      routes.push_back(t.get_route());
     }
     return routes;
   };
@@ -881,8 +881,7 @@ TEST(tb_preprocess, no_alighting_transfer) {
   ASSERT_NE(transport_idx_t::invalid(), u);
   auto const s = tbd.transport_first_segment_[t];  // SA -> SB
   ASSERT_EQ(1U, tbd.segment_transfers_[s].size());
-  EXPECT_EQ(tt.transport_route_[u],
-            tbd.transfer_layout_.route(tbd.segment_transfers_[s][0]));
+  EXPECT_EQ(tt.transport_route_[u], tbd.segment_transfers_[s][0].get_route());
 }
 
 // X and Y (SA -> SB -> SC) both depart SA at 10:00. X is faster (SB 10:04,
@@ -968,13 +967,11 @@ TEST(tb_preprocess, equal_start_time) {
       tbd.segment_transfers_[tbd.transport_first_segment_[f]];
   auto const x_offset =
       to_idx(x - tt.route_transport_ranges_[tt.transport_route_[x]].from_);
-  EXPECT_TRUE(std::any_of(begin(transfers), end(transfers),
-                          [&](tb::transfer const& tr) {
-                            auto const& l = tbd.transfer_layout_;
-                            return l.route(tr) == tt.transport_route_[x] &&
-                                   l.transport_offset(tr) == x_offset &&
-                                   l.to_segment_offset(tr) == 1U;
-                          }));
+  EXPECT_TRUE(std::any_of(
+      begin(transfers), end(transfers), [&](tb::transfer const& tr) {
+        return tr.get_route() == tt.transport_route_[x] &&
+               tr.transport_offset_ == x_offset && tr.to_segment_offset_ == 1U;
+      }));
 
   auto const results = tripbased_search(
       tt, tbd, "S0", "SC", unixtime_t{sys_days{March / 1 / 2021} + 8h});
@@ -986,31 +983,25 @@ TEST(tb_preprocess, equal_start_time) {
   EXPECT_EQ(unixtime_t{sys_days{March / 1 / 2021} + 10h + 10min}, earliest);
 }
 
-TEST(tb_preprocess, transfer_layout) {
-  // 2 routes, the larger has 2 transports, the longer 4 stops
-  auto const tt = load_gtfs(equal_start_files);
-  ASSERT_EQ(2U, tt.n_routes());
-  auto const l = tb::get_transfer_layout(tt);
-  EXPECT_EQ(1U, l.route_bits_);
-  EXPECT_EQ(1U, l.transport_bits_);
-  EXPECT_EQ(2U, l.stop_bits_);
-
-  // wider than the former fixed widths (16 bits transport offset, 12 bits
-  // stop index): routes with 213 656 transports, 65 536 stops
-  auto const wide = tb::transfer_layout{
-      .route_bits_ = 21U, .transport_bits_ = 18U, .stop_bits_ = 16U};
+TEST(tb_preprocess, transfer_fields) {
+  // wider than the former fields (16 bits transport offset, 12 bits stop
+  // index): full Transitous has 1.9 M routes, routes with up to 213 656
+  // transports (frequencies.txt)
   for (auto const& [r, transport_offset, to_segment_offset, day_offset] :
        {std::tuple{route_idx_t{0U}, 0U, stop_idx_t{0U}, std::int8_t{-8}},
-        std::tuple{route_idx_t{(1U << 21U) - 1U}, 213'655U, stop_idx_t{65'535U},
-                   std::int8_t{7}},
-        std::tuple{route_idx_t{1'234'567U}, 70'000U, stop_idx_t{4'097U},
+        std::tuple{route_idx_t{(1U << 24U) - 1U}, (1U << 20U) - 1U,
+                   stop_idx_t{65'535U}, std::int8_t{7}},
+        std::tuple{route_idx_t{1'900'000U}, 213'655U, stop_idx_t{4'097U},
                    std::int8_t{-1}}}) {
     auto t = tb::transfer{};
-    t.packed_ = wide.pack(r, transport_offset, to_segment_offset, day_offset);
-    EXPECT_EQ(r, wide.route(t));
-    EXPECT_EQ(transport_offset, wide.transport_offset(t));
-    EXPECT_EQ(to_segment_offset, wide.to_segment_offset(t));
-    EXPECT_EQ(day_offset, wide.day_offset(t));
+    t.set_route(r);
+    t.transport_offset_ = transport_offset;
+    t.to_segment_offset_ = to_segment_offset;
+    t.set_day_offset(day_offset);
+    EXPECT_EQ(r, t.get_route());
+    EXPECT_EQ(transport_offset, t.transport_offset_);
+    EXPECT_EQ(to_segment_offset, t.to_segment_offset_);
+    EXPECT_EQ(day_offset, t.get_day_offset());
   }
 }
 

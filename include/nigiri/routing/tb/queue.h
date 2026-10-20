@@ -41,9 +41,8 @@ struct queue {
                queue_idx_t const parent,
                std::uint8_t const k,
                std::uint64_t& max_pareto_set_size) {
-    auto const& layout = r_.tbd_.transfer_layout_;
     auto const day_offset =
-        q_[parent].transport_query_day_offset_ + layout.day_offset(transfer);
+        q_[parent].transport_query_day_offset_ + transfer.get_day_offset();
 
     if (day_offset <= 0 || day_offset >= kTBMaxDayOffset) {
       tb_queue_dbg("  day_offset out of range: {}",
@@ -51,10 +50,11 @@ struct queue {
       return false;
     }
 
-    auto const route = layout.route(transfer);
+    auto const route = transfer.get_route();
     auto const transport_offset =
-        static_cast<std::uint16_t>(layout.transport_offset(transfer));
-    auto const to_segment_offset = layout.to_segment_offset(transfer);
+        static_cast<std::uint16_t>(transfer.transport_offset_);
+    auto const to_segment_offset =
+        static_cast<stop_idx_t>(transfer.to_segment_offset_);
     auto const min_segment_offset =
         r_.query(route, transport_offset,
                  static_cast<query_day_offset_t>(day_offset), k);

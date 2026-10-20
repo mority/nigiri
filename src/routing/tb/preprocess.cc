@@ -524,11 +524,20 @@ void preprocess_route(timetable const& tt,
 }
 
 tb_data preprocess(timetable const& tt, profile_idx_t const prf_idx) {
+  auto max_transports = std::uint32_t{0U};
+  for (auto r = route_idx_t{0U}; r != tt.n_routes(); ++r) {
+    max_transports =
+        std::max(max_transports, tt.route_transport_ranges_[r].size());
+  }
+  utl::verify(tt.n_routes() <= 1U << transfer::kRouteBits &&
+                  max_transports <= 1U << transfer::kTransportOffsetBits,
+              "tb: a transfer can't address {} routes with up to {} transports",
+              tt.n_routes(), max_transports);
+
   stats stats;
 
   auto d = tb_data{};
   d.prf_idx_ = prf_idx;
-  d.transfer_layout_ = get_transfer_layout(tt);
 
   // Bitfield deduplication
   auto bitfields = hash_map<bitfield, tb_bitfield_idx_t>{};
@@ -586,12 +595,12 @@ tb_data preprocess(timetable const& tt, profile_idx_t const prf_idx) {
                   d.transport_first_segment_[from.transport_idx_to_] +
                   from.stop_idx_to_;
               to.traffic_days_ = get_or_create_bf(from.bf_);
-              auto const to_route = tt.transport_route_[from.transport_idx_to_];
-              to.packed_ = d.transfer_layout_.pack(
-                  to_route,
+              to.set_route(tt.transport_route_[from.transport_idx_to_]);
+              to.transport_offset_ =
                   to_idx(from.transport_idx_to_ -
-                         tt.route_transport_ranges_[to_route].from_),
-                  from.stop_idx_to_, from.day_offset_);
+                         tt.route_transport_ranges_[to.get_route()].from_);
+              to.to_segment_offset_ = from.stop_idx_to_;
+              to.set_day_offset(from.day_offset_);
             }
           }
         }
