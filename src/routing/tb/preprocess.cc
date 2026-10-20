@@ -528,6 +528,7 @@ tb_data preprocess(timetable const& tt, profile_idx_t const prf_idx) {
 
   auto d = tb_data{};
   d.prf_idx_ = prf_idx;
+  d.transfer_layout_ = get_transfer_layout(tt);
 
   // Bitfield deduplication
   auto bitfields = hash_map<bitfield, tb_bitfield_idx_t>{};
@@ -585,12 +586,12 @@ tb_data preprocess(timetable const& tt, profile_idx_t const prf_idx) {
                   d.transport_first_segment_[from.transport_idx_to_] +
                   from.stop_idx_to_;
               to.traffic_days_ = get_or_create_bf(from.bf_);
-              to.route_ = tt.transport_route_[from.transport_idx_to_];
-              to.transport_offset_ = static_cast<std::uint16_t>(
+              auto const to_route = tt.transport_route_[from.transport_idx_to_];
+              to.packed_ = d.transfer_layout_.pack(
+                  to_route,
                   to_idx(from.transport_idx_to_ -
-                         tt.route_transport_ranges_[to.route_].from_));
-              to.to_segment_offset_ = from.stop_idx_to_;
-              to.set_day_offset(from.day_offset_);
+                         tt.route_transport_ranges_[to_route].from_),
+                  from.stop_idx_to_, from.day_offset_);
             }
           }
         }

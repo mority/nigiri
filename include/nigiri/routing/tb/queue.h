@@ -41,8 +41,9 @@ struct queue {
                queue_idx_t const parent,
                std::uint8_t const k,
                std::uint64_t& max_pareto_set_size) {
+    auto const& layout = r_.tbd_.transfer_layout_;
     auto const day_offset =
-        q_[parent].transport_query_day_offset_ + transfer.get_day_offset();
+        q_[parent].transport_query_day_offset_ + layout.day_offset(transfer);
 
     if (day_offset <= 0 || day_offset >= kTBMaxDayOffset) {
       tb_queue_dbg("  day_offset out of range: {}",
@@ -50,27 +51,30 @@ struct queue {
       return false;
     }
 
+    auto const route = layout.route(transfer);
+    auto const transport_offset =
+        static_cast<std::uint16_t>(layout.transport_offset(transfer));
+    auto const to_segment_offset = layout.to_segment_offset(transfer);
     auto const min_segment_offset =
-        r_.query(transfer.route_, transfer.transport_offset_,
+        r_.query(route, transport_offset,
                  static_cast<query_day_offset_t>(day_offset), k);
-    if (transfer.to_segment_offset_ >= min_segment_offset) {
+    if (to_segment_offset >= min_segment_offset) {
       tb_queue_dbg(
           "  already reached: transfer.route={}, transfer.to_segment={} >= "
           "{}=min_segment, reached_segments={}",
-          transfer.route_, transfer.to_segment_, min_segment_offset,
-          r_.to_str(base_, transfer.route_));
+          route, transfer.to_segment_, min_segment_offset,
+          r_.to_str(base_, route));
       return false;
     }
 
     tb_queue_dbg("    enqueue");
     q_.push_back(queue_entry{
-        .segment_range_ = {transfer.to_segment_,
-                           transfer.to_segment_ - transfer.to_segment_offset_ +
-                               min_segment_offset},
+        .segment_range_ = {transfer.to_segment_, transfer.to_segment_ -
+                                                     to_segment_offset +
+                                                     min_segment_offset},
         .parent_ = parent,
         .transport_query_day_offset_ = static_cast<queue_idx_t>(day_offset)});
-    r_.update(transfer.route_, transfer.transport_offset_,
-              transfer.to_segment_offset_,
+    r_.update(route, transport_offset, to_segment_offset,
               static_cast<query_day_offset_t>(day_offset), k,
               max_pareto_set_size);
 
