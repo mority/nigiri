@@ -1206,6 +1206,36 @@ TEST(tb_query, intermodal_abc) {
   EXPECT_EQ(std::string_view{intermodal_abc_journeys},
             results_str(results, tt));
 }
+
+// One query_state for two queries: the first one's arrival times and
+// destination offset (5 min) must not carry over to the second one (15 min).
+TEST(tb_query, reuse_state) {
+  auto const tt = load_hrd(files_abc);
+  auto const tbd = tb::preprocess(tt, profile_idx_t{0});
+  auto search_state = routing::search_state{};
+  auto algo_state = tb::query_state{tt, tbd};
+  auto const search = [&](duration_t const dest_offset) {
+    auto q = routing::query{
+        .start_time_ =
+            interval{unixtime_t{sys_days{March / 30 / 2020}} + 5_hours,
+                     unixtime_t{sys_days{March / 30 / 2020}} + 6_hours},
+        .start_match_mode_ = routing::location_match_mode::kIntermodal,
+        .dest_match_mode_ = routing::location_match_mode::kIntermodal,
+        .start_ = {{tt.locations_.location_id_to_idx_.at(
+                        {.id_ = "0000001", .src_ = source_idx_t{0U}}),
+                    10_minutes, 99U}},
+        .destination_ = {{tt.locations_.location_id_to_idx_.at(
+                              {.id_ = "0000003", .src_ = source_idx_t{0U}}),
+                          dest_offset, 77U}}};
+    return *(routing::search<direction::kForward, tb::query_engine<false>>{
+        tt, nullptr, search_state, algo_state, std::move(q)}
+                 .execute()
+                 .journeys_);
+  };
+  search(5_minutes);
+  EXPECT_EQ(std::string_view{intermodal_abc_journeys},
+            results_str(search(15_minutes), tt));
+}
 // R (RA -> RB -> SD) departs RA every minute from 00:00 to 71:59, so its
 // route has 4 320 transports, three per minute of the day. S0 -> RA -> SD
 // (1 transfer) boards R at 23:17, S0 -> M -> RB -> SD (2 transfers) at 05:32.

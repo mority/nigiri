@@ -25,10 +25,12 @@ struct query_state {
   }
 
   void reset() {
+    utl::fill(t_min_, unixtime_t::max());
     utl::fill(parent_, queue_entry::kNoParent);
     r_.reset();
     q_n_.reset();
     end_reachable_.zero_out();
+    dist_to_dest_.clear();
   }
 
   tb_data const& tbd_;
