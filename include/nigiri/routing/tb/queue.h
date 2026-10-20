@@ -27,7 +27,7 @@ struct queue_entry {
   static_assert(1 << kQueryDayOffsetBits >= kTBMaxDayOffset);
 
   interval<segment_idx_t> segment_range_;
-  queue_idx_t parent_ : 27;
+  queue_idx_t parent_ : kParentBits;
   queue_idx_t transport_query_day_offset_ : kQueryDayOffsetBits;
 };
 
@@ -71,6 +71,8 @@ struct queue {
     auto const transport_first_segment =
         r_.tbd_.transport_first_segment_
             [r_.tt_.route_transport_ranges_[route].from_ + transport_offset];
+    utl::verify(q_.size() < queue_entry::kNoParent,
+                "tb: more than {} queue entries", queue_entry::kNoParent);
     q_.push_back(queue_entry{
         .segment_range_ = {transport_first_segment + to_segment_offset,
                            transport_first_segment + min_segment_offset},
@@ -108,6 +110,8 @@ struct queue {
 
     assert(tbd.get_segment_range(t).contains(
         interval{segment, transport_first_segment + min_segment_offset}));
+    utl::verify(q_.size() < queue_entry::kNoParent,
+                "tb: more than {} queue entries", queue_entry::kNoParent);
     q_.push_back(queue_entry{
         .segment_range_ = {segment,
                            transport_first_segment + min_segment_offset},
