@@ -884,6 +884,105 @@ TEST(tb_preprocess, no_alighting_transfer) {
   EXPECT_EQ(tt.transport_route_[u], tbd.segment_transfers_[s][0].route_);
 }
 
+// X and Y (SA -> SB -> SC) both depart SA at 10:00. X is faster (SB 10:04,
+// SC 10:10; Y: SB 10:07, SC 10:20) and precedes Y in their route (Y is
+// loaded first). F (S0 -> SB -> SD -> SB) reaches X at its first visit of SB
+// (09:58 + 2 min transfer time) and only Y at its second (10:04 + 2 min).
+// Line-based pruning processes the second visit first; ordering the reached
+// transports by their departure at SA ranked X like Y, so Y dominated X and
+// the transfer to X was dropped (S0 -> SC: 10:20 instead of 10:10).
+mem_dir equal_start_files() {
+  return mem_dir::read(R"(
+# agency.txt
+agency_id,agency_name,agency_url,agency_timezone
+DTA,Demo Transit Authority,,Europe/London
+
+# stops.txt
+stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+S0,S0,,,,,,
+SA,SA,,,,,,
+SB,SB,,,,,,
+SC,SC,,,,,,
+SD,SD,,,,,,
+
+# calendar.txt
+service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+MON,1,0,0,0,0,0,0,20210301,20210307
+
+# routes.txt
+route_id,agency_id,route_short_name,route_long_name,route_desc,route_type
+RF,DTA,RF,RF,"S0 -> SB",3
+RR,DTA,RR,RR,"SA -> SC",3
+
+# trips.txt
+route_id,service_id,trip_id,trip_headsign,block_id
+RR,MON,Y,Y,
+RR,MON,X,X,
+RF,MON,F,F,
+
+# transfers.txt
+from_stop_id,to_stop_id,transfer_type,min_transfer_time
+SB,SB,2,120
+
+# stop_times.txt
+trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+Y,10:00:00,10:00:00,SA,0,0,0
+Y,10:07:00,10:07:00,SB,1,0,0
+Y,10:20:00,10:20:00,SC,2,0,0
+X,10:00:00,10:00:00,SA,0,0,0
+X,10:04:00,10:04:00,SB,1,0,0
+X,10:10:00,10:10:00,SC,2,0,0
+F,09:00:00,09:00:00,S0,0,0,0
+F,09:58:00,09:58:00,SB,1,0,0
+F,10:00:00,10:00:00,SD,2,0,0
+F,10:04:00,10:04:00,SB,3,0,0
+)");
+}
+
+TEST(tb_preprocess, equal_start_time) {
+  auto const tt = load_gtfs(equal_start_files);
+  auto const tbd = tb::preprocess(tt, profile_idx_t{0});
+  auto f = transport_idx_t::invalid(), x = transport_idx_t::invalid(),
+       y = transport_idx_t::invalid();
+  for (auto t = transport_idx_t{0U}; t != tt.transport_traffic_days_.size();
+       ++t) {
+    auto const first =
+        stop{tt.route_location_seq_[tt.transport_route_[t]].front()};
+    if (tt.get_default_name(first.location_idx()) == "S0") {
+      f = t;
+    } else if (tt.event_mam(t, 1, event_type::kArr).count() == 10 * 60 + 4) {
+      x = t;
+    } else {
+      y = t;
+    }
+  }
+  ASSERT_NE(transport_idx_t::invalid(), f);
+  ASSERT_NE(transport_idx_t::invalid(), x);
+  ASSERT_NE(transport_idx_t::invalid(), y);
+  ASSERT_EQ(tt.transport_route_[x], tt.transport_route_[y]);
+  ASSERT_LT(x, y);
+
+  // F's first visit of SB: the transfer to X
+  auto const& transfers =
+      tbd.segment_transfers_[tbd.transport_first_segment_[f]];
+  auto const x_offset =
+      to_idx(x - tt.route_transport_ranges_[tt.transport_route_[x]].from_);
+  EXPECT_TRUE(std::any_of(
+      begin(transfers), end(transfers), [&](tb::transfer const& tr) {
+        return tr.route_ == tt.transport_route_[x] &&
+               tr.transport_offset_ == x_offset && tr.to_segment_offset_ == 1U;
+      }));
+
+  auto const results = tripbased_search(
+      tt, tbd, "S0", "SC", unixtime_t{sys_days{March / 1 / 2021} + 8h});
+  ASSERT_NE(0U, results.size());
+  auto earliest = results.begin()->dest_time_;
+  for (auto const& j : results) {
+    earliest = std::min(earliest, j.dest_time_);
+  }
+  EXPECT_EQ(unixtime_t{sys_days{March / 1 / 2021} + 10h + 10min}, earliest);
+}
+
 mem_dir early_train_files() {
   return mem_dir::read(R"(
 # agency.txt

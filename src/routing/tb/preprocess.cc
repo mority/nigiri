@@ -16,16 +16,20 @@
 
 namespace nigiri::routing::tb {
 
+// Entries are ordered by (shift amount, transport offset), the offset of the
+// transport in the target route. The transports of a route are no later at
+// every stop than the next one (loader/get_index.h), so an entry is never later
+// at any stop than one with a greater key.
 struct reached_line_based {
   struct rlb_entry {
     std::int8_t shift_amount_;
-    std::uint16_t start_time_;
+    std::uint32_t transport_offset_;
     bitfield bf_;
   };
 
   void update(stop_idx_t const j,
               std::int8_t const shift_amount_new,
-              std::uint16_t const start_time_new,
+              std::uint32_t const transport_offset_new,
               bitfield& bf_new) {
     for (auto& entry : transports_[j]) {
       if (bf_new.none()) {
@@ -36,8 +40,8 @@ struct reached_line_based {
         continue;
       }
 
-      if (std::tie(shift_amount_new, start_time_new) <
-          std::tie(entry.shift_amount_, entry.start_time_)) {
+      if (std::tie(shift_amount_new, transport_offset_new) <
+          std::tie(entry.shift_amount_, entry.transport_offset_)) {
         entry.bf_ &= ~bf_new;
       } else {
         bf_new &= ~entry.bf_;
@@ -49,7 +53,7 @@ struct reached_line_based {
     transports_.clear();
     for (stop_idx_t j = 0; j < num_stops; ++j) {
       transports_[j].emplace_back(std::numeric_limits<std::int8_t>::max(),
-                                  std::numeric_limits<std::uint16_t>::max(),
+                                  std::numeric_limits<std::uint32_t>::max(),
                                   bitfield::max());
     }
   }
@@ -321,11 +325,12 @@ void preprocess_transport(timetable const& tt,
       }
 
       // offset from begin of tp_to interval
-      auto const k = static_cast<std::size_t>(
+      auto const transport_offset = static_cast<std::uint32_t>(
           std::distance(event_times.begin(), earliest_dep));
 
       // transport index of transport that we transfer to
-      auto const u = tt.route_transport_ranges_[neighbor.route_idx_to_][k];
+      auto const u =
+          tt.route_transport_ranges_[neighbor.route_idx_to_][transport_offset];
 
       // shift amount due to number of times transport u passed midnight
       auto const u_dep_day_offset =
@@ -357,8 +362,7 @@ void preprocess_transport(timetable const& tt,
         // update earliest transport data structure
         auto const day_offset = static_cast<std::int8_t>(
             t_arr_day_offset + transfer_day_offset - u_dep_day_offset);
-        s.reached_.update(neighbor.stop_idx_to_, day_offset,
-                          tt.event_mam(u, 0, event_type::kDep).mam_,
+        s.reached_.update(neighbor.stop_idx_to_, day_offset, transport_offset,
                           common_traffic_days);
 
         // recheck common days
@@ -374,7 +378,7 @@ void preprocess_transport(timetable const& tt,
           s.reached_.transports_[neighbor.stop_idx_to_].emplace_back(
               static_cast<std::int8_t>(t_arr_day_offset + transfer_day_offset -
                                        u_dep_day_offset),
-              tt.event_mam(u, 0, event_type::kDep).mam_, common_traffic_days);
+              transport_offset, common_traffic_days);
 
           // update subsequent stops
           for (stop_idx_t j_prime = neighbor.stop_idx_to_ + 1U;
@@ -383,13 +387,13 @@ void preprocess_transport(timetable const& tt,
             s.reached_.update(
                 j_prime,
                 t_arr_day_offset + transfer_day_offset - u_dep_day_offset,
-                tt.event_mam(u, 0, event_type::kDep).mam_, improvement);
+                transport_offset, improvement);
             if (improvement.any()) {
               s.reached_.transports_[j_prime].emplace_back(
                   static_cast<std::int8_t>(t_arr_day_offset +
                                            transfer_day_offset -
                                            u_dep_day_offset),
-                  tt.event_mam(u, 0, event_type::kDep).mam_, improvement);
+                  transport_offset, improvement);
             }
           }
         }
