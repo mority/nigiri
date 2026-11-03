@@ -14,7 +14,6 @@
 
 #include "nigiri/location_match_mode.h"
 #include "nigiri/routing/direct.h"
-#include "nigiri/routing/direct_filter.h"
 #include "nigiri/routing/get_earliest_transport.h"
 #include "nigiri/routing/gpu/raptor.h"
 #include "nigiri/routing/leg_alternatives.h"
@@ -89,7 +88,7 @@ routing_result pong(timetable const& tt,
 
   auto const processing_start_time = std::chrono::steady_clock::now();
 
-  auto const fastest_direct = get_fastest_direct(tt, q, SearchDir);
+  auto const fastest_direct = q.fastest_direct_.value_or(kUnreachableDirect);
   auto const search_interval = std::visit(
       utl::overloaded{[](interval<unixtime_t> const start_interval) {
                         return start_interval;
@@ -232,11 +231,10 @@ routing_result pong(timetable const& tt,
   auto const is_validated = [&](journey const& j) {
     return is_better(j.dest_time_, start_time);
   };
-  auto const get_result_count = [&](bool const include_too_slow) {
+  auto const get_result_count = [&]() {
     return utl::count_if(*result.journeys_, [&](journey const& j) {
-      return is_validated(j) && !is_not_better_than_direct(q, j) &&
-             (include_too_slow || (j.travel_time() < fastest_direct &&
-                                   j.travel_time() <= q.max_travel_time_));
+      return is_validated(j) && j.travel_time() < fastest_direct &&
+             j.travel_time() <= q.max_travel_time_;
     });
   };
   auto const is_timeout_reached = [&]() {
@@ -247,8 +245,7 @@ routing_result pong(timetable const& tt,
     return false;
   };
   while ((is_better(start_time, end_time) ||
-          get_result_count(true) + get_result_count(false) <
-              2 * q.min_connection_count_) &&
+          get_result_count() < q.min_connection_count_) &&
          tt.external_interval().contains(start_time) && !is_timeout_reached()) {
     // An iteration that starts inside a non-empty interval but finds nothing
     // inside it only proves the interval exhausted (fixed-window queries).
@@ -281,10 +278,12 @@ routing_result pong(timetable const& tt,
                  loc{tt, s.stop_}, s.time_at_start_, s.time_at_stop_);
       ping.add_start(s.stop_, s.time_at_stop_);
     }
+    // No bound from start_time: a journey can depart long after it, so such a
+    // bound loses journeys within the maximum travel time. The maximum travel
+    // time is applied to the results, as in the range query. unix_to_delta
+    // clamps the bound to the 16-bit range.
     auto const worst_time_at_dest =
-        start_time +
-        (kFwd ? 1 : -1) *
-            std::min(q.max_travel_time_ + kMinLookAhead, kMaxTravelTime);
+        start_time + (kFwd ? 1 : -1) * duration_t::max();
     auto ping_results = pareto_set<journey>{};
     auto const ping_start = std::chrono::steady_clock::now();
     ping.execute(start_time, q.max_transfers_, worst_time_at_dest,
@@ -417,16 +416,13 @@ routing_result pong(timetable const& tt,
     auto const erase = !j.is_reconstructed_ || !is_validated(j) ||
                        is_out_of_interval ||
                        j.travel_time() >= fastest_direct ||
-                       j.travel_time() > q.max_travel_time_ ||
-                       is_not_better_than_direct(q, j);
+                       j.travel_time() > q.max_travel_time_;
     if (erase) {
       trace_pong(
           "ERASE not_reconstructed={}, not_validated={}, "
-          "slower_than_direct={}, slower_than_query_max_travel_time={}, "
-          "offsets_not_better_than_direct={} {}",
+          "slower_than_direct={}, slower_than_query_max_travel_time={} {}",
           j.legs_.empty(), !is_validated(j), j.travel_time() >= fastest_direct,
-          j.travel_time() > q.max_travel_time_,
-          is_not_better_than_direct(q, j), to_tuple(j));
+          j.travel_time() > q.max_travel_time_, to_tuple(j));
     }
     return erase;
   });
