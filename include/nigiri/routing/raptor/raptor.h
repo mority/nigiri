@@ -92,7 +92,6 @@ struct raptor {
         lb_{lb},
         via_stops_{via_stops},
         base_{base},
-        bounds_{std::as_const(state_).template get_bounds<Vias>()},
         prf_idx_{prf_idx},
         allowed_claszes_{allowed_claszes},
         require_bike_transport_{require_bike_transport},
@@ -121,6 +120,7 @@ struct raptor {
   void fill_bounds(std::size_t const n_rows) {
     auto& s = state_;
     auto const n = static_cast<std::size_t>(s.n_locations_);
+    s.bounds_storage_.resize(n * (Vias + 1U) * (kMaxTransfers + 2U));
 
     auto const td_stops = rtt_ != nullptr && has_profile_td_footpaths(prf_idx_)
                               ? &(kFwd ? rtt_->has_td_footpaths_out_
@@ -173,7 +173,10 @@ struct raptor {
     }
   }
 
-  void set_bounds(unsigned const last_round) { bounds_last_k_ = last_round; }
+  void set_bounds(unsigned const last_round) {
+    bounds_ = std::as_const(state_).template get_bounds<Vias>();
+    bounds_last_k_ = last_round;
+  }
 
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
