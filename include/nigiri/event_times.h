@@ -8,6 +8,12 @@
 
 #include "nigiri/types.h"
 
+#if defined(_MSC_VER)
+#define NIGIRI_FORCE_INLINE __forceinline
+#else
+#define NIGIRI_FORCE_INLINE inline __attribute__((always_inline))
+#endif
+
 namespace nigiri {
 
 // The event times of all transports of one route at one event: first
@@ -15,7 +21,8 @@ namespace nigiri {
 struct event_times {
   struct iterator;
 
-  CISTA_CUDA_COMPAT delta operator[](std::size_t const i) const {
+  CISTA_CUDA_COMPAT NIGIRI_FORCE_INLINE delta
+  operator[](std::size_t const i) const {
     return first_dep_[i] + offsets_[n_patterns_ == 1U ? 0U : pattern_[i]];
   }
 
