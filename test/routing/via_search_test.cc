@@ -17,6 +17,7 @@
 #include "nigiri/loader/gtfs/noon_offsets.h"
 
 #include "nigiri/routing/raptor/pong.h"
+#include "nigiri/routing/raptor_search.h"
 #include "nigiri/rt/create_rt_timetable.h"
 #include "nigiri/rt/gtfsrt_update.h"
 #include "nigiri/rt/rt_timetable.h"
@@ -2301,4 +2302,66 @@ TEST(routing, pong_via_stay_at_start_before_direct_walk) {
           .via_stops_ = {{loc_idx(tt, "A"), 10min}}},
       direction::kForward);
   EXPECT_TRUE(results.empty());
+}
+
+TEST(routing, raptor_state_grows_with_via_count) {
+  auto s = routing::raptor_state{};
+  auto const expect_entries = [&](std::size_t const n) {
+    auto const n_round_entries = n * (routing::kMaxTransfers + 2U);
+    EXPECT_EQ(n, s.tmp_storage_.size());
+    EXPECT_EQ(n, s.best_storage_.size());
+    EXPECT_EQ(n_round_entries, s.round_times_storage_.size());
+    EXPECT_EQ(n_round_entries, s.bounds_storage_.size());
+  };
+
+  s.resize(10U, 1U, 0U, 0U);
+  expect_entries(10U);
+  s.resize(10U, 1U, 0U, 2U);
+  expect_entries(30U);
+  s.resize(10U, 1U, 0U, 1U);  // keeps the larger allocation
+  expect_entries(30U);
+}
+
+// The state has to grow for a query with more vias and has to keep working for
+// a query with fewer vias, where it is larger than needed.
+TEST(routing, via_count_changes_on_same_state) {
+  auto const tt = load_timetable(test_files_1);
+
+  auto const make_query = [&](std::vector<routing::via_stop> vias) {
+    return routing::query{.start_time_ = iv("2019-05-01 10:00 Europe/Berlin",
+                                            "2019-05-01 10:01 Europe/Berlin"),
+                          .start_ = {{loc_idx(tt, "A"), 0_minutes, 0U}},
+                          .destination_ = {{loc_idx(tt, "D"), 0_minutes, 0U}},
+                          .via_stops_ = std::move(vias)};
+  };
+  auto const no_via = make_query({});
+  auto const one_via = make_query({{loc_idx(tt, "B"), 0_minutes}});
+  auto const two_vias = make_query(
+      {{loc_idx(tt, "B"), 0_minutes}, {loc_idx(tt, "C"), 0_minutes}});
+
+  auto const run = [&](bool const pong, routing::query q,
+                       routing::search_state& ss, routing::raptor_state& rs) {
+    auto const r =
+        pong ? routing::pong_search(tt, nullptr, ss, rs, std::move(q),
+                                    direction::kForward)
+             : routing::raptor_search(tt, nullptr, ss, rs, std::move(q),
+                                      direction::kForward);
+    return results_to_str(*r.journeys_, tt);
+  };
+
+  for (auto const pong : {false, true}) {
+    auto ss = routing::search_state{};
+    auto rs = routing::raptor_state{};
+    for (auto const& q : {no_via, two_vias, one_via, no_via}) {
+      auto const reused = run(pong, q, ss, rs);
+
+      auto fresh_ss = routing::search_state{};
+      auto fresh_rs = routing::raptor_state{};
+      auto const fresh = run(pong, q, fresh_ss, fresh_rs);
+
+      EXPECT_FALSE(fresh.empty());
+      EXPECT_EQ(fresh, reused)
+          << "pong=" << pong << ", vias=" << q.via_stops_.size();
+    }
+  }
 }

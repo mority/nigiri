@@ -13,13 +13,22 @@ namespace nigiri::routing {
 
 raptor_state& raptor_state::resize(unsigned const n_locations,
                                    unsigned const n_routes,
-                                   unsigned const n_rt_transports) {
+                                   unsigned const n_rt_transports,
+                                   via_offset_t const n_vias) {
+  // Only grows: a state is reused for queries with different via counts, and
+  // shrinking would not free memory but zero it again on the next growth.
+  auto const grow = [](std::vector<delta_t>& v, std::size_t const size) {
+    if (v.size() < size) {
+      v.resize(size);
+    }
+  };
+
+  auto const n_entries = std::size_t{n_locations} * (n_vias + 1U);
   n_locations_ = n_locations;
-  tmp_storage_.resize(n_locations * (kMaxVias + 1));
-  best_storage_.resize(n_locations * (kMaxVias + 1));
-  round_times_storage_.resize(n_locations * (kMaxVias + 1) *
-                              (kMaxTransfers + 2));
-  bounds_storage_.resize(n_locations * (kMaxVias + 1) * (kMaxTransfers + 2));
+  grow(tmp_storage_, n_entries);
+  grow(best_storage_, n_entries);
+  grow(round_times_storage_, n_entries * (kMaxTransfers + 2U));
+  grow(bounds_storage_, n_entries * (kMaxTransfers + 2U));
   station_mark_.resize(n_locations);
   prev_station_mark_.resize(n_locations);
   route_mark_.resize(n_routes);
