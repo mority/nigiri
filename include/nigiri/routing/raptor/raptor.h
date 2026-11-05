@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <algorithm>
 #include <span>
 
 #include "nigiri/common/delta_t.h"
@@ -119,6 +120,8 @@ struct raptor {
   algo_stats_t get_stats() const { return stats_; }
 
   void fill_bounds(std::size_t const n_rows) {
+    assert(n_rows <= n_init_rounds_);
+
     auto& s = state_;
     auto const n = static_cast<std::size_t>(s.n_locations_);
 
@@ -177,7 +180,14 @@ struct raptor {
 
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
-    round_times_.reset(kInvalidArray);
+    if constexpr (SearchMode == search_mode::kOneToAll) {
+      // The caller reads all rounds from the state after the search.
+      round_times_.reset(kInvalidArray);
+      n_init_rounds_ = kMaxTransfers + 2U;
+    } else {
+      n_init_rounds_ = 0U;
+      init_rounds_up_to(0U);  // for add_start()
+    }
   }
 
   void limit_time_at_dest(unsigned const k, unixtime_t const t) {
@@ -225,6 +235,8 @@ struct raptor {
     trace_print_init_state();
 
     for (auto k = 1U; k != end_k; ++k) {
+      init_rounds_up_to(k);
+
       for (auto i = 0U; i != n_locations_; ++i) {
         for (auto v = 0U; v != Vias + 1; ++v) {
           best_[i][v] = get_best(round_times_[k][i][v], best_[i][v]);
@@ -399,8 +411,9 @@ struct raptor {
       return;
     }
 
+    auto const end_init_k = std::min(end_k, n_init_rounds_);
     is_dest_.for_each_set_bit([&](auto const i) {
-      for (auto k = 1U; k != end_k; ++k) {
+      for (auto k = 1U; k < end_init_k; ++k) {
         auto const dest_time = round_times_[k][i][Vias];
         if (dest_time != kInvalid) {
           trace("ADDING JOURNEY: start={}, dest={} @ {}, transfers={}\n",
@@ -428,10 +441,24 @@ struct raptor {
     }
     trace("reconstruct({} - {}, {} transfers", j.departure_time(),
           j.arrival_time(), j.transfers_);
+    // The journey can be older than the last reset_arrivals() and have more
+    // rounds than the search since then reached.
+    init_rounds_up_to(j.transfers_ + 1U);
     reconstruct_journey<SearchDir>(tt_, rtt_, q, state_, j, base(), base_);
   }
 
 private:
+  // Rounds are initialized on first use: most searches end long before
+  // kMaxTransfers. Rows that are not initialized yet hold stale values,
+  // possibly of the other search direction (ping and pong share the table), and
+  // must not be read.
+  void init_rounds_up_to(unsigned const k) {
+    for (; n_init_rounds_ <= k; ++n_init_rounds_) {
+      std::fill_n(&round_times_[n_init_rounds_][0U], n_locations_,
+                  kInvalidArray);
+    }
+  }
+
   date::sys_days base() const {
     return tt_.internal_interval_days().from_ + as_int(base_) * date::days{1};
   }
@@ -1567,6 +1594,7 @@ private:
   std::span<std::array<delta_t, Vias + 1>> tmp_;
   std::span<std::array<delta_t, Vias + 1>> best_;
   flat_matrix_view<std::array<delta_t, Vias + 1>> round_times_;
+  unsigned n_init_rounds_{0U};
   bitvec const& is_dest_;
   std::array<bitvec, kMaxVias> const& is_via_;
   std::vector<std::uint16_t> const& dist_to_end_;

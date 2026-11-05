@@ -32,7 +32,10 @@ struct raptor_state {
                        unsigned n_rt_transports);
 
   template <via_offset_t Vias>
-  void print(timetable const& tt, date::sys_days, delta_t invalid);
+  void print(timetable const& tt,
+             date::sys_days,
+             delta_t invalid,
+             unsigned n_rounds);
 
   template <via_offset_t Vias>
   std::span<std::array<delta_t, Vias + 1>> get_tmp() {

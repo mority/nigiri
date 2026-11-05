@@ -16,9 +16,9 @@
 #define trace(...) fmt::print(__VA_ARGS__)
 #endif
 
-#define trace_print_state(...)               \
-  fmt::print(__VA_ARGS__);                   \
-  state_.print<Vias>(tt_, base(), kInvalid); \
+#define trace_print_state(...)                               \
+  fmt::print(__VA_ARGS__);                                   \
+  state_.print<Vias>(tt_, base(), kInvalid, n_init_rounds_); \
   fmt::print("\n")
 
 #define trace_print_state_after_round() \
