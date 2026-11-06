@@ -6,6 +6,7 @@
 #include "nigiri/common/delta_t.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/limits.h"
+#include "nigiri/routing/one_to_n_state.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/raptor/debug.h"
 #include "nigiri/routing/raptor/raptor_state.h"
@@ -19,7 +20,10 @@
 
 namespace nigiri::routing {
 
-enum class search_mode { kOneToOne, kOneToAll };
+// kOneToN: labels (arrival, transfers) at a set of target cells reached by an
+// egress walk (see one_to_n.h). Keeps a single label row (best_) instead of
+// one row per round, so journeys cannot be reconstructed.
+enum class search_mode { kOneToOne, kOneToAll, kOneToN };
 
 template <direction SearchDir,
           bool Rt,
@@ -35,6 +39,7 @@ struct raptor {
   };
 
   static constexpr bool kUseLowerBounds = true;
+  static constexpr auto const kSingleRow = SearchMode == search_mode::kOneToN;
   static constexpr auto const kFwd = (SearchDir == direction::kForward);
   static constexpr auto const kBwd = (SearchDir == direction::kBackward);
   static constexpr auto const kInvalid = kInvalidDelta<SearchDir>;
@@ -81,7 +86,8 @@ struct raptor {
         n_locations_{tt_.n_locations()},
         n_routes_{tt.n_routes()},
         n_rt_transports_{Rt ? rtt->n_rt_transports() : 0U},
-        state_{state.resize(n_locations_, n_routes_, n_rt_transports_)},
+        state_{state.resize(
+            n_locations_, n_routes_, n_rt_transports_, !kSingleRow)},
         tmp_{state_.get_tmp<Vias>()},
         best_{state_.get_best<Vias>()},
         round_times_{state.get_round_times<Vias>()},
@@ -177,8 +183,12 @@ struct raptor {
 
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
-    round_times_.reset(kInvalidArray);
+    if constexpr (!kSingleRow) {
+      round_times_.reset(kInvalidArray);
+    }
   }
+
+  void set_one_to_n(one_to_n_state& s) { one_to_n_ = &s; }
 
   void limit_time_at_dest(unsigned const k, unixtime_t const t) {
     update_time_at_dest(k, unix_to_delta(base(), t));
@@ -202,12 +212,14 @@ struct raptor {
         "adding start [fwd={}] {}: {}, v={} [current: best={}, round={} => "
         "best={}]\n",
         kFwd, loc{tt_, l}, t, v, to_unix(best_[to_idx(l)][v]),
-        to_unix(round_times_[0U][to_idx(l)][v]),
+        to_unix(kSingleRow ? kInvalid : round_times_[0U][to_idx(l)][v]),
         get_best(t, to_unix(best_[to_idx(l)][v])));
     best_[to_idx(l)][v] =
         get_best(unix_to_delta(base(), t), best_[to_idx(l)][v]);
-    round_times_[0U][to_idx(l)][v] =
-        get_best(unix_to_delta(base(), t), round_times_[0U][to_idx(l)][v]);
+    if constexpr (!kSingleRow) {
+      round_times_[0U][to_idx(l)][v] =
+          get_best(unix_to_delta(base(), t), round_times_[0U][to_idx(l)][v]);
+    }
     state_.station_mark_.set(to_idx(l), true);
   }
 
@@ -225,9 +237,11 @@ struct raptor {
     trace_print_init_state();
 
     for (auto k = 1U; k != end_k; ++k) {
-      for (auto i = 0U; i != n_locations_; ++i) {
-        for (auto v = 0U; v != Vias + 1; ++v) {
-          best_[i][v] = get_best(round_times_[k][i][v], best_[i][v]);
+      if constexpr (!kSingleRow) {
+        for (auto i = 0U; i != n_locations_; ++i) {
+          for (auto v = 0U; v != Vias + 1; ++v) {
+            best_[i][v] = get_best(round_times_[k][i][v], best_[i][v]);
+          }
         }
       }
       is_dest_.for_each_set_bit([&](std::uint64_t const i) {
@@ -388,14 +402,18 @@ struct raptor {
       utl::fill(state_.station_mark_.blocks_, 0U);
 
       update_transfers(k);
-      update_intermodal_footpaths(k);
+      if constexpr (kSingleRow) {
+        update_one_to_n_targets(k);
+      } else {
+        update_intermodal_footpaths(k);
+      }
       update_footpaths(k);
       update_td_offsets(k);
 
       trace_print_state_after_round();
     }
 
-    if constexpr (SearchMode == search_mode::kOneToAll) {
+    if constexpr (SearchMode != search_mode::kOneToOne) {
       return;
     }
 
@@ -423,7 +441,7 @@ struct raptor {
   }
 
   void reconstruct(query const& q, journey& j) {
-    if constexpr (SearchMode == search_mode::kOneToAll) {
+    if constexpr (SearchMode != search_mode::kOneToOne) {
       return;
     }
     trace("reconstruct({} - {}, {} transfers", j.departure_time(),
@@ -734,10 +752,12 @@ private:
           auto const fp_target_time =
               clamp(tmp_time + transfer_time + dir(stay.count()));
 
-          if (bounds_last_k_ == 0U &&
-              is_better(fp_target_time, best_[i][target_v])) {
-            round_times_[k][i][target_v] =
-                get_best(fp_target_time, round_times_[k][i][target_v]);
+          if constexpr (!kSingleRow) {
+            if (bounds_last_k_ == 0U &&
+                is_better(fp_target_time, best_[i][target_v])) {
+              round_times_[k][i][target_v] =
+                  get_best(fp_target_time, round_times_[k][i][target_v]);
+            }
           }
 
           trace(
@@ -759,7 +779,9 @@ private:
             }
 
             ++stats_.n_earliest_arrival_updated_by_footpath_;
-            round_times_[k][i][target_v] = fp_target_time;
+            if constexpr (!kSingleRow) {
+              round_times_[k][i][target_v] = fp_target_time;
+            }
             best_[i][target_v] = fp_target_time;
             state_.station_mark_.set(i, true);
             if (is_dest) {
@@ -821,10 +843,12 @@ private:
                                                         fp.duration().count()) +
                                  stay.count()));
 
-              if (bounds_last_k_ == 0U &&
-                  is_better(fp_target_time, best_[target][target_v])) {
-                round_times_[k][target][target_v] =
-                    get_best(fp_target_time, round_times_[k][target][target_v]);
+              if constexpr (!kSingleRow) {
+                if (bounds_last_k_ == 0U &&
+                    is_better(fp_target_time, best_[target][target_v])) {
+                  round_times_[k][target][target_v] = get_best(
+                      fp_target_time, round_times_[k][target][target_v]);
+                }
               }
 
               if (is_better(fp_target_time, best_[target][target_v]) &&
@@ -862,7 +886,9 @@ private:
                     to_unix(fp_target_time), v, target_v, stay);
 
                 ++stats_.n_earliest_arrival_updated_by_footpath_;
-                round_times_[k][target][target_v] = fp_target_time;
+                if constexpr (!kSingleRow) {
+                  round_times_[k][target][target_v] = fp_target_time;
+                }
                 best_[target][target_v] = fp_target_time;
                 state_.station_mark_.set(target, true);
                 if (target_v == Vias && is_dest_[target]) {
@@ -928,10 +954,12 @@ private:
                   auto const fp_target_time =
                       clamp(tmp_time + dir(duration.count() + stay.count()));
 
-                  if (bounds_last_k_ == 0U &&
-                      is_better(fp_target_time, best_[target][target_v])) {
-                    round_times_[k][target][target_v] = get_best(
-                        fp_target_time, round_times_[k][target][target_v]);
+                  if constexpr (!kSingleRow) {
+                    if (bounds_last_k_ == 0U &&
+                        is_better(fp_target_time, best_[target][target_v])) {
+                      round_times_[k][target][target_v] = get_best(
+                          fp_target_time, round_times_[k][target][target_v]);
+                    }
                   }
 
                   if (is_better(fp_target_time, best_[target][target_v]) &&
@@ -969,7 +997,9 @@ private:
                         to_unix(fp_target_time), v, target_v, stay);
 
                     ++stats_.n_earliest_arrival_updated_by_footpath_;
-                    round_times_[k][target][target_v] = fp_target_time;
+                    if constexpr (!kSingleRow) {
+                      round_times_[k][target][target_v] = fp_target_time;
+                    }
                     best_[target][target_v] = fp_target_time;
                     state_.station_mark_.set(target, true);
                     if (is_dest_[target]) {
@@ -1166,7 +1196,7 @@ private:
         for (auto j = 0U; j != Vias + 1; ++j) {
           auto const v = Vias - j;
           if (et[v] && stp.can_finish<SearchDir>(is_wheelchair_)) {
-            auto current_best = get_best(round_times_[k - 1][l_idx][v],
+            auto current_best = get_best(prev_round_label(k, l_idx, v),
                                          tmp_[l_idx][v], best_[l_idx][v]);
 
             if (is_better_loose(by_transport, time_at_dest_[k]) &&
@@ -1209,7 +1239,7 @@ private:
       auto const by_transport = rt_time_at_stop(
           rt_t, stop_idx, kFwd ? event_type::kDep : event_type::kArr);
       for (auto v = 0U; v != Vias + 1; ++v) {
-        auto const prev_round_time = round_times_[k - 1][l_idx][v];
+        auto const prev_round_time = prev_round_label(k, l_idx, v);
         if (is_better_or_eq(prev_round_time, by_transport)) {
           et[v] = true;
         }
@@ -1328,7 +1358,7 @@ private:
                        kFwd ? event_type::kArr : event_type::kDep);
 
           if (current_best[cs] == kInvalid) {
-            current_best[cs] = get_best(round_times_[k - 1][l_idx][cs],
+            current_best[cs] = get_best(prev_round_label(k, l_idx, cs),
                                         tmp_[l_idx][cs], best_[l_idx][cs]);
           }
 
@@ -1386,7 +1416,7 @@ private:
                 ? get_time(et_times_cache[v][0], stop_idx,
                            kFwd ? event_type::kDep : event_type::kArr)
                 : kInvalid;
-        auto const prev_round_time = round_times_[k - 1][l_idx][v];
+        auto const prev_round_time = prev_round_label(k, l_idx, v);
         if (prev_round_time != kInvalid &&
             is_better_or_eq(prev_round_time, et_time_at_stop)) {
           auto const [day, mam] = split(prev_round_time);
@@ -1547,6 +1577,72 @@ private:
 
   bool is_intermodal_dest() const { return !dist_to_end_.empty(); }
 
+  // Label at l after round k-1, used for boarding in round k.
+  // kSingleRow: best_ holds it. Route scanning in round k writes only tmp_,
+  // so at the stops marked in round k-1 (the only stops boarded from) best_
+  // is still exactly the round k-1 label.
+  delta_t prev_round_label(unsigned const k,
+                           std::size_t const l,
+                           std::size_t const v) {
+    if constexpr (kSingleRow) {
+      return best_[l][v];
+    } else {
+      return round_times_[k - 1][l][v];
+    }
+  }
+
+  // kOneToN: egress walks from the vehicle arrivals of round k (tmp_, without
+  // transfer time, like update_intermodal_footpaths) to the target cells.
+  // Cells improved in round k get the label (k, time).
+  void update_one_to_n_targets(unsigned const k) {
+    assert(one_to_n_ != nullptr && one_to_n_->egress_ != nullptr);
+    auto& s = *one_to_n_;
+    auto const& egress = *s.egress_;
+
+    state_.prev_station_mark_.for_each_set_bit([&](std::uint64_t const i) {
+      auto const tmp_time = tmp_[i][Vias];
+      if (tmp_time == kInvalid) {
+        return;
+      }
+      for (auto const& e : egress[location_idx_t{i}]) {
+        auto const c = to_idx(e.cell_);
+        auto const t = clamp(tmp_time + dir(e.duration_.count()));
+        auto& best = s.best_[c];
+        if (is_better(t, best) && is_better_loose(t, time_at_dest_[k])) {
+          if (best == kInvalid && s.relevant_.test(c)) {
+            ++s.n_reached_;
+          }
+          best = t;
+          s.improved_.set(c, true);
+        }
+      }
+    });
+
+    s.improved_.for_each_set_bit([&](std::uint64_t const c) {
+      s.emitted_.push_back(
+          {.cell_ = cell_idx_t{static_cast<cell_idx_t::value_t>(c)},
+           .k_ = static_cast<std::uint8_t>(k),
+           .time_ = s.best_[c]});
+    });
+    utl::fill(s.improved_.blocks_, 0U);
+
+    // Target pruning: once every relevant cell has a label, a label worse
+    // than the worst cell label cannot improve any cell, in this round or
+    // later ones (cell labels only improve). Relevant cells are all cells
+    // that may be reached within the travel time limit.
+    if (s.n_reached_ == s.n_relevant_) {
+      auto worst = kFwd ? std::numeric_limits<delta_t>::min()
+                        : std::numeric_limits<delta_t>::max();
+      s.relevant_.for_each_set_bit([&](std::uint64_t const c) {
+        if (is_better(worst, s.best_[c])) {
+          worst = s.best_[c];
+        }
+      });
+      update_time_at_dest(k, worst);
+      ++s.n_bound_rounds_;
+    }
+  }
+
   void update_time_at_dest(unsigned const k, delta_t const t) {
     if constexpr (SearchMode == search_mode::kOneToAll) {
       return;
@@ -1585,6 +1681,7 @@ private:
   bool no_compulsory_reservation_;
   bool is_wheelchair_;
   transfer_time_settings transfer_time_settings_;
+  one_to_n_state* one_to_n_{nullptr};
 };
 
 }  // namespace nigiri::routing

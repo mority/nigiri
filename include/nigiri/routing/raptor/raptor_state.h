@@ -27,9 +27,12 @@ struct raptor_state {
   raptor_state& operator=(raptor_state&&) = default;
   ~raptor_state() = default;
 
+  // with_round_times=false keeps only tmp_ and best_ (one label row): enough
+  // for searches that need labels but no journey reconstruction (kOneToN).
   raptor_state& resize(unsigned n_locations,
                        unsigned n_routes,
-                       unsigned n_rt_transports);
+                       unsigned n_rt_transports,
+                       bool with_round_times = true);
 
   template <via_offset_t Vias>
   void print(timetable const& tt, date::sys_days, delta_t invalid);
@@ -64,39 +67,48 @@ struct raptor_state {
 
   template <via_offset_t Vias>
   flat_matrix_view<std::array<delta_t, Vias + 1>> get_round_times() {
+    auto const n_rows = n_rows_of(round_times_storage_);
     return {{reinterpret_cast<std::array<delta_t, Vias + 1>*>(
                  round_times_storage_.data()),
-             n_locations_ * (kMaxTransfers + 2)},
-            kMaxTransfers + 2U,
+             n_locations_ * n_rows},
+            n_rows,
             n_locations_};
   }
 
   template <via_offset_t Vias>
   flat_matrix_view<std::array<delta_t, Vias + 1> const> get_round_times()
       const {
+    auto const n_rows = n_rows_of(round_times_storage_);
     return {{reinterpret_cast<std::array<delta_t, Vias + 1> const*>(
                  round_times_storage_.data()),
-             n_locations_ * (kMaxTransfers + 2)},
-            kMaxTransfers + 2U,
+             n_locations_ * n_rows},
+            n_rows,
             n_locations_};
   }
 
   template <via_offset_t Vias>
   flat_matrix_view<std::array<delta_t, Vias + 1>> get_bounds() {
+    auto const n_rows = n_rows_of(bounds_storage_);
     return {{reinterpret_cast<std::array<delta_t, Vias + 1>*>(
                  bounds_storage_.data()),
-             n_locations_ * (kMaxTransfers + 2)},
-            kMaxTransfers + 2U,
+             n_locations_ * n_rows},
+            n_rows,
             n_locations_};
   }
 
   template <via_offset_t Vias>
   flat_matrix_view<std::array<delta_t, Vias + 1> const> get_bounds() const {
+    auto const n_rows = n_rows_of(bounds_storage_);
     return {{reinterpret_cast<std::array<delta_t, Vias + 1> const*>(
                  bounds_storage_.data()),
-             n_locations_ * (kMaxTransfers + 2)},
-            kMaxTransfers + 2U,
+             n_locations_ * n_rows},
+            n_rows,
             n_locations_};
+  }
+
+  // 0 rows if the storage was not allocated (resize with_round_times=false)
+  static unsigned n_rows_of(std::vector<delta_t> const& storage) {
+    return storage.empty() ? 0U : kMaxTransfers + 2U;
   }
 
   unsigned n_locations_{};

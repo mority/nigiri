@@ -69,11 +69,14 @@ void dijkstra(vecvec<NodeIdx, Edge> const& graph,
   }
 }
 
-void dijkstra(timetable const&,
-              query const&,
-              vecvec<location_idx_t, footpath> const& lb_graph,
-              bitvec_map<location_idx_t> const* has_rt,
-              vecvec<location_idx_t, footpath> const* rt_lb_graph,
-              std::vector<std::uint16_t>& dists);
+// max_dist: locations with a distance >= max_dist stay unreached
+void dijkstra(
+    timetable const&,
+    query const&,
+    vecvec<location_idx_t, footpath> const& lb_graph,
+    bitvec_map<location_idx_t> const* has_rt,
+    vecvec<location_idx_t, footpath> const* rt_lb_graph,
+    std::vector<std::uint16_t>& dists,
+    label::dist_t max_dist = std::numeric_limits<label::dist_t>::max());
 
 }  // namespace nigiri::routing

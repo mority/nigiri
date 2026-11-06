@@ -11,6 +11,9 @@
 
 namespace nigiri::routing {
 
+// Day of the search base (delta_t origin) for searches starting at start_time.
+day_idx_t make_base(timetable const&, unixtime_t start_time);
+
 struct fastest_offset {
   delta_t duration_{std::numeric_limits<delta_t>::max()};
   // k == 0: No connection

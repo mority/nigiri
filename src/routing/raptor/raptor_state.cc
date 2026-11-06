@@ -13,13 +13,19 @@ namespace nigiri::routing {
 
 raptor_state& raptor_state::resize(unsigned const n_locations,
                                    unsigned const n_routes,
-                                   unsigned const n_rt_transports) {
+                                   unsigned const n_rt_transports,
+                                   bool const with_round_times) {
   n_locations_ = n_locations;
   tmp_storage_.resize(n_locations * (kMaxVias + 1));
   best_storage_.resize(n_locations * (kMaxVias + 1));
-  round_times_storage_.resize(n_locations * (kMaxVias + 1) *
-                              (kMaxTransfers + 2));
-  bounds_storage_.resize(n_locations * (kMaxVias + 1) * (kMaxTransfers + 2));
+  if (with_round_times) {
+    round_times_storage_.resize(n_locations * (kMaxVias + 1) *
+                                (kMaxTransfers + 2));
+    bounds_storage_.resize(n_locations * (kMaxVias + 1) * (kMaxTransfers + 2));
+  } else {
+    round_times_storage_ = {};
+    bounds_storage_ = {};
+  }
   station_mark_.resize(n_locations);
   prev_station_mark_.resize(n_locations);
   route_mark_.resize(n_routes);
@@ -38,8 +44,9 @@ void raptor_state::print(timetable const& tt,
   auto const& best = get_best<Vias>();
   auto const& round_times = get_round_times<Vias>();
 
+  auto const n_rows = round_times.n_rows_;
   auto const has_empty_rounds = [&](std::uint32_t const l) {
-    for (auto k = 0U; k != kMaxTransfers + 2U; ++k) {
+    for (auto k = 0U; k != n_rows; ++k) {
       if (round_times[k][l] != invalid_array) {
         return false;
       }
@@ -79,7 +86,7 @@ void raptor_state::print(timetable const& tt,
     fmt::print("best=");
     print_deltas(b);
     fmt::print(", round_times: ");
-    for (auto i = 0U; i != kMaxTransfers + 2U; ++i) {
+    for (auto i = 0U; i != n_rows; ++i) {
       auto const& t = round_times[i][l];
       fmt::print("{}:", i);
       print_deltas(t);

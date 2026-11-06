@@ -20,7 +20,8 @@ void dijkstra(timetable const& tt,
               vecvec<location_idx_t, footpath> const& lb_graph,
               bitvec_map<location_idx_t> const* has_rt,
               vecvec<location_idx_t, footpath> const* rt_lb_graph,
-              std::vector<label::dist_t>& dists) {
+              std::vector<label::dist_t>& dists,
+              label::dist_t const max_dist) {
   dists.resize(tt.n_locations());
   utl::fill(dists, std::numeric_limits<label::dist_t>::max());
 
@@ -56,7 +57,7 @@ void dijkstra(timetable const& tt,
     });
   }
 
-  dijkstra(lb_graph, has_rt, rt_lb_graph, pq, dists);
+  dijkstra(lb_graph, has_rt, rt_lb_graph, pq, dists, max_dist);
 
   for (auto i = 0U; i != tt.n_locations(); ++i) {
     auto const lb = dists[i];

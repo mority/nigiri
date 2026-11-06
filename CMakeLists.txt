@@ -123,6 +123,11 @@ add_executable(nigiri-benchmark ${nigiri-benchmark-files})
 target_link_libraries(nigiri-benchmark PRIVATE nigiri boost-program_options ianatzdb-res)
 target_compile_features(nigiri-benchmark PUBLIC cxx_std_23)
 
+# --- ONE-TO-N ---
+add_executable(nigiri-one-to-n exe/one_to_n.cc)
+target_link_libraries(nigiri-one-to-n PRIVATE nigiri boost-program_options ianatzdb-res)
+target_compile_features(nigiri-one-to-n PUBLIC cxx_std_23)
+
 # --- QA ---
 file(GLOB_RECURSE nigiri-qa-files exe/qa.cc)
 add_executable(nigiri-qa ${nigiri-qa-files})
