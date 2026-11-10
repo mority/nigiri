@@ -10,6 +10,7 @@
 #include "nigiri/for_each_meta.h"
 #include "nigiri/get_otel_tracer.h"
 #include "nigiri/logging.h"
+#include "nigiri/routing/ablation.h"
 #include "nigiri/routing/dijkstra.h"
 #include "nigiri/routing/direct.h"
 #include "nigiri/routing/get_fastest_direct.h"
@@ -55,6 +56,14 @@ struct search_stats {
          search_interval_reduction_by_early_termination_.count()},
         {"n_execute_fwd", n_execute_fwd_},
         {"n_execute_bwd", n_execute_bwd_},
+        {"n_proof_iterations", n_proof_iterations_},
+        {"proof_time_us", proof_time_us_},
+        {"ping_time_us", ping_time_us_},
+        {"pong_time_us", pong_time_us_},
+        {"n_rounds_ping", n_rounds_ping_},
+        {"n_rounds_pong", n_rounds_pong_},
+        {"ablation", ablation_},
+        {"pong_lookahead_days", pong_lookahead_days_},
     };
   }
 
@@ -66,6 +75,22 @@ struct search_stats {
   std::chrono::minutes search_interval_reduction_by_early_termination_{0LL};
   std::uint64_t n_execute_fwd_{0ULL};
   std::uint64_t n_execute_bwd_{0ULL};
+  // Pong only: iterations that started inside a non-empty search interval
+  // but found no journey departing (forward) / arriving (backward) inside
+  // it, i.e. iterations that only prove the interval exhausted; and their
+  // duration
+  std::uint64_t n_proof_iterations_{0ULL};
+  std::uint64_t proof_time_us_{0ULL};
+  // Pong only: time in the searches in query direction (ping) and against it
+  // (pong, incl. reconstructing the matched journey), and RAPTOR rounds per
+  // direction (together the n_rounds of the algorithm stats)
+  std::uint64_t ping_time_us_{0ULL};
+  std::uint64_t pong_time_us_{0ULL};
+  std::uint64_t n_rounds_ping_{0ULL};
+  std::uint64_t n_rounds_pong_{0ULL};
+  // NIGIRI_ABLATION switches (ablation::code()) and, for Pong, its look-ahead
+  std::uint64_t ablation_{get_ablation().code()};
+  std::uint64_t pong_lookahead_days_{0ULL};
 };
 
 struct routing_result {
@@ -115,17 +140,21 @@ struct search {
       auto lb_span = get_otel_tracer()->StartSpan("lower bounds");
       auto lb_scope = opentelemetry::trace::Scope{lb_span};
       UTL_START_TIMING(lb);
-      dijkstra(
-          tt_, q_,
-          (kFwd ? tt_.fwd_search_lb_graph_[q_.prf_idx_]
-                : tt_.bwd_search_lb_graph_[q_.prf_idx_]),
-          (rtt_ == nullptr ? nullptr
-                           : &(kFwd ? rtt_->fwd_search_lb_graph_has_edges_
-                                    : rtt_->bwd_search_lb_graph_has_edges_)),
-          (rtt_ == nullptr ? nullptr
-                           : &(kFwd ? rtt_->fwd_search_lb_graph_
-                                    : rtt_->bwd_search_lb_graph_)),
-          state_.travel_time_lower_bound_);
+      if (get_ablation().no_lb_) {
+        state_.travel_time_lower_bound_.assign(tt_.n_locations(), 0U);
+      } else {
+        dijkstra(
+            tt_, q_,
+            (kFwd ? tt_.fwd_search_lb_graph_[q_.prf_idx_]
+                  : tt_.bwd_search_lb_graph_[q_.prf_idx_]),
+            (rtt_ == nullptr ? nullptr
+                             : &(kFwd ? rtt_->fwd_search_lb_graph_has_edges_
+                                      : rtt_->bwd_search_lb_graph_has_edges_)),
+            (rtt_ == nullptr ? nullptr
+                             : &(kFwd ? rtt_->fwd_search_lb_graph_
+                                      : rtt_->bwd_search_lb_graph_)),
+            state_.travel_time_lower_bound_);
+      }
       UTL_STOP_TIMING(lb);
       stats_.lb_time_ = static_cast<std::uint64_t>(UTL_TIMING_MS(lb));
 
@@ -190,7 +219,7 @@ struct search {
                                                           start_time};
                             }},
             q_.start_time_)},
-        fastest_direct_{get_fastest_direct(tt_, q_, SearchDir)},
+        fastest_direct_{q_.fastest_direct_.value_or(kUnreachableDirect)},
         algo_{init(q_.allowed_claszes_,
                    q_.require_bike_transport_,
                    q_.require_car_transport_,

@@ -13,6 +13,7 @@
 #include "utl/timing.h"
 
 #include "nigiri/location_match_mode.h"
+#include "nigiri/routing/ablation.h"
 #include "nigiri/routing/direct.h"
 #include "nigiri/routing/get_earliest_transport.h"
 #include "nigiri/routing/gpu/raptor.h"
@@ -49,8 +50,9 @@ constexpr auto const kPruneWithPingBounds = true;
 // after / before the queried start time are most likely not interesting for
 // the user, so the search is capped at this distance from the query start
 // time. Six days (instead of a full week) prevents a query on a Monday from
-// reporting journeys on the following / previous Monday.
-constexpr auto const kMaxLookAhead = 6_days;
+// reporting journeys on the following / previous Monday. Benchmarks can raise
+// it with NIGIRI_PONG_LOOKAHEAD_DAYS (get_pong_max_lookahead() in ablation.h),
+// so that it cuts no journey that the range query finds.
 
 auto to_tuple(journey const& j) {
   return std::tuple{j.departure_time(), j.arrival_time(), j.transfers_};
@@ -97,6 +99,8 @@ routing_result pong(timetable const& tt,
                     query q,
                     std::optional<std::chrono::seconds> timeout) {
   constexpr auto kFwd = (SearchDir == direction::kForward);
+  auto const& abl = get_ablation();
+  auto const max_lookahead = get_pong_max_lookahead();
 
   using ping_algo_t =
       std::conditional_t<std::is_same_v<AlgoState, gpu::gpu_raptor_state>,
@@ -111,7 +115,7 @@ routing_result pong(timetable const& tt,
 
   auto const processing_start_time = std::chrono::steady_clock::now();
 
-  auto const fastest_direct = get_fastest_direct(tt, q, SearchDir);
+  auto const fastest_direct = q.fastest_direct_.value_or(kUnreachableDirect);
   auto const search_interval = std::visit(
       utl::overloaded{[](interval<unixtime_t> const start_interval) {
                         return start_interval;
@@ -128,8 +132,30 @@ routing_result pong(timetable const& tt,
                     tt.internal_interval().from_)
                     .count()};
 
-  auto const lookahead_end = kFwd ? search_interval.from_ + kMaxLookAhead
-                                  : search_interval.to_ - kMaxLookAhead;
+  auto const lookahead_end = kFwd ? search_interval.from_ + max_lookahead
+                                  : search_interval.to_ - max_lookahead;
+
+  // Every journey that survives the final filter departs (kFwd) / arrives
+  // (!kFwd) before the end of the search interval (or the look-ahead if the
+  // interval may be extended) and travels at most max_travel_time_ (sanitized
+  // to kMaxTravelTime). So no ping has to look further than this.
+  auto const may_extend =
+      kFwd ? q.extend_interval_later_ : q.extend_interval_earlier_;
+  auto const search_end =
+      may_extend ? lookahead_end
+                 : (kFwd ? std::min(lookahead_end, search_interval.to_)
+                         : std::max(lookahead_end, search_interval.from_));
+  auto const ping_worst_time_at_dest =
+      search_end + (kFwd ? 1 : -1) * q.max_travel_time_;
+  // Pings wait at the origin and pongs are cut at the ping's start, so labels
+  // of one search can lie up to this far apart. The trip scan has to cover it
+  // (raptor::set_scan_days), or a ping returns a journey that a journey with
+  // fewer transfers dominates and its pong cannot reproduce it.
+  auto const scan_days = static_cast<unsigned>(
+      (kFwd ? ping_worst_time_at_dest - search_interval.from_
+            : search_interval.to_ - ping_worst_time_at_dest) /
+          std::chrono::days{1} +
+      2);
 
   // ====
   // PING
@@ -148,7 +174,9 @@ routing_result pong(timetable const& tt,
   auto lb_time = std::chrono::steady_clock::duration{};
   auto const ping_lb_start = std::chrono::steady_clock::now();
   auto ping_lb = std::vector<std::uint16_t>{};
-  if constexpr (ping_algo_t::kUseLowerBounds) {
+  if (ping_algo_t::kUseLowerBounds && abl.no_lb_) {
+    ping_lb.assign(tt.n_locations(), 0U);  // NIGIRI_ABLATION=no-lb
+  } else if constexpr (ping_algo_t::kUseLowerBounds) {
     dijkstra(tt, q,
              (kFwd ? tt.fwd_search_lb_graph_[q.prf_idx_]
                    : tt.bwd_search_lb_graph_[q.prf_idx_]),
@@ -199,7 +227,10 @@ routing_result pong(timetable const& tt,
   auto const pong_lb_start = std::chrono::steady_clock::now();
   auto pong_lb = std::vector<std::uint16_t>{};
   if constexpr (pong_algo_t::kUseLowerBounds) {
-    if (kPruneWithPingBounds) {
+    // The backward searches are bounded by the labels of the forward search
+    // instead. NIGIRI_ABLATION=no-pingbound: Dijkstra lower bounds, as before
+    // #384 (zero with no-lb, too).
+    if ((kPruneWithPingBounds && !abl.no_ping_bound_) || abl.no_lb_) {
       pong_lb.assign(tt.n_locations(), 0U);
     } else {
       dijkstra(tt, q,
@@ -216,6 +247,13 @@ routing_result pong(timetable const& tt,
     }
   }
   lb_time += std::chrono::steady_clock::now() - pong_lb_start;
+
+  if constexpr (!kGpu) {
+    ping.set_scan_days(
+        std::max(scan_days, static_cast<unsigned>(kMaxTravelTime /
+                                                  std::chrono::days{1}) +
+                                1U));
+  }
 
   auto pong = pong_algo_t{tt,
                           rtt,
@@ -235,6 +273,13 @@ routing_result pong(timetable const& tt,
                           q.transfer_time_settings_,
                           q.prf_idx_};
 
+  if constexpr (!kGpu) {
+    pong.set_scan_days(
+        std::max(scan_days, static_cast<unsigned>(kMaxTravelTime /
+                                                  std::chrono::days{1}) +
+                                1U));
+  }
+
   q.flip_dir();
 
   // ========
@@ -247,7 +292,9 @@ routing_result pong(timetable const& tt,
       .search_stats_ =
           {.lb_time_ = static_cast<std::uint64_t>(
                std::chrono::duration_cast<std::chrono::milliseconds>(lb_time)
-                   .count())},
+                   .count()),
+           .pong_lookahead_days_ =
+               static_cast<std::uint64_t>(max_lookahead.count() / 1440)},
       .algo_stats_ = {}};
   auto start_time =
       kFwd ? search_interval.from_ : search_interval.to_ - duration_t{1};
@@ -257,11 +304,10 @@ routing_result pong(timetable const& tt,
   auto const is_validated = [&](journey const& j) {
     return is_better(j.dest_time_, start_time);
   };
-  auto const get_result_count = [&](bool const include_too_slow) {
+  auto const get_result_count = [&]() {
     return utl::count_if(*result.journeys_, [&](journey const& j) {
-      return is_validated(j) &&
-             (include_too_slow || (j.travel_time() < fastest_direct &&
-                                   j.travel_time() <= q.max_travel_time_));
+      return is_validated(j) && j.travel_time() < fastest_direct &&
+             j.travel_time() <= q.max_travel_time_;
     });
   };
   auto const is_timeout_reached = [&]() {
@@ -272,10 +318,23 @@ routing_result pong(timetable const& tt,
     return false;
   };
   while ((is_better(start_time, end_time) ||
-          get_result_count(true) + get_result_count(false) <
-              2 * q.min_connection_count_) &&
+          get_result_count() < q.min_connection_count_) &&
          tt.external_interval().contains(start_time) &&
          is_better(start_time, lookahead_end) && !is_timeout_reached()) {
+    // An iteration that starts inside a non-empty interval but finds nothing
+    // inside it only proves the interval exhausted (fixed-window queries).
+    auto const iteration_start = std::chrono::steady_clock::now();
+    auto const inside_interval = is_better(start_time, end_time);
+    auto const count_proof = [&]() {
+      if (inside_interval) {
+        ++result.search_stats_.n_proof_iterations_;
+        result.search_stats_.proof_time_us_ += static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - iteration_start)
+                .count());
+      }
+    };
+
     // ----
     // PING
     // ----
@@ -293,20 +352,28 @@ routing_result pong(timetable const& tt,
                  loc{tt, s.stop_}, s.time_at_start_, s.time_at_stop_);
       ping.add_start(s.stop_, s.time_at_stop_, s.v_);
     }
-    auto const worst_time_at_dest =
-        start_time +
-        (kFwd ? 1 : -1) *
-            std::min(q.max_travel_time_ + kMinLookAhead, kMaxTravelTime);
+    // No bound from start_time: a journey can depart long after it, so such a
+    // bound loses journeys within the maximum travel time. The bound is where
+    // the last journey that survives the final filter can arrive (see
+    // ping_worst_time_at_dest above).
+    auto const worst_time_at_dest = ping_worst_time_at_dest;
     if constexpr (!kGpu) {
-      for (auto const& j : s_state.results_) {
-        if (!j.error_ && !is_better(j.dest_time_, start_time)) {
-          ping.limit_time_at_dest(j.transfers_ + 1U, j.start_time_);
+      if (!abl.no_limit_) {  // NIGIRI_ABLATION=no-limit
+        for (auto const& j : s_state.results_) {
+          if (!j.error_ && !is_better(j.dest_time_, start_time)) {
+            ping.limit_time_at_dest(j.transfers_ + 1U, j.start_time_);
+          }
         }
       }
     }
     auto ping_results = pareto_set<journey>{};
+    auto const ping_start = std::chrono::steady_clock::now();
     ping.execute(start_time, q.max_transfers_, worst_time_at_dest,
                  ping_results);
+    result.search_stats_.ping_time_us_ += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - ping_start)
+            .count());
     kFwd ? ++result.search_stats_.n_execute_fwd_
          : ++result.search_stats_.n_execute_bwd_;
     if (ping_results.empty()) {
@@ -314,6 +381,7 @@ routing_result pong(timetable const& tt,
           "EMPTY PING RESULTS -> QUIT (max_transfers={}, "
           "worst_time_at_dest={})",
           q.max_transfers_, worst_time_at_dest);
+      count_proof();
       break;
     }
     utl::sort(ping_results, [](journey const& a, journey const& b) {
@@ -323,7 +391,8 @@ routing_result pong(timetable const& tt,
     // ----
     // PONG
     // ----
-    if constexpr (kPruneWithPingBounds) {
+    auto const ping_bound = kPruneWithPingBounds && !abl.no_ping_bound_;
+    if (ping_bound) {
       // Has to happen before pong.reset_arrivals() wipes the shared
       // round_times the ping search just filled.
       ping.fill_bounds(ping_results.begin()->transfers_ + std::size_t{1U});
@@ -368,6 +437,7 @@ routing_result pong(timetable const& tt,
       }
       ping_j.start_time_ = match->dest_time_;
     };
+    auto pong_has_labels = false;
     for (auto& ping_j : ping_results) {
       trace_pong("-- PING RESULT: {}", to_tuple(ping_j));
 
@@ -379,17 +449,29 @@ routing_result pong(timetable const& tt,
             return pong_j.transfers_ == ping_j.transfers_ &&
                    pong_j.start_time_ == ping_j.dest_time_;
           });
-      if (known != end(s_state.results_)) {
+      if (!abl.no_skip_ && known != end(s_state.results_)) {  // no-skip
         trace_pong("---- KNOWN [updating ping start time {} -> {}]\n",
                    ping_j.start_time_, known->dest_time_);
         ping_j.start_time_ = known->dest_time_;
         continue;
       }
 
-      if constexpr (kPruneWithPingBounds) {
+      if (ping_bound) {
         pong.set_bounds(ping_j.transfers_ + 1U);
       }
+      auto const pong_start = std::chrono::steady_clock::now();
+      if (abl.no_sharing_ && pong_has_labels) {
+        // NIGIRI_ABLATION=no-sharing: no labels from the previous backward
+        // search of this iteration. fill_bounds() copied the bounds, so they
+        // stay.
+        pong.reset_arrivals();
+      }
+      pong_has_labels = true;
       run_pong(pong, ping_j);
+      result.search_stats_.pong_time_us_ += static_cast<std::uint64_t>(
+          std::chrono::duration_cast<std::chrono::microseconds>(
+              std::chrono::steady_clock::now() - pong_start)
+              .count());
     }
     q.flip_dir();
 
@@ -409,6 +491,12 @@ routing_result pong(timetable const& tt,
         "AFTER {} [next={}]:\n\t{}", start_time, next,
         fmt::join(s_state.results_.els_ | std::views::transform(to_tuple),
                   "\n\t"));
+
+    if (utl::all_of(ping_results, [&](journey const& j) {
+          return !is_better(j.start_time_, end_time);
+        })) {
+      count_proof();
+    }
 
     start_time = next;
   }
@@ -446,6 +534,8 @@ routing_result pong(timetable const& tt,
       kFwd ? search_interval.from_ : searched_until + duration_t{1},
       kFwd ? searched_until : search_interval.to_};
   result.algo_stats_ = (ping.get_stats() + pong.get_stats()).to_map();
+  result.search_stats_.n_rounds_ping_ = ping.get_stats().n_rounds_;
+  result.search_stats_.n_rounds_pong_ = pong.get_stats().n_rounds_;
   result.search_stats_.execute_time_ =
       std::chrono::duration_cast<std::chrono::milliseconds>(
           (std::chrono::steady_clock::now() - processing_start_time));

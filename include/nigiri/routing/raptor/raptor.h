@@ -1,9 +1,12 @@
 #pragma once
 
 #include <cassert>
+#include <algorithm>
+#include <limits>
 #include <span>
 
 #include "nigiri/common/delta_t.h"
+#include "nigiri/routing/ablation.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/pareto_set.h"
@@ -90,6 +93,7 @@ struct raptor {
         dist_to_end_{dist_to_dest},
         td_dist_to_end_{td_dist_to_dest},
         lb_{lb},
+        route_lb_gen_{++state.route_lb_gen_},
         via_stops_{via_stops},
         base_{base},
         bounds_{std::as_const(state_).template get_bounds<Vias>()},
@@ -119,6 +123,8 @@ struct raptor {
   algo_stats_t get_stats() const { return stats_; }
 
   void fill_bounds(std::size_t const n_rows) {
+    assert(n_rows <= n_init_rounds_);
+
     auto& s = state_;
     auto const n = static_cast<std::size_t>(s.n_locations_);
 
@@ -175,9 +181,24 @@ struct raptor {
 
   void set_bounds(unsigned const last_round) { bounds_last_k_ = last_round; }
 
+  // Number of days the trip scan looks ahead of a label (default: enough for
+  // kMaxTravelTime). A search whose labels can lie further apart, such as
+  // Pong's forward searches that wait at the origin, has to raise it:
+  // otherwise an early label at a stop hides a trip more days ahead that a
+  // later label (dominated by the early one) would still reach.
+  void set_scan_days(unsigned const n) { n_scan_days_ = n; }
+
   void reset_arrivals() {
     utl::fill(time_at_dest_, kInvalid);
-    round_times_.reset(kInvalidArray);
+    if (SearchMode == search_mode::kOneToAll || !lazy_reset_) {
+      // kOneToAll: the caller reads all rounds from the state after the
+      // search. !lazy_reset_: NIGIRI_ABLATION=no-lazyreset.
+      round_times_.reset(kInvalidArray);
+      n_init_rounds_ = kMaxTransfers + 2U;
+    } else {
+      n_init_rounds_ = 0U;
+      init_rounds_up_to(0U);  // for add_start()
+    }
   }
 
   void limit_time_at_dest(unsigned const k, unixtime_t const t) {
@@ -225,6 +246,8 @@ struct raptor {
     trace_print_init_state();
 
     for (auto k = 1U; k != end_k; ++k) {
+      init_rounds_up_to(k);
+
       for (auto i = 0U; i != n_locations_; ++i) {
         for (auto v = 0U; v != Vias + 1; ++v) {
           best_[i][v] = get_best(round_times_[k][i][v], best_[i][v]);
@@ -234,11 +257,21 @@ struct raptor {
         update_time_at_dest(k, best_[i][Vias]);
       });
 
+      if (kUseLowerBounds && route_lb_) {
+        utl::fill(state_.route_best_arr_, kInvalid);
+      }
       auto any_marked = false;
       state_.station_mark_.for_each_set_bit([&](std::uint64_t const i) {
         for (auto const& r : tt_.location_routes_[location_idx_t{i}]) {
           any_marked = true;
           state_.route_mark_.set(to_idx(r), true);
+          if (kUseLowerBounds && route_lb_) {
+            auto& a = state_.route_best_arr_[to_idx(r)];
+            auto const arr = best_[i][0];
+            if (a == kInvalid || is_better(arr, a)) {
+              a = arr;
+            }
+          }
         }
         if constexpr (Rt) {
           for (auto const& rt_t :
@@ -253,6 +286,8 @@ struct raptor {
         trace_print_state_after_round();
         break;
       }
+
+      ++stats_.n_rounds_;
 
       std::swap(state_.prev_station_mark_, state_.station_mark_);
       utl::fill(state_.station_mark_.blocks_, 0U);
@@ -399,8 +434,9 @@ struct raptor {
       return;
     }
 
+    auto const end_init_k = std::min(end_k, n_init_rounds_);
     is_dest_.for_each_set_bit([&](auto const i) {
-      for (auto k = 1U; k != end_k; ++k) {
+      for (auto k = 1U; k < end_init_k; ++k) {
         auto const dest_time = round_times_[k][i][Vias];
         if (dest_time != kInvalid) {
           trace("ADDING JOURNEY: start={}, dest={} @ {}, transfers={}\n",
@@ -428,10 +464,24 @@ struct raptor {
     }
     trace("reconstruct({} - {}, {} transfers", j.departure_time(),
           j.arrival_time(), j.transfers_);
+    // The journey can be older than the last reset_arrivals() and have more
+    // rounds than the search since then reached.
+    init_rounds_up_to(j.transfers_ + 1U);
     reconstruct_journey<SearchDir>(tt_, rtt_, q, state_, j, base(), base_);
   }
 
 private:
+  // Rounds are initialized on first use: most searches end long before
+  // kMaxTransfers. Rows that are not initialized yet hold stale values,
+  // possibly of the other search direction (ping and pong share the table), and
+  // must not be read.
+  void init_rounds_up_to(unsigned const k) {
+    for (; n_init_rounds_ <= k; ++n_init_rounds_) {
+      std::fill_n(&round_times_[n_init_rounds_][0U], n_locations_,
+                  kInvalidArray);
+    }
+  }
+
   date::sys_days base() const {
     return tt_.internal_interval_days().from_ + as_int(base_) * date::days{1};
   }
@@ -555,6 +605,30 @@ private:
         }
       }
 
+      // The bound is applied per stop inside the scan, but a route whose best
+      // conceivable contribution cannot beat the destination need not be
+      // entered at all. route_min_lb_ is the minimum over the route's stops -
+      // computed on first use and reused for the rest of the query, since lb_
+      // is fixed once the destination is known.
+      if (kUseLowerBounds && route_lb_) {
+        auto const a = state_.route_best_arr_[to_idx(r)];
+        if (a != kInvalid) {
+          if (state_.route_lb_epoch_[to_idx(r)] != route_lb_gen_) {
+            auto m = std::numeric_limits<std::uint16_t>::max();
+            for (auto const s : tt_.route_location_seq_[r]) {
+              m = std::min(m, get_lb(to_idx(stop{s}.location_idx())));
+            }
+            state_.route_min_lb_[to_idx(r)] = m;
+            state_.route_lb_epoch_[to_idx(r)] = route_lb_gen_;
+          }
+          auto const m = state_.route_min_lb_[to_idx(r)];
+          if (m != std::numeric_limits<std::uint16_t>::max() &&
+              !is_better_loose(a + dir(m), time_at_dest_[k])) {
+            ++stats_.route_update_prevented_by_lower_bound_;
+            return;
+          }
+        }
+      }
       ++stats_.n_routes_visited_;
       trace("┊ ├k={} updating route {}\n", k, r);
 
@@ -1453,7 +1527,8 @@ private:
           k, tt_.to_unixtime(day_at_stop, mam_at_stop), stop_idx,
           loc{tt_, stop{tt_.route_location_seq_[r][stop_idx]}.location_idx()});
 
-    auto const n_days_to_iterate = kMaxTravelTime / std::chrono::days{1} + 1U;
+    auto const n_days_to_iterate =
+        static_cast<day_idx_t::value_t>(n_scan_days_);
     for (auto i = day_idx_t::value_t{0U}; i != n_days_to_iterate; ++i) {
       auto const day = kFwd ? day_at_stop + i : day_at_stop - i;
 
@@ -1567,17 +1642,24 @@ private:
   std::span<std::array<delta_t, Vias + 1>> tmp_;
   std::span<std::array<delta_t, Vias + 1>> best_;
   flat_matrix_view<std::array<delta_t, Vias + 1>> round_times_;
+  unsigned n_init_rounds_{0U};
+  // NIGIRI_ABLATION switches (no-routelb, no-lazyreset)
+  bool route_lb_{!get_ablation().no_route_lb_};
+  bool lazy_reset_{!get_ablation().no_lazy_reset_};
   bitvec const& is_dest_;
   std::array<bitvec, kMaxVias> const& is_via_;
   std::vector<std::uint16_t> const& dist_to_end_;
   hash_map<location_idx_t, std::vector<td_offset>> const& td_dist_to_end_;
   std::vector<std::uint16_t> const& lb_;
+  std::uint32_t route_lb_gen_;
   std::vector<via_stop> const& via_stops_;
   std::array<delta_t, kMaxTransfers + 2> time_at_dest_;
   day_idx_t base_;
   raptor_stats stats_;
   flat_matrix_view<std::array<delta_t, Vias + 1U> const> bounds_;
   unsigned bounds_last_k_{0U};
+  unsigned n_scan_days_{
+      static_cast<unsigned>(kMaxTravelTime / std::chrono::days{1}) + 1U};
   profile_idx_t prf_idx_{0U};
   clasz_mask_t allowed_claszes_;
   bool require_bike_transport_;

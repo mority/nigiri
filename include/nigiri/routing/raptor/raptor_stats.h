@@ -10,6 +10,7 @@ struct raptor_stats {
   std::map<std::string, std::uint64_t> to_map() const {
     return {
         {"n_routing_time", n_routing_time_},
+        {"n_rounds", n_rounds_},
         {"n_footpaths_visited", n_footpaths_visited_},
         {"n_routes_visited", n_routes_visited_},
         {"n_earliest_trip_calls", n_earliest_trip_calls_},
@@ -27,6 +28,7 @@ struct raptor_stats {
   raptor_stats operator+(raptor_stats const& o) const {
     auto copy = *this;
     copy.n_routing_time_ += o.n_routing_time_;
+    copy.n_rounds_ += o.n_rounds_;
     copy.n_footpaths_visited_ += o.n_footpaths_visited_;
     copy.n_routes_visited_ += o.n_routes_visited_;
     copy.n_earliest_trip_calls_ += o.n_earliest_trip_calls_;
@@ -42,6 +44,8 @@ struct raptor_stats {
   }
 
   std::uint64_t n_routing_time_{0ULL};
+  // RAPTOR rounds in which routes were scanned, summed over all searches
+  std::uint64_t n_rounds_{0ULL};
   std::uint64_t n_footpaths_visited_{0ULL};
   std::uint64_t n_routes_visited_{0ULL};
   std::uint64_t n_earliest_trip_calls_{0ULL};

@@ -23,6 +23,9 @@ raptor_state& raptor_state::resize(unsigned const n_locations,
   station_mark_.resize(n_locations);
   prev_station_mark_.resize(n_locations);
   route_mark_.resize(n_routes);
+  route_min_lb_.resize(n_routes);
+  route_lb_epoch_.assign(n_routes, 0U);
+  route_best_arr_.resize(n_routes);
   rt_transport_mark_.resize(n_rt_transports);
   return *this;
 }
@@ -30,7 +33,8 @@ raptor_state& raptor_state::resize(unsigned const n_locations,
 template <via_offset_t Vias>
 void raptor_state::print(timetable const& tt,
                          date::sys_days const base,
-                         delta_t const invalid) {
+                         delta_t const invalid,
+                         unsigned const n_rounds) {
   auto invalid_array = std::array<delta_t, Vias + 1>{};
   invalid_array.fill(invalid);
 
@@ -39,7 +43,7 @@ void raptor_state::print(timetable const& tt,
   auto const& round_times = get_round_times<Vias>();
 
   auto const has_empty_rounds = [&](std::uint32_t const l) {
-    for (auto k = 0U; k != kMaxTransfers + 2U; ++k) {
+    for (auto k = 0U; k != n_rounds; ++k) {
       if (round_times[k][l] != invalid_array) {
         return false;
       }
@@ -79,7 +83,7 @@ void raptor_state::print(timetable const& tt,
     fmt::print("best=");
     print_deltas(b);
     fmt::print(", round_times: ");
-    for (auto i = 0U; i != kMaxTransfers + 2U; ++i) {
+    for (auto i = 0U; i != n_rounds; ++i) {
       auto const& t = round_times[i][l];
       fmt::print("{}:", i);
       print_deltas(t);
@@ -92,8 +96,17 @@ void raptor_state::print(timetable const& tt,
 static_assert(kMaxVias == 2,
               "raptor_state.cc needs to be adjusted for kMaxVias");
 
-template void raptor_state::print<0>(timetable const&, date::sys_days, delta_t);
-template void raptor_state::print<1>(timetable const&, date::sys_days, delta_t);
-template void raptor_state::print<2>(timetable const&, date::sys_days, delta_t);
+template void raptor_state::print<0>(timetable const&,
+                                     date::sys_days,
+                                     delta_t,
+                                     unsigned);
+template void raptor_state::print<1>(timetable const&,
+                                     date::sys_days,
+                                     delta_t,
+                                     unsigned);
+template void raptor_state::print<2>(timetable const&,
+                                     date::sys_days,
+                                     delta_t,
+                                     unsigned);
 
 }  // namespace nigiri::routing
