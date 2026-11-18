@@ -29,8 +29,32 @@
 
 namespace nigiri::loader::gtfs {
 
+constexpr auto const kMaxPlatformChangeDwell = 6_minutes;
+
+bool stays_seated(
+    trip const& from,
+    trip const& to,
+    mutable_fws_multimap<location_idx_t, location_idx_t> const& equivalences) {
+  auto const a = stop{from.stop_seq_.back()}.location_idx();
+  auto const b = stop{to.stop_seq_.front()}.location_idx();
+  if (a == b) {
+    return true;
+  }
+  if (from.requires_interpolation_ || to.requires_interpolation_ ||
+      to_idx(a) >= equivalences.size()) {
+    return false;
+  }
+  auto const dwell =
+      to.event_times_.front().dep_ - from.event_times_.back().arr_;
+  return dwell >= 0_minutes && dwell <= kMaxPlatformChangeDwell &&
+         utl::any_of(equivalences[a],
+                     [&](location_idx_t const x) { return x == b; });
+}
+
 std::vector<std::pair<basic_string<gtfs_trip_idx_t>, bitfield>>
-block::rule_services(trip_data& trips) {
+block::rule_services(
+    trip_data& trips,
+    mutable_fws_multimap<location_idx_t, location_idx_t> const& equivalences) {
   utl::verify(!trips_.empty(), "empty block not allowed");
 
   utl::erase_if(trips_, [&](gtfs_trip_idx_t const& t) {
@@ -83,9 +107,8 @@ block::rule_services(trip_data& trips) {
            ++succ_it) {
         auto const& curr_trip = trips.data_[current_it->trip_];
         auto const& succ_trip = trips.data_[succ_it->trip_];
-        if (stop{curr_trip.stop_seq_.back()}.location_ !=
-            stop{succ_trip.stop_seq_.front()}.location_) {
-          continue;  // prev last stop != next first stop
+        if (!stays_seated(curr_trip, succ_trip, equivalences)) {
+          continue;
         }
 
         if (trips.no_stay_seated_.contains(

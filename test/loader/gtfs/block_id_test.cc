@@ -223,3 +223,79 @@ T6: 2006-07-02, 02:00.1
     expect_no_transfers(*res.begin());
   }
 }
+
+// P1 and P2 are 20 m apart, Q is 1 km away.
+constexpr auto const platform_change_stops = std::string_view{
+    R"(stop_id,stop_name,stop_desc,stop_lat,stop_lon,stop_url,location_type,parent_station
+S1,STOP 1,,49.880000,8.660000,,,
+P1,MARKET 1,,49.870000,8.650000,,,
+P2,MARKET 2,,49.870180,8.650000,,,
+Q,FAR,,49.879000,8.650000,,,
+S3,STOP 3,,49.860000,8.640000,,,
+)"};
+
+constexpr auto const platform_change_calendar = std::string_view{
+    R"(service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+ALL,1,1,1,1,1,1,1,20060701,20060731)"};
+
+constexpr auto const platform_change_trips =
+    R"(route_id,service_id,trip_id,trip_headsign,trip_short_name,block_id
+A,ALL,A1,,A1,1
+A,ALL,B1,,B1,1
+A,ALL,C2,,C2,2
+A,ALL,D2,,D2,2
+A,ALL,E3,,E3,3
+A,ALL,F3,,F3,3
+)";
+
+constexpr auto const platform_change_stop_times =
+    R"(trip_id,arrival_time,departure_time,stop_id,stop_sequence
+A1,09:50:00,09:50:00,S1,1
+A1,10:00:00,10:00:00,P2,2
+B1,10:01:00,10:01:00,P1,1
+B1,10:10:00,10:10:00,S3,2
+C2,11:50:00,11:50:00,S1,1
+C2,12:00:00,12:00:00,P2,2
+D2,12:10:00,12:10:00,P1,1
+D2,12:20:00,12:20:00,S3,2
+E3,13:50:00,13:50:00,S1,1
+E3,14:00:00,14:00:00,P2,2
+F3,14:01:00,14:01:00,Q,1
+F3,14:10:00,14:10:00,S3,2
+)";
+
+TEST(gtfs, block_id_platform_change) {
+  using std::filesystem::path;
+  auto const files = mem_dir{
+      {{path{kAgencyFile}, std::string{agency}},
+       {path{kStopFile}, std::string{platform_change_stops}},
+       {path{kCalenderFile}, std::string{platform_change_calendar}},
+       {path{kRoutesFile}, std::string{routes}},
+       {path{kTripsFile}, std::string{platform_change_trips}},
+       {path{kStopTimesFile}, std::string{platform_change_stop_times}}}};
+  auto const tt = loader::load(files, {2006_y / 7 / 1, 2006_y / 8 / 1});
+
+  auto const transport = [&](std::string_view id) {
+    for (auto t = trip_idx_t{0U}; t != tt.trip_id_strings_.size(); ++t) {
+      if (tt.trip_id_strings_[t].view() == id) {
+        return tt.trip_transport_ranges_[t][0].first;
+      }
+    }
+    return transport_idx_t::invalid();
+  };
+
+  EXPECT_EQ(transport("A1"), transport("B1"));
+  EXPECT_NE(transport("C2"), transport("D2"));  // dwell too long
+  EXPECT_NE(transport("E3"), transport("F3"));  // not equivalent
+
+  auto const seq = tt.route_location_seq_[tt.transport_route_[transport("A1")]];
+  ASSERT_EQ(3U, seq.size());
+  EXPECT_EQ("P1", tt.locations_.ids_[stop{seq[1]}.location_idx()].view());
+
+  auto const res =
+      raptor_search(tt, nullptr, "S1", "S3", "2006-07-03 09:50 Europe/Berlin");
+  ASSERT_EQ(1, res.size());
+  EXPECT_EQ(1U, res.begin()->legs_.size());
+  EXPECT_EQ(unixtime_t{sys_days{2006_y / 7 / 3} + std::chrono::minutes{490}},
+            res.begin()->dest_time_);
+}

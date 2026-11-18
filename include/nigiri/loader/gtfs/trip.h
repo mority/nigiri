@@ -34,7 +34,8 @@ static auto const kSingleTripTransportationNotAllowed = bitvec{"0"};
 
 struct block {
   std::vector<std::pair<basic_string<gtfs_trip_idx_t>, bitfield>> rule_services(
-      trip_data&);
+      trip_data&,
+      mutable_fws_multimap<location_idx_t, location_idx_t> const& equivalences);
 
   std::vector<gtfs_trip_idx_t> trips_;
 };

@@ -310,7 +310,8 @@ void load_timetable(loader_config const& config,
         continue;
       }
 
-      for (auto const& [trips, traffic_days] : blk->rule_services(trip_data)) {
+      for (auto const& [trips, traffic_days] :
+           blk->rule_services(trip_data, ctx.equivalences_)) {
         add_trip(trips, &traffic_days);
       }
     }
