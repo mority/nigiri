@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <limits>
 #include <optional>
+#include <vector>
 
+#include "utl/erase_duplicates.h"
 #include "utl/helpers/algorithm.h"
 #include "utl/overloaded.h"
 
@@ -358,28 +360,58 @@ void optimize_transfers(timetable const& tt,
                         rt_timetable const* rtt,
                         query const& q,
                         journey& j) {
-  auto const vias = count_vias(tt, rtt, q, j);
-  for (auto i = 0U; i + 2 < j.legs_.size(); ++i) {
-    auto& leg_from = j.legs_[i];
-    auto& leg_footpath = j.legs_[i + 1];
-    auto& leg_to = j.legs_[i + 2];
-    if (!holds_alternative<journey::run_enter_exit>(leg_from.uses_) ||
-        !holds_alternative<footpath>(leg_footpath.uses_) ||
-        !holds_alternative<journey::run_enter_exit>(leg_to.uses_)) {
-      continue;
-    }
+  struct change {
+    stop_idx_t exit_, enter_;
+    location_idx_t exit_loc_, enter_loc_;
+    unixtime_t arr_, dep_, arr_fp_;
+    footpath fp_;
+    double penalty_;
+    bool same_place_;
+  };
 
-    auto& ree_from = get<journey::run_enter_exit>(leg_from.uses_);
-    auto& ree_to = get<journey::run_enter_exit>(leg_to.uses_);
+  struct transfer {
+    std::size_t leg_;
+    bool fixed_;
+    std::vector<change> changes_;
+  };
+
+  struct node {
+    stop_idx_t enter_, exit_;
+    double cost_{std::numeric_limits<double>::max()};
+    std::size_t pred_{0U};
+    std::size_t change_{0U};
+  };
+
+  constexpr auto kEps = 1e-9;
+  constexpr auto kUnreached = std::numeric_limits<double>::max();
+
+  auto const is_transfer = [&](std::size_t const i) {
+    return i + 2U < j.legs_.size() &&
+           holds_alternative<journey::run_enter_exit>(j.legs_[i].uses_) &&
+           holds_alternative<footpath>(j.legs_[i + 1U].uses_) &&
+           holds_alternative<journey::run_enter_exit>(j.legs_[i + 2U].uses_);
+  };
+  auto const ree = [&](std::size_t const i) -> journey::run_enter_exit& {
+    return get<journey::run_enter_exit>(j.legs_[i].uses_);
+  };
+
+  auto const vias = count_vias(tt, rtt, q, j);
+
+  auto const collect = [&](std::size_t const i, stop_idx_t const min_enter,
+                           bool const last) {
+    auto const& leg_from = j.legs_[i];
+    auto const& leg_footpath = j.legs_[i + 1U];
+    auto const& leg_to = j.legs_[i + 2U];
+    auto const& ree_from = ree(i);
+    auto const& ree_to = ree(i + 2U);
+
+    auto t = transfer{.leg_ = i, .fixed_ = false, .changes_ = {}};
 
     auto current_v = vias.before_[i];
-    // footpaths from or to a via stop with stay duration != 0 are kept as is
     auto keep_transfer = false;
 
     auto fr_from = rt::frun{tt, rtt, ree_from.r_};
     auto from_start = static_cast<stop_idx_t>(ree_from.stop_range_.from_ + 1U);
-
-    // make sure that no via stops are skipped in ree_from
     for (auto s = ree_from.stop_range_.from_; s < fr_from.size(); ++s) {
       if (current_v < q.via_stops_.size() &&
           matches(tt, nullptr, location_match_mode::kEquivalent,
@@ -395,12 +427,8 @@ void optimize_transfers(timetable const& tt,
       }
     }
 
-    fr_from.stop_range_ = {from_start, fr_from.size()};
-
     auto fr_to = rt::frun{tt, rtt, ree_to.r_};
     auto to_end = static_cast<stop_idx_t>(ree_to.stop_range_.to_ - 1U);
-
-    // make sure that no via stops are skipped in ree_to
     for (auto s = ree_to.stop_range_.from_; s < fr_to.size(); ++s) {
       if (current_v < q.via_stops_.size() &&
           matches(tt, nullptr, location_match_mode::kEquivalent,
@@ -416,37 +444,46 @@ void optimize_transfers(timetable const& tt,
       }
     }
 
+    if (q.via_stops_.empty()) {
+      from_start = static_cast<stop_idx_t>(min_enter + 1U);
+      if (!last) {
+        to_end = static_cast<stop_idx_t>(fr_to.size() - 1U);
+      }
+    }
+
+    if (keep_transfer || is_td_source(rtt, q.prf_idx_, leg_footpath.from_)) {
+      t.fixed_ = true;
+      t.changes_.push_back(
+          {.exit_ = static_cast<stop_idx_t>(ree_from.stop_range_.to_ - 1U),
+           .enter_ = ree_to.stop_range_.from_,
+           .exit_loc_ = leg_from.to_,
+           .enter_loc_ = leg_to.from_,
+           .arr_ = leg_from.arr_time_,
+           .dep_ = leg_to.dep_time_,
+           .arr_fp_ = leg_footpath.arr_time_,
+           .fp_ = get<footpath>(leg_footpath.uses_),
+           .penalty_ = 0.0,
+           .same_place_ = false});
+      return t;
+    }
+
+    fr_from.stop_range_ = {from_start, fr_from.size()};
     fr_to.stop_range_ = {stop_idx_t{0U}, to_end};
-
-    if (keep_transfer) {
-      continue;
-    }
-
-    // The static footpaths are not valid where time-dependent ones exist
-    // (e.g. an elevator out of service).
-    if (is_td_source(rtt, q.prf_idx_, leg_footpath.from_)) {
-      continue;
-    }
-
-    auto penalty_best = std::numeric_limits<double>::max();
-    auto min_enter = stop_idx_t{0U};
-    for (auto stp_from : fr_from) {
+    for (auto const stp_from : fr_from) {
       if (!stp_from.out_allowed()) {
         continue;
       }
       auto const from_trip = trip_at(stp_from, event_type::kArr);
-      for (auto stp_to : it_range{fr_to.rbegin(), fr_to.rend()}) {
+      for (auto const stp_to : it_range{fr_to.rbegin(), fr_to.rend()}) {
         if (!stp_to.in_allowed()) {
           continue;
         }
-
         auto const shortest = shortest_transfer(
             tt, rtt, q.prf_idx_, search_location(q.prf_idx_, stp_from),
             search_location(q.prf_idx_, stp_to));
         if (!shortest.has_value()) {
           continue;
         }
-
         auto const fp = footpath{stp_to.get_location_idx(), *shortest};
         auto const fp_dur =
             adjusted_transfer_time(q.transfer_time_settings_, fp.duration());
@@ -456,37 +493,158 @@ void optimize_transfers(timetable const& tt,
         if (arr_fp > dep) {
           continue;
         }
-        if (stp_to.stop_idx_ < min_enter) {
-          continue;
+        t.changes_.push_back(
+            {.exit_ = stp_from.stop_idx_,
+             .enter_ = stp_to.stop_idx_,
+             .exit_loc_ = stp_from.get_location_idx(),
+             .enter_loc_ = stp_to.get_location_idx(),
+             .arr_ = arr,
+             .dep_ = dep,
+             .arr_fp_ = arr_fp,
+             .fp_ = fp,
+             .penalty_ = get_penalty(tt, fp_dur, dep - arr_fp,
+                                     stp_from.get_location_idx(),
+                                     stp_to.get_location_idx(), from_trip,
+                                     trip_at(stp_to, event_type::kDep)),
+             .same_place_ = matches(
+                 tt, nullptr, location_match_mode::kEquivalent,
+                 stp_from.get_location_idx(), stp_to.get_location_idx())});
+      }
+    }
+    return t;
+  };
+
+  auto const apply = [&](std::size_t const i, change const& c) {
+    auto& leg_from = j.legs_[i];
+    auto& leg_footpath = j.legs_[i + 1U];
+    auto& leg_to = j.legs_[i + 2U];
+
+    leg_from.to_ = c.exit_loc_;
+    leg_from.arr_time_ = c.arr_;
+    ree(i).stop_range_.to_ = static_cast<stop_idx_t>(c.exit_ + 1U);
+
+    leg_to.from_ = c.enter_loc_;
+    leg_to.dep_time_ = c.dep_;
+    ree(i + 2U).stop_range_.from_ = c.enter_;
+
+    leg_footpath.from_ = c.exit_loc_;
+    leg_footpath.to_ = c.enter_loc_;
+    leg_footpath.dep_time_ = c.arr_;
+    leg_footpath.arr_time_ = c.arr_fp_;
+    leg_footpath.uses_ = c.fp_;
+  };
+
+  auto const solve = [&](std::vector<transfer> const& chain) {
+    auto const n_trips = chain.size() + 1U;
+    auto nodes = std::vector<std::vector<node>>(n_trips);
+    for (auto k = 0U; k != n_trips; ++k) {
+      auto enters = std::vector<stop_idx_t>{};
+      auto exits = std::vector<stop_idx_t>{};
+      if (k == 0U) {
+        enters.push_back(ree(chain.front().leg_).stop_range_.from_);
+      } else {
+        for (auto const& c : chain[k - 1U].changes_) {
+          enters.push_back(c.enter_);
         }
-        if (matches(tt, nullptr, location_match_mode::kEquivalent,
-                    stp_from.get_location_idx(), stp_to.get_location_idx())) {
-          min_enter = static_cast<stop_idx_t>(stp_to.stop_idx_ + 1U);
+      }
+      if (k + 1U == n_trips) {
+        exits.push_back(static_cast<stop_idx_t>(
+            ree(chain.back().leg_ + 2U).stop_range_.to_ - 1U));
+      } else {
+        for (auto const& c : chain[k].changes_) {
+          exits.push_back(c.exit_);
         }
-        auto const to_trip = trip_at(stp_to, event_type::kDep);
-        auto const penalty =
-            get_penalty(tt, fp_dur, dep - arr_fp, stp_from.get_location_idx(),
-                        stp_to.get_location_idx(), from_trip, to_trip);
-        if (penalty < penalty_best) {
-          leg_from.to_ = stp_from.get_location_idx();
-          leg_from.arr_time_ = arr;
-          ree_from.stop_range_.to_ =
-              stp_from.stop_idx_ + 1U;  // half open interval
-
-          leg_to.from_ = stp_to.get_location_idx();
-          leg_to.dep_time_ = dep;
-          ree_to.stop_range_.from_ = stp_to.stop_idx_;
-
-          leg_footpath.from_ = stp_from.get_location_idx();
-          leg_footpath.to_ = stp_to.get_location_idx();
-          leg_footpath.dep_time_ = arr;
-          leg_footpath.arr_time_ = arr_fp;
-          leg_footpath.uses_ = fp;
-
-          penalty_best = penalty;
+      }
+      utl::erase_duplicates(enters);
+      utl::erase_duplicates(exits);
+      for (auto const e : enters) {
+        for (auto const x : exits) {
+          if (e < x) {
+            nodes[k].push_back({.enter_ = e, .exit_ = x});
+          }
         }
       }
     }
+
+    for (auto& n : nodes.front()) {
+      n.cost_ = 0.0;
+    }
+    for (auto k = 0U; k != chain.size(); ++k) {
+      auto const& t = chain[k];
+      for (auto ci = 0U; ci != t.changes_.size(); ++ci) {
+        auto const& c = t.changes_[ci];
+        for (auto pi = 0U; pi != nodes[k].size(); ++pi) {
+          auto const& p = nodes[k][pi];
+          if (p.exit_ != c.exit_ || p.cost_ == kUnreached) {
+            continue;
+          }
+          for (auto& n : nodes[k + 1U]) {
+            if (n.enter_ != c.enter_) {
+              continue;
+            }
+            auto const is_double_visit =
+                !t.fixed_ && utl::any_of(t.changes_, [&](change const& d) {
+                  return d.same_place_ && p.enter_ < d.exit_ &&
+                         d.exit_ <= c.exit_ && c.enter_ <= d.enter_ &&
+                         d.enter_ < n.exit_ &&
+                         (d.exit_ != c.exit_ || d.enter_ != c.enter_);
+                });
+            if (is_double_visit) {
+              continue;
+            }
+            auto const cost = p.cost_ + c.penalty_;
+            if (cost < n.cost_ - kEps) {
+              n.cost_ = cost;
+              n.pred_ = pi;
+              n.change_ = ci;
+            }
+          }
+        }
+      }
+    }
+
+    auto const& last = nodes.back();
+    auto best = last.size();
+    for (auto ni = 0U; ni != last.size(); ++ni) {
+      if (last[ni].cost_ == kUnreached) {
+        continue;
+      }
+      if (best == last.size() || last[ni].cost_ < last[best].cost_ - kEps ||
+          (last[ni].cost_ <= last[best].cost_ + kEps &&
+           last[ni].change_ < last[best].change_)) {
+        best = ni;
+      }
+    }
+    if (best == last.size()) {
+      return;
+    }
+    for (auto k = chain.size(); k != 0U; --k) {
+      auto const& n = nodes[k][best];
+      auto const& t = chain[k - 1U];
+      if (!t.fixed_) {
+        apply(t.leg_, t.changes_[n.change_]);
+      }
+      best = n.pred_;
+    }
+  };
+
+  auto chain = std::vector<transfer>{};
+  for (auto i = 0U; i < j.legs_.size(); ++i) {
+    if (!is_transfer(i)) {
+      continue;
+    }
+    chain.clear();
+    auto min_enter = ree(i).stop_range_.from_;
+    for (; is_transfer(i); i += 2U) {
+      chain.push_back(collect(i, min_enter, !is_transfer(i + 2U)));
+      auto const& changes = chain.back().changes_;
+      min_enter = changes.empty()
+                      ? ree(i + 2U).stop_range_.from_
+                      : utl::min_element(changes, [](auto&& a, auto&& b) {
+                          return a.enter_ < b.enter_;
+                        })->enter_;
+    }
+    solve(chain);
   }
 }
 
