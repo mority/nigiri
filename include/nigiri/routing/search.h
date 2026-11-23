@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include "fmt/format.h"
 
 #include "utl/enumerate.h"
@@ -10,6 +12,7 @@
 
 #include "nigiri/get_otel_tracer.h"
 #include "nigiri/logging.h"
+#include "nigiri/routing/arrivals_mode.h"
 #include "nigiri/routing/dijkstra.h"
 #include "nigiri/routing/direct.h"
 #include "nigiri/routing/get_fastest_direct.h"
@@ -263,7 +266,7 @@ struct search {
                          kBwd);
         if constexpr (kBwd) {
           trace("dir=BWD, interval extension earlier -> reset state\n");
-          algo_.reset_arrivals();
+          arrivals_mode_ = arrivals_mode::kOverwrite;
           remove_ontrip_results();
         }
       }
@@ -273,7 +276,7 @@ struct search {
                          kFwd);
         if constexpr (kFwd) {
           trace("dir=BWD, interval extension later -> reset state\n");
-          algo_.reset_arrivals();
+          arrivals_mode_ = arrivals_mode::kOverwrite;
           remove_ontrip_results();
         }
       }
@@ -374,7 +377,8 @@ private:
             return;
           }
 
-          algo_.next_start_time();
+          algo_.next_start_time(
+              std::exchange(arrivals_mode_, arrivals_mode::kReuse));
           auto const start_time = from_it->time_at_start_;
           for (auto const& s : it_range{from_it, to_it}) {
             trace("init: time_at_start={}, time_at_stop={} at {}\n",
@@ -447,6 +451,7 @@ private:
   duration_t fastest_direct_;
   Algo algo_;
   std::optional<std::chrono::seconds> timeout_;
+  arrivals_mode arrivals_mode_{arrivals_mode::kOverwrite};
 };
 
 }  // namespace nigiri::routing

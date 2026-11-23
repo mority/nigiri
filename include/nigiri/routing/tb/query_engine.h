@@ -1,5 +1,6 @@
 #pragma once
 
+#include "nigiri/routing/arrivals_mode.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/pareto_set.h"
 #include "nigiri/routing/query.h"
@@ -102,13 +103,14 @@ struct query_engine {
 
   algo_state_t& get_state() { return state_; }
 
-  void reset_arrivals() {
-    state_.r_.reset();
-    utl::fill(state_.t_min_, unixtime_t::max());
-    utl::fill(state_.parent_, queue_entry::kNoParent);
+  void next_start_time(arrivals_mode const mode) {
+    if (mode == arrivals_mode::kOverwrite) {
+      state_.r_.reset();
+      utl::fill(state_.t_min_, unixtime_t::max());
+      utl::fill(state_.parent_, queue_entry::kNoParent);
+    }
+    state_.q_n_.reset();
   }
-
-  void next_start_time() { state_.q_n_.reset(); }
 
   void add_start(location_idx_t, unixtime_t, via_offset_t = 0U);
 

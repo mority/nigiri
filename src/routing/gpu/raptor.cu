@@ -677,7 +677,6 @@ gpu_raptor<SearchDir, WithBounds>::gpu_raptor(
               "GPU raptor: rt search requires the uploaded device rt "
               "timetable (rt_timetable::gpu_rtt_)");
   state_.impl_->resize_rt(rtt == nullptr ? 0U : rtt->n_rt_transports());
-  reset_arrivals();
   state_.impl_->upload_query(kDirIdx, is_dest, dist_to_dest, td_dist_to_dest);
 }
 
@@ -1211,7 +1210,11 @@ void gpu_raptor<SearchDir, WithBounds>::reset_arrivals() {
 }
 
 template <direction SearchDir, bool WithBounds>
-void gpu_raptor<SearchDir, WithBounds>::next_start_time() {
+void gpu_raptor<SearchDir, WithBounds>::next_start_time(
+    arrivals_mode const mode) {
+  if (mode == arrivals_mode::kOverwrite) {
+    reset_arrivals();
+  }
   starts_.clear();
   auto& s = *state_.impl_;
   cudaMemsetAsync(thrust::raw_pointer_cast(s.best_.data()), 0xFF,

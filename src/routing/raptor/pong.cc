@@ -7,6 +7,7 @@
 #include <span>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 
 #include "utl/helpers/algorithm.h"
 #include "utl/sorted_diff.h"
@@ -252,8 +253,7 @@ routing_result pong(timetable const& tt,
                q.via_stops_, q.max_start_offset_, q.start_match_mode_,
                q.use_start_footpaths_, starts, false, q.prf_idx_,
                q.transfer_time_settings_);
-    ping.reset_arrivals();
-    ping.next_start_time();
+    ping.next_start_time(arrivals_mode::kOverwrite);
     for (auto const& s : starts) {
       trace_pong("--- PING START: {} at time_at_start={} time_at_stop={}",
                  loc{tt, s.stop_}, s.time_at_start_, s.time_at_stop_);
@@ -293,12 +293,12 @@ routing_result pong(timetable const& tt,
     // PONG
     // ----
     if constexpr (kPruneWithPingBounds) {
-      // Has to happen before pong.reset_arrivals() wipes the shared
+      // Has to happen before the first pong overwrites the shared
       // round_times the ping search just filled.
       ping.fill_bounds(ping_results.begin()->transfers_ + std::size_t{1U});
     }
     q.flip_dir();
-    pong.reset_arrivals();
+    auto pong_mode = arrivals_mode::kOverwrite;
     auto const run_pong = [&](auto& po, journey& ping_j) {
       starts.clear();
       get_starts(flip(SearchDir), tt, rtt, ping_j.dest_time_, q.start_,
@@ -306,7 +306,7 @@ routing_result pong(timetable const& tt,
                  q.start_match_mode_,
                  q.start_match_mode_ != location_match_mode::kIntermodal,
                  starts, false, q.prf_idx_, q.transfer_time_settings_);
-      po.next_start_time();
+      po.next_start_time(std::exchange(pong_mode, arrivals_mode::kReuse));
       for (auto const& s : starts) {
         trace_pong("---- PONG START: {} at time_at_start={} time_at_stop={}",
                    loc{tt, s.stop_}, s.time_at_start_, s.time_at_stop_);

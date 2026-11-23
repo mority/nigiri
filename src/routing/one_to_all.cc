@@ -31,7 +31,7 @@ void run_raptor(raptor<SearchDir, Rt, kVias, search_mode::kOneToAll>&& algo,
                 unixtime_t const worst_time_at_dest,
                 query const& q) {
   auto results = pareto_set<journey>{};
-  algo.next_start_time();
+  algo.next_start_time(arrivals_mode::kOverwrite);
   for (auto const& s : q.start_) {
     auto const t = SearchDir == direction::kForward ? start_time + s.duration()
                                                     : start_time - s.duration();

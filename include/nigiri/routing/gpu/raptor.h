@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "nigiri/common/delta_t.h"
+#include "nigiri/routing/arrivals_mode.h"
 #include "nigiri/routing/clasz_mask.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/limits.h"
@@ -85,8 +86,7 @@ struct gpu_raptor {
       profile_idx_t const prf_idx);
 
   raptor_stats get_stats() const { return stats_; }
-  void reset_arrivals();
-  void next_start_time();
+  void next_start_time(arrivals_mode);
 
   void fill_bounds(std::size_t n_rows);
 
@@ -107,6 +107,8 @@ struct gpu_raptor {
   void reconstruct(query const&, journey&);
 
 private:
+  void reset_arrivals();
+
   date::sys_days base() const {
     return tt_.internal_interval_days().from_ + to_idx(base_) * date::days{1};
   }

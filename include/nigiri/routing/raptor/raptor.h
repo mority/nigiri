@@ -8,6 +8,7 @@
 
 #include "nigiri/common/delta_t.h"
 #include "nigiri/location_routes.h"
+#include "nigiri/routing/arrivals_mode.h"
 #include "nigiri/routing/journey.h"
 #include "nigiri/routing/limits.h"
 #include "nigiri/routing/pareto_set.h"
@@ -116,7 +117,6 @@ struct raptor {
     if constexpr (SearchMode == search_mode::kOneToAll) {
       state_.one_to_all_arrivals_.resize(kMaxTransfers + 2U, n_locations_);
     }
-    reset_arrivals();
 
     if (is_intermodal_dest()) {
       // only used for intermodal queries (dist_to_dest != empty)
@@ -190,15 +190,16 @@ struct raptor {
 
   void set_bounds(unsigned const last_round) { bounds_last_k_ = last_round; }
 
-  void reset_arrivals() {
-    utl::fill(time_at_dest_, kInvalid);
-    round_times_.reset(kInvalidArray);
-    if constexpr (SearchMode == search_mode::kOneToAll) {
-      utl::fill(state_.one_to_all_arrivals_.entries_, kInvalid);
+  void next_start_time(arrivals_mode const mode) {
+    if (mode == arrivals_mode::kOverwrite) {
+      utl::fill(time_at_dest_, kInvalid);
+      utl::fill(round_times_.entries_.subspan(0U, round_times_.n_columns_),
+                kInvalidArray);
+      state_.n_init_rounds_ = 1U;
+      if constexpr (SearchMode == search_mode::kOneToAll) {
+        utl::fill(state_.one_to_all_arrivals_.entries_, kInvalid);
+      }
     }
-  }
-
-  void next_start_time() {
     utl::fill(best_, kInvalidArray);
     utl::fill(tmp_, kInvalidArray);
     utl::fill(state_.prev_station_mark_.blocks_, 0U);
@@ -241,6 +242,12 @@ struct raptor {
       update_one_to_all_arrivals(0U);
     }
     for (auto k = 1U; k != end_k; ++k) {
+      if (k == state_.n_init_rounds_) {
+        auto const n = round_times_.n_columns_;
+        utl::fill(round_times_.entries_.subspan(k * n, n), kInvalidArray);
+        ++state_.n_init_rounds_;
+      }
+
       for (auto i = 0U; i != n_locations_; ++i) {
         for (auto v = 0U; v != Vias + 1; ++v) {
           best_[i][v] = get_best(round_times_[k][i][v], best_[i][v]);
@@ -420,8 +427,9 @@ struct raptor {
       return;
     }
 
+    auto const end_init_k = std::min(end_k, state_.n_init_rounds_);
     is_dest_.for_each_set_bit([&](auto const i) {
-      for (auto k = 1U; k != end_k; ++k) {
+      for (auto k = 1U; k < end_init_k; ++k) {
         auto const dest_time = round_times_[k][i][Vias];
         if (dest_time != kInvalid) {
           trace("ADDING JOURNEY: start={}, dest={} @ {}, transfers={}\n",
