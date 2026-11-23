@@ -1317,8 +1317,8 @@ struct raptor_impl {
   // tracking for efficient reset in reuse_previous_arrivals
   cuda::std::span<std::uint32_t> round_touched_;
   std::uint32_t round_touched_stride_{0U};
-  // true once a round loop has written round_times_; cleared by
-  // reset_arrivals(). Gates the reuse_previous_arrivals kernel.
+  // true once a round loop has written round_times_; cleared by an
+  // overwrite. Gates the reuse_previous_arrivals kernel.
   std::uint32_t has_reusable_round_times_{0U};
   cuda::std::span<location_idx_t const> dest_locs_;
   std::uint32_t n_dest_locs_{0U};

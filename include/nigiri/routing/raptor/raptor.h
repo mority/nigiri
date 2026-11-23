@@ -195,7 +195,7 @@ struct raptor {
       utl::fill(time_at_dest_, kInvalid);
       utl::fill(round_times_.entries_.subspan(0U, round_times_.n_columns_),
                 kInvalidArray);
-      state_.n_init_rounds_ = 1U;
+      state_.k_stale_ = 1U;
       if constexpr (SearchMode == search_mode::kOneToAll) {
         utl::fill(state_.one_to_all_arrivals_.entries_, kInvalid);
       }
@@ -242,10 +242,10 @@ struct raptor {
       update_one_to_all_arrivals(0U);
     }
     for (auto k = 1U; k != end_k; ++k) {
-      if (k == state_.n_init_rounds_) {
+      if (k == state_.k_stale_) {
         auto const n = round_times_.n_columns_;
         utl::fill(round_times_.entries_.subspan(k * n, n), kInvalidArray);
-        ++state_.n_init_rounds_;
+        ++state_.k_stale_;
       }
 
       for (auto i = 0U; i != n_locations_; ++i) {
@@ -427,9 +427,9 @@ struct raptor {
       return;
     }
 
-    auto const end_init_k = std::min(end_k, state_.n_init_rounds_);
+    auto const end_fresh_k = std::min(end_k, state_.k_stale_);
     is_dest_.for_each_set_bit([&](auto const i) {
-      for (auto k = 1U; k < end_init_k; ++k) {
+      for (auto k = 1U; k < end_fresh_k; ++k) {
         auto const dest_time = round_times_[k][i][Vias];
         if (dest_time != kInvalid) {
           trace("ADDING JOURNEY: start={}, dest={} @ {}, transfers={}\n",

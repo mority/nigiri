@@ -589,6 +589,7 @@ struct gpu_raptor_state::impl {
   thrust::device_vector<std::uint32_t> round_touched_;
   std::uint32_t round_touched_stride_{0U};
   bool has_reusable_round_times_{false};
+  std::uint32_t k_stale_{0U};
 
   // per-direction query data: [0]=fwd, [1]=bwd (ping/pong interleave on the
   // shared state, each direction uploads its slot once in the ctor)
@@ -1016,6 +1017,16 @@ void gpu_raptor<SearchDir, WithBounds>::execute(
   launch(init_arrivals_kernel<SearchDir, WithBounds>, s.stream_, r,
          d_worst_time_at_dest);
   for (auto k = 1U; k != end_k; ++k) {
+    if (k == s.k_stale_) {
+      cudaMemsetAsync(
+          thrust::raw_pointer_cast(s.round_times_.data()) + k * n_locations_,
+          0xFF, n_locations_ * sizeof(std::uint64_t), s.stream_);
+      cudaMemsetAsync(thrust::raw_pointer_cast(s.round_touched_.data()) +
+                          k * s.round_touched_stride_,
+                      0x00, s.round_touched_stride_ * sizeof(std::uint32_t),
+                      s.stream_);
+      ++s.k_stale_;
+    }
     launch(reuse_previous_arrivals_kernel<SearchDir, WithBounds>, s.stream_, r,
            k);
     launch(mark_routes_kernel<SearchDir, WithBounds>, s.stream_, r, k);
@@ -1083,7 +1094,7 @@ void gpu_raptor<SearchDir, WithBounds>::execute(
   CUDA_CHECK(cudaPeekAtLastError());
 
   // round_times_ now holds this start time's results, so the next execute()
-  // has something to fold; cleared again by reset_arrivals()
+  // has something to fold; cleared again by the next overwrite
   s.has_reusable_round_times_ = true;
 
   // === DEVICE RECONSTRUCT ===
@@ -1100,7 +1111,8 @@ void gpu_raptor<SearchDir, WithBounds>::execute(
   }
 
   auto const n_dest = static_cast<std::uint32_t>(dest_list.size());
-  auto const total = n_dest * end_k;
+  auto const end_fresh_k = std::min(end_k, s.k_stale_);
+  auto const total = n_dest * end_fresh_k;
 
   auto* const dest_pin = s.rec_dest_pin_.ensure(dest_list.size());
   std::copy(dest_list.begin(), dest_list.end(), dest_pin);
@@ -1115,7 +1127,7 @@ void gpu_raptor<SearchDir, WithBounds>::execute(
     auto const threads = 128U;
     auto const blocks = (total + threads - 1U) / threads;
     reconstruct_kernel<SearchDir, WithBounds>
-        <<<blocks, threads, 0, s.stream_>>>(dest_dev, n_dest, end_k, r,
+        <<<blocks, threads, 0, s.stream_>>>(dest_dev, n_dest, end_fresh_k, r,
                                             rec_out_dev);
     CUDA_CHECK(cudaMemcpyAsync(rec_host, rec_out_dev,
                                total * sizeof(gpu_journey),
@@ -1133,7 +1145,7 @@ void gpu_raptor<SearchDir, WithBounds>::execute(
       log(log_lvl::error, "search",
           "reconstruct failed: gpu breadcrumb chain unreconstructable "
           "(dest={}, k={})",
-          to_idx(gj.dest_l_), idx % end_k);
+          to_idx(gj.dest_l_), idx % end_fresh_k);
       continue;
     }
 
@@ -1198,25 +1210,20 @@ void gpu_raptor<SearchDir, WithBounds>::execute(
 }
 
 template <direction SearchDir, bool WithBounds>
-void gpu_raptor<SearchDir, WithBounds>::reset_arrivals() {
-  auto& s = *state_.impl_;
-  cudaMemsetAsync(thrust::raw_pointer_cast(s.time_at_dest_.data()), 0xFF,
-                  s.time_at_dest_.size() * sizeof(std::uint64_t), s.stream_);
-  s.has_reusable_round_times_ = false;
-  cudaMemsetAsync(thrust::raw_pointer_cast(s.round_touched_.data()), 0x00,
-                  s.round_touched_.size() * sizeof(std::uint32_t), s.stream_);
-  cudaMemsetAsync(thrust::raw_pointer_cast(s.round_times_.data()), 0xFF,
-                  s.round_times_.size() * sizeof(std::uint64_t), s.stream_);
-}
-
-template <direction SearchDir, bool WithBounds>
 void gpu_raptor<SearchDir, WithBounds>::next_start_time(
     arrivals_mode const mode) {
+  auto& s = *state_.impl_;
   if (mode == arrivals_mode::kOverwrite) {
-    reset_arrivals();
+    cudaMemsetAsync(thrust::raw_pointer_cast(s.time_at_dest_.data()), 0xFF,
+                    s.time_at_dest_.size() * sizeof(std::uint64_t), s.stream_);
+    s.has_reusable_round_times_ = false;
+    cudaMemsetAsync(thrust::raw_pointer_cast(s.round_touched_.data()), 0x00,
+                    s.round_touched_stride_ * sizeof(std::uint32_t), s.stream_);
+    cudaMemsetAsync(thrust::raw_pointer_cast(s.round_times_.data()), 0xFF,
+                    n_locations_ * sizeof(std::uint64_t), s.stream_);
+    s.k_stale_ = 1U;
   }
   starts_.clear();
-  auto& s = *state_.impl_;
   cudaMemsetAsync(thrust::raw_pointer_cast(s.best_.data()), 0xFF,
                   s.best_.size() * sizeof(std::uint64_t), s.stream_);
   cudaMemsetAsync(thrust::raw_pointer_cast(s.tmp_.data()), 0xFF,

@@ -107,8 +107,6 @@ struct gpu_raptor {
   void reconstruct(query const&, journey&);
 
 private:
-  void reset_arrivals();
-
   date::sys_days base() const {
     return tt_.internal_interval_days().from_ + to_idx(base_) * date::days{1};
   }

@@ -39,7 +39,7 @@ void raptor_state::print(timetable const& tt,
   auto const& round_times = get_round_times<Vias>();
 
   auto const has_empty_rounds = [&](std::uint32_t const l) {
-    for (auto k = 0U; k != n_init_rounds_; ++k) {
+    for (auto k = 0U; k != k_stale_; ++k) {
       if (round_times[k][l] != invalid_array) {
         return false;
       }
@@ -79,7 +79,7 @@ void raptor_state::print(timetable const& tt,
     fmt::print("best=");
     print_deltas(b);
     fmt::print(", round_times: ");
-    for (auto i = 0U; i != n_init_rounds_; ++i) {
+    for (auto i = 0U; i != k_stale_; ++i) {
       auto const& t = round_times[i][l];
       fmt::print("{}:", i);
       print_deltas(t);
